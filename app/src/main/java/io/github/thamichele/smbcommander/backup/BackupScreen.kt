@@ -216,6 +216,14 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         item { Option("Dividi per anno e mese", "Per esempio 2026/10", settings.byMonth, vm::setByMonth) }
         item { Option("Solo quando è in carica", "Il backup aspetta che il telefono sia collegato", settings.chargingOnly, vm::setChargingOnly) }
         item {
+            Option(
+                "Notifica dello stato",
+                "Foto ancora da salvare, ultimo backup ed eventuali errori",
+                settings.statusNotification,
+                vm::setStatusNotification,
+            )
+        }
+        item {
             Text(
                 "Il backup parte da solo ogni ora quando sei sul Wi-Fi di casa e il NAS risponde. " +
                     "Le foto vengono cancellate dal telefono solo se lo chiedi tu con «Libera spazio».",

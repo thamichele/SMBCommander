@@ -13,6 +13,8 @@ data class BackupSettings(
     /** Sort into "2026/10" subfolders by the date the photo was taken. */
     val byMonth: Boolean = true,
     val chargingOnly: Boolean = false,
+    /** A notification with what is left to save, the last outcome and any error. */
+    val statusNotification: Boolean = true,
 )
 
 /** Outcome of the last run, shown on the backup screen. */
@@ -21,6 +23,8 @@ data class BackupStatus(
     val lastUploaded: Int = 0,
     val totalUploaded: Int = 0,
     val lastError: String? = null,
+    /** Photos still to save after the last run; -1 when it could not tell. */
+    val pending: Int = -1,
 )
 
 class BackupSettingsStore(context: Context) {
@@ -36,6 +40,7 @@ class BackupSettingsStore(context: Context) {
             includeVideos = prefs.getBoolean("videos", false),
             byMonth = prefs.getBoolean("by_month", true),
             chargingOnly = prefs.getBoolean("charging_only", false),
+            statusNotification = prefs.getBoolean("status_notification", true),
         )
     }
 
@@ -48,6 +53,7 @@ class BackupSettingsStore(context: Context) {
             .putBoolean("videos", settings.includeVideos)
             .putBoolean("by_month", settings.byMonth)
             .putBoolean("charging_only", settings.chargingOnly)
+            .putBoolean("status_notification", settings.statusNotification)
             .apply()
     }
 
@@ -56,10 +62,12 @@ class BackupSettingsStore(context: Context) {
         lastUploaded = prefs.getInt("last_uploaded", 0),
         totalUploaded = prefs.getInt("total_uploaded", 0),
         lastError = prefs.getString("last_error", null),
+        pending = prefs.getInt("pending", -1),
     )
 
-    fun recordRun(uploaded: Int, error: String?) {
+    fun recordRun(uploaded: Int, error: String?, pending: Int) {
         prefs.edit()
+            .putInt("pending", pending)
             .putLong("last_run", System.currentTimeMillis())
             .putInt("last_uploaded", uploaded)
             .putInt("total_uploaded", prefs.getInt("total_uploaded", 0) + uploaded)

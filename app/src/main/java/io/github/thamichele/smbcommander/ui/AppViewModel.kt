@@ -248,6 +248,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
 
+    /** A folder opened from a widget. */
+    fun openFromOutside(share: String, path: String) {
+        if (repo.isConfigured) navigate(share, path)
+    }
+
     // --- navigation -------------------------------------------------------------------------------------------------
 
     fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
