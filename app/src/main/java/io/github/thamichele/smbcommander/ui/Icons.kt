@@ -37,6 +37,7 @@ object AppIcons {
     val OpenWith = icon("M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5")
     val Alert = icon("M12 3l9 16H3zM12 10v4M12 17h.01")
     val Check = icon("M5 12l5 5l9-10")
+    val Info = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8h.01")
     val ChevronRight = icon("M9 6l6 6l-6 6")
     val Eye = icon("M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6a3 3 0 1 0 0 6z")
     val EyeOff = icon("M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2")
