@@ -33,10 +33,14 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
 
 Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo QNAP: non usa API proprietarie.
 
-## In arrivo
+## Backup automatico delle foto
 
-- **Backup automatico delle foto** dalla fotocamera a una cartella del NAS, in background, quando il telefono è sul
-  Wi-Fi di casa.
+- Sceglie gli album del telefono da salvare (di default la fotocamera) e una delle tue cartelle sul NAS.
+- Parte da solo ogni ora, **solo sul Wi-Fi di casa** e con batteria sufficiente (facoltativo: solo in carica),
+  e quando apri l'app. Si può anche avviare a mano.
+- Divide le foto per anno e mese (`2026/10`), mantiene la posizione GPS delle foto, video facoltativi.
+- Ogni file passa da un nome temporaneo: un backup interrotto riprende da dove si era fermato e non lascia file a
+  metà. Le foto **non vengono mai cancellate dal telefono**.
 
 ## Privacy e sicurezza
 

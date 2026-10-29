@@ -32,6 +32,7 @@ import java.util.UUID
 sealed interface Screen {
     data object Setup : Screen
     data object Shares : Screen
+    data object Backup : Screen
     data class Browser(val share: String, val path: String) : Screen
 
     /** Full-screen photos of [folder], swiping through [images] starting at [index]. */
@@ -137,9 +138,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         repo.forget()
         app.folders.clear()
+        // a different NAS starts from scratch: no backup towards a folder that may not exist there
+        app.backupSettings.clear()
+        app.backupLedger.clear()
+        io.github.thamichele.smbcommander.backup.BackupScheduler.apply(app, app.backupSettings.load())
         listingCache.clear()
         _folders.value = emptyList()
         _screen.value = Screen.Setup
+    }
+
+    fun openBackup() {
+        _screen.value = Screen.Backup
+    }
+
+    fun openFiles() {
+        _screen.value = Screen.Shares
     }
 
     fun openSettings() {
@@ -225,6 +238,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 return true
             }
             Screen.Setup -> if (repo.isConfigured) {
+                _screen.value = Screen.Shares
+                return true
+            }
+            Screen.Backup -> {
                 _screen.value = Screen.Shares
                 return true
             }
