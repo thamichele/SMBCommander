@@ -90,7 +90,9 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
 
     private fun upload(fs: NasFileSystem, share: String, folder: String, item: MediaItem, createdDirs: MutableSet<String>) {
         ensureFolder(fs, share, folder, createdDirs)
-        val target = RemotePath.child(folder, item.name)
+        // the name comes from whichever app saved the photo: never let it pick another folder
+        val name = item.name.takeIf { RemotePath.isValidName(it) } ?: "media_${item.key.substringAfter(':').substringBefore(':')}"
+        val target = RemotePath.child(folder, name)
         val existing = fs.stat(share, target)
         if (existing != null && !existing.isDirectory && existing.size == item.size) return // already there
         val path = if (existing == null) target else EditSync.freePath(fs, share, target)

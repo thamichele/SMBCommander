@@ -10,7 +10,24 @@ data class NasServer(
     val username: String,
     val password: String,
     val domain: String = "",
-)
+    /** Identity the NAS showed when it was paired, see [ServerIdentity]; empty until the first connection. */
+    val serverId: String = "",
+) {
+    /** Keeps the password out of anything that prints the settings (logs, crash reports). */
+    override fun toString(): String = "NasServer(host=$host, username=$username, domain=$domain, serverId=$serverId)"
+}
+
+/**
+ * The NAS is recognised by the server GUID it sends before any password is exchanged. A different machine answering
+ * at the same address (another network with the same IP range, a spoofed name) is refused before it can receive the
+ * login, so it cannot collect the password hash. On Samba, and so on QNAP, the GUID comes from the NetBIOS name: it
+ * only changes when the NAS is renamed, and then connecting again from the settings pairs it anew.
+ */
+object ServerIdentity {
+    /** True when nothing is paired yet or [presented] is the paired identity. */
+    fun accepts(paired: String, presented: String?): Boolean =
+        paired.isEmpty() || (presented != null && paired.equals(presented, ignoreCase = true))
+}
 
 data class RemoteEntry(
     val share: String,

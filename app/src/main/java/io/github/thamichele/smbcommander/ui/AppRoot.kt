@@ -205,13 +205,16 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: 
     }
 }
 
-/** Hands the cached copy to another app; write permission lets editors save straight into it. */
+/** Hands the cached copy to another app; only editors get write permission, to save straight into it. */
 private fun openExternally(context: Context, file: File, name: String, edit: Boolean): Boolean {
     val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
     val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(RemotePath.extension(name)) ?: "*/*"
     val intent = Intent(if (edit) Intent.ACTION_EDIT else Intent.ACTION_VIEW)
         .setDataAndType(uri, mime)
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        .addFlags(
+            if (edit) Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            else Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
     return try {
         context.startActivity(if (edit) Intent.createChooser(intent, "Modifica con") else intent)
         true

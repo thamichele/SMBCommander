@@ -13,7 +13,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Keeps the NAS connection settings on the device. The password is encrypted with an AES key that never leaves the
- * Android Keystore; backups are disabled in the manifest, so nothing is copied off the phone.
+ * Android Keystore; backups and device-to-device transfers are disabled (manifest and data_extraction_rules.xml), so
+ * nothing is copied off the phone.
  */
 class CredentialStore(context: Context) {
 
@@ -30,6 +31,7 @@ class CredentialStore(context: Context) {
             username = prefs.getString(KEY_USER, "").orEmpty(),
             password = password,
             domain = prefs.getString(KEY_DOMAIN, "").orEmpty(),
+            serverId = prefs.getString(KEY_SERVER_ID, "").orEmpty(),
         )
     }
 
@@ -39,7 +41,13 @@ class CredentialStore(context: Context) {
             .putString(KEY_USER, server.username)
             .putString(KEY_DOMAIN, server.domain)
             .putString(KEY_PASSWORD, encrypt(server.password))
+            .putString(KEY_SERVER_ID, server.serverId)
             .apply()
+    }
+
+    /** Remembers the identity of the NAS, learnt at the first connection after an update. */
+    fun savePairing(serverId: String) {
+        prefs.edit().putString(KEY_SERVER_ID, serverId).apply()
     }
 
     fun clear() {
@@ -83,5 +91,6 @@ class CredentialStore(context: Context) {
         const val KEY_USER = "user"
         const val KEY_DOMAIN = "domain"
         const val KEY_PASSWORD = "password"
+        const val KEY_SERVER_ID = "server_id"
     }
 }

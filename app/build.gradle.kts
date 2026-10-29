@@ -44,6 +44,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // the debug key is public (committed above): its builds get their own identity, so an APK signed with it
+            // can never install as an update of the real app and read its data
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("release")

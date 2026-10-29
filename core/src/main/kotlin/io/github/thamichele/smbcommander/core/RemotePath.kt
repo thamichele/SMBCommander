@@ -6,8 +6,9 @@ package io.github.thamichele.smbcommander.core
  */
 object RemotePath {
 
+    /** ".." is dropped too: a path must never climb out of the folder it was built from. */
     fun normalize(path: String): String =
-        path.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }.joinToString("/")
+        path.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." && it != ".." }.joinToString("/")
 
     fun child(parent: String, name: String): String {
         val p = normalize(parent)
