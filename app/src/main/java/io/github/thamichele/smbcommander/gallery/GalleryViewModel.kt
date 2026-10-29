@@ -7,7 +7,7 @@ import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.SavedFolder
-import io.github.thamichele.smbcommander.data.isImage
+import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -103,7 +103,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun walk(fs: NasFileSystem, share: String, path: String, depth: Int, found: (List<RemoteEntry>) -> Unit) {
         currentCoroutineContext().ensureActive()
         val entries = fs.list(share, path).filterNot { it.name.startsWith(".") || it.name.startsWith("@") }
-        val photos = entries.filter { it.isImage }
+        val photos = entries.filter { it.isMedia }
         if (photos.isNotEmpty()) found(photos)
         if (depth >= MAX_DEPTH) return
         // newest folders first, so "2026/10" shows before "2019/01"

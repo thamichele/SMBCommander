@@ -12,6 +12,7 @@ import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.widget.BackupWidget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -114,6 +115,8 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setChargingOnly(on: Boolean) = update(_settings.value.copy(chargingOnly = on))
 
+    fun setStatusNotification(on: Boolean) = update(_settings.value.copy(statusNotification = on))
+
     fun runNow() = BackupScheduler.runNow(app, _settings.value)
 
     private val _freeSpace = MutableStateFlow<FreeSpace>(FreeSpace.Idle)
@@ -206,5 +209,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         _settings.value = settings
         store.save(settings)
         BackupScheduler.apply(app, settings)
+        BackupNotifier.update(app)
+        BackupWidget.updateAll(app)
     }
 }

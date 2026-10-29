@@ -22,6 +22,7 @@ import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.widget.BackupWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -45,7 +46,7 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         val destination = settings.destination
         if (!settings.enabled || destination == null) return Result.success()
         if (!hasMediaPermission(applicationContext)) {
-            app.backupSettings.recordRun(0, "Manca il permesso di leggere le foto")
+            finish(0, "Manca il permesso di leggere le foto", -1)
             return Result.success()
         }
         if (!app.repository.isConfigured) return Result.success()
@@ -53,7 +54,7 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         val pending = MediaScanner(applicationContext).items(settings.albums, settings.includeVideos)
             .filterNot { app.backupLedger.contains(it.key) }
         if (pending.isEmpty()) {
-            app.backupSettings.recordRun(0, null)
+            finish(0, null, 0)
             return Result.success()
         }
 
@@ -64,7 +65,7 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             app.repository.fs().also { it.list(destination.share, destination.path) }
         } catch (e: Exception) {
             // most likely away from home: try again at the next run
-            app.backupSettings.recordRun(0, "NAS non raggiungibile: ${e.message ?: e.javaClass.simpleName}")
+            finish(0, "NAS non raggiungibile: ${e.message ?: e.javaClass.simpleName}", pending.size)
             return Result.retry()
         }
 
@@ -86,15 +87,22 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
                 app.backupLedger.add(item.key)
                 uploaded++
             } catch (e: NasException) {
-                app.backupSettings.recordRun(uploaded, "Backup interrotto: ${e.message}")
+                finish(uploaded, "Backup interrotto: ${e.message}", pending.size - uploaded)
                 return Result.retry()
             } catch (e: Exception) {
                 // one unreadable or rejected file must not block all the others
                 lastError = "«${item.name}» non salvato: ${e.message ?: e.javaClass.simpleName}"
             }
         }
-        app.backupSettings.recordRun(uploaded, lastError)
+        finish(uploaded, lastError, pending.size - uploaded)
         return Result.success()
+    }
+
+    /** Remembers how the run went and shows it: status notification and home screen widget. */
+    private fun finish(uploaded: Int, error: String?, pending: Int) {
+        app.backupSettings.recordRun(uploaded, error, pending)
+        BackupNotifier.update(applicationContext)
+        BackupWidget.updateAll(applicationContext)
     }
 
     private fun upload(fs: NasFileSystem, share: String, folder: String, item: MediaItem, createdDirs: MutableSet<String>) {

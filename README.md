@@ -22,14 +22,20 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   e quelle che non ti interessa gestire dal telefono restano fuori.
 - Interfaccia moderna (Jetpack Compose), fluida anche con migliaia di file.
 - Genera le **miniature delle foto una volta sola** e le tiene in cache sul telefono.
-- **Visualizzatore di foto** a schermo intero con zoom e scorrimento: mostra un'anteprima leggera (1600 px, JPEG
-  compresso) salvata in cache, così la seconda volta si apre all'istante. L'originale si apre o si salva solo se
-  serve.
+- **Visualizzatore di foto e video** a schermo intero con zoom e scorrimento: per le foto mostra una copia con gli
+  stessi pixel dell'originale (solo compressa in JPEG) salvata in cache, così la seconda volta si apre all'istante.
+  I video si riproducono in streaming dal NAS, senza scaricarli prima. L'originale si apre o si salva solo se serve.
 - **Modifica sicura dei file**: il file viene scaricato in una cache temporanea e aperto con l'app che preferisci.
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
   non rovina mai l'originale.
-- Operazioni di base: carica dal telefono, scarica sul telefono, nuova cartella, rinomina, elimina.
+- Operazioni di base: carica dal telefono, scarica sul telefono, nuova cartella, nuovo file di testo vuoto, rinomina,
+  elimina.
+- **Copia e sposta** tra cartelle del NAS: tieni premuto per selezionare uno o più elementi, scegli Copia o Sposta,
+  apri la cartella di destinazione e premi «Incolla qui». I trasferimenti vanno in una coda con l'avanzamento e
+  continuano mentre navighi; quando possibile la copia la fa il NAS stesso, senza passare dal telefono.
+- **Salva sul NAS dalle altre app**: dal menu Condividi di qualunque app scegli «Salva sul NAS», poi la cartella.
+- **Widget** per la schermata Home: avvia il backup o apre una cartella scelta.
 
 Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo QNAP: non usa API proprietarie.
 
@@ -39,6 +45,8 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 - Parte da solo ogni ora, **solo sul Wi-Fi di casa** e con batteria sufficiente (facoltativo: solo in carica),
   e quando apri l'app. Si può anche avviare a mano.
 - Divide le foto per anno e mese (`2026/10`), mantiene la posizione GPS delle foto, video facoltativi.
+- Una notifica discreta dice quante foto restano da salvare, com'è andato l'ultimo backup ed eventuali errori
+  (si può disattivare).
 - Ogni file passa da un nome temporaneo: un backup interrotto riprende da dove si era fermato e non lascia file a
   metà. Il backup **non cancella mai nulla dal telefono** da solo.
 - **Libera spazio**: quando vuoi, l'app cerca le foto del telefono che sono già sul NAS e te le propone da eliminare.
@@ -50,7 +58,7 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 
 ## Galleria foto
 
-La sezione **Galleria** mostra solo le foto della cartella in cui finisce il backup, e nient'altro: niente
+La sezione **Galleria** mostra solo le foto e i video della cartella in cui finisce il backup, e nient'altro: niente
 indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
 recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
 Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come

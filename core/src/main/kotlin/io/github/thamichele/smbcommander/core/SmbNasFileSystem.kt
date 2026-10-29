@@ -167,6 +167,61 @@ class SmbNasFileSystem(
         ).use { it.rename(RemotePath.toSmb(to), replace) }
     }
 
+    override fun openRandom(share: String, path: String): RandomReader = withRetry {
+        val file = disk(share).openFile(
+            RemotePath.toSmb(path),
+            EnumSet.of(AccessMask.GENERIC_READ),
+            null,
+            SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_OPEN,
+            null
+        )
+        val length = file.fileInformation.standardInformation.endOfFile
+        object : RandomReader {
+            override val size: Long = length
+
+            override fun read(position: Long, buffer: ByteArray, offset: Int, length: Int): Int {
+                if (position >= size) return -1
+                return file.read(buffer, position, offset, length).let { if (it <= 0) -1 else it }
+            }
+
+            override fun close() = file.close()
+        }
+    }
+
+    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress) {
+        val total = stat(fromShare, from)?.size ?: -1L
+        progress(0, total)
+        // server-side copy (FSCTL_SRV_COPYCHUNK): the NAS copies the bytes itself
+        val copiedOnNas = runCatching {
+            withRetry {
+                disk(fromShare).openFile(
+                    RemotePath.toSmb(from),
+                    EnumSet.of(AccessMask.GENERIC_READ),
+                    null,
+                    SMB2ShareAccess.ALL,
+                    SMB2CreateDisposition.FILE_OPEN,
+                    null
+                ).use { source ->
+                    disk(toShare).openFile(
+                        RemotePath.toSmb(to),
+                        EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE),
+                        null,
+                        SMB2ShareAccess.ALL,
+                        SMB2CreateDisposition.FILE_OVERWRITE_IF,
+                        null
+                    ).use { target -> source.remoteCopyTo(target) }
+                }
+            }
+        }.isSuccess
+        if (copiedOnNas) {
+            progress(total, total)
+            return
+        }
+        // the NAS refused (or copying between shares is not allowed): stream it through the phone
+        openRead(fromShare, from).use { input -> upload(toShare, to, input, total, progress) }
+    }
+
     override fun close() {
         synchronized(lock) {
             disconnect()
