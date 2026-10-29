@@ -12,9 +12,7 @@ import io.github.thamichele.smbcommander.data.CredentialStore
 import io.github.thamichele.smbcommander.data.EditSessionStore
 import io.github.thamichele.smbcommander.data.FolderStore
 import io.github.thamichele.smbcommander.data.NasRepository
-import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ThumbnailCache
-import kotlinx.coroutines.flow.MutableSharedFlow
 import java.io.File
 
 class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
@@ -31,9 +29,6 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var backupLedger: BackupLedger
         private set
-
-    /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
-    val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)
 
     override fun onCreate() {
         super.onCreate()

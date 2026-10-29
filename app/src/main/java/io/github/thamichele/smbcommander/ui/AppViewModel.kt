@@ -321,43 +321,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun delete(entry: RemoteEntry) = folderOperation("«${entry.name}» eliminato") { share, _ ->
         repo.io { it.delete(share, entry.path) }
-        app.deletedPhotos.emit(listOf(entry)) // the gallery may show it too
-    }
-
-    /**
-     * Deletes photos from the NAS, from the gallery or the viewer. The backup ledger keeps them, so the backup does not
-     * upload them again.
-     */
-    fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
-        val gone = ArrayList<RemoteEntry>()
-        var error: String? = null
-        for (photo in photos) {
-            try {
-                repo.io { it.delete(photo.share, photo.path) }
-                gone += photo
-            } catch (e: Exception) {
-                error = e.readable()
-                break
-            }
-        }
-        if (gone.isNotEmpty()) {
-            app.deletedPhotos.emit(gone)
-            dropDeleted(gone)
-        }
-        message(
-            error ?: if (gone.size == 1) "Foto eliminata dal NAS" else "${gone.size} foto eliminate dal NAS"
-        )
-    }
-
-    /** Takes deleted photos out of the viewer and of the folder listings already loaded. */
-    private fun dropDeleted(gone: List<RemoteEntry>) {
-        val keys = gone.map { it.share + "/" + it.path }.toSet()
-        val isGone = { e: RemoteEntry -> e.share + "/" + e.path in keys }
-        listingCache.replaceAll { _, list -> list.filterNot(isGone) }
-        _browser.update { it.copy(entries = it.entries.filterNot(isGone)) }
-        val s = _screen.value as? Screen.Viewer ?: return
-        val left = s.images.filterNot(isGone)
-        _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
     }
 
     /** Copies documents picked on the phone into the current folder; names already taken get " (2)", " (3)"... */

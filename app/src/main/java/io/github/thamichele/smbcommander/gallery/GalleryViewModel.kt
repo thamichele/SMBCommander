@@ -16,10 +16,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import java.util.concurrent.ConcurrentHashMap
 
 /** Photos of one month, newest month first. */
 data class MonthGroup(val year: Int, val month: Int, val photos: List<RemoteEntry>)
@@ -45,18 +43,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val state: StateFlow<GalleryState> = _state.asStateFlow()
     private var job: Job? = null
 
-    /** Deleted while a walk may still be running: kept out of what it finds. */
-    private val deleted = ConcurrentHashMap.newKeySet<String>()
-
-    init {
-        viewModelScope.launch {
-            app.deletedPhotos.collect { gone ->
-                deleted += gone.map { key(it) }
-                _state.update { s -> s.copy(months = s.months.withoutDeleted()) }
-            }
-        }
-    }
-
     /** Loads on first show, or again when the backup folder changed meanwhile. */
     fun ensureLoaded() {
         val folder = app.backupSettings.load().destination
@@ -68,8 +54,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun refresh() {
         val folder = app.backupSettings.load().destination
         job?.cancel()
-        // a fresh walk only finds what is still on the NAS
-        deleted.clear()
         if (folder == null) {
             _state.value = GalleryState()
             return
@@ -81,9 +65,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val fs = app.repository.fs()
                 walk(fs, folder.share, folder.path, 0) { batch ->
                     found += batch
-                    _state.update { it.copy(months = group(found.filterNot(::isDeleted))) }
+                    _state.value = _state.value.copy(months = group(found))
                 }
-                _state.update { it.copy(months = group(found.filterNot(::isDeleted)), loading = false) }
+                _state.value = _state.value.copy(months = group(found), loading = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -118,18 +102,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val cal = Calendar.getInstance().apply { timeInMillis = photo.modified }
         return cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) + 1
     }
-
-    private fun key(e: RemoteEntry) = e.share + "/" + e.path
-
-    /** The photo itself, or a folder that contained it, was deleted. */
-    private fun isDeleted(e: RemoteEntry): Boolean {
-        if (deleted.isEmpty()) return false
-        val k = key(e)
-        return deleted.any { k == it || k.startsWith("$it/") }
-    }
-
-    private fun List<MonthGroup>.withoutDeleted(): List<MonthGroup> =
-        map { g -> g.copy(photos = g.photos.filterNot(::isDeleted)) }.filter { it.photos.isNotEmpty() }
 
     private companion object {
         const val MAX_DEPTH = 3
