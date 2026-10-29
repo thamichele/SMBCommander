@@ -18,7 +18,9 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
 
 - Si collega al NAS **solo in rete locale** tramite **SMB 2/3**, il protocollo più veloce in casa. Niente cloud,
   niente relay, niente porte aperte su Internet.
-- Mostra condivisioni e cartelle con un'interfaccia moderna (Jetpack Compose), fluida anche con migliaia di file.
+- Mostra **solo le cartelle che scegli tu**: le aggiungi a mano per nome, comprese le cartelle condivise nascoste,
+  e quelle che non ti interessa gestire dal telefono restano fuori.
+- Interfaccia moderna (Jetpack Compose), fluida anche con migliaia di file.
 - Genera le **miniature delle foto una volta sola** e le tiene in cache sul telefono.
 - **Modifica sicura dei file**: il file viene scaricato in una cache temporanea e aperto con l'app che preferisci.
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che

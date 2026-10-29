@@ -49,8 +49,8 @@ class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
     override fun listShares(): List<String> = withRetry {
         val transport = SMBTransportFactories.SRVSVC.getTransport(session())
         ServerService(transport).shares1
-            // type 0 = disk share; the high bits only flag special/temporary shares
-            .filter { (it.type and 0xFFFF) == 0 && !it.netName.endsWith("$") }
+            // low bits 0 = disk share; the "special" bit marks administrative shares such as ADMIN$ and C$
+            .filter { (it.type and 0xFFFF) == 0 && (it.type and STYPE_SPECIAL) == 0 }
             .map { it.netName }
             .sortedBy { it.lowercase() }
     }
@@ -236,6 +236,7 @@ class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
 
     private companion object {
         const val BUFFER_SIZE = 1 shl 20
+        const val STYPE_SPECIAL = 0x80000000.toInt()
         val NOT_FOUND = setOf(
             NtStatus.STATUS_OBJECT_NAME_NOT_FOUND,
             NtStatus.STATUS_OBJECT_PATH_NOT_FOUND,

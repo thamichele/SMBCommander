@@ -12,6 +12,7 @@ import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
+import io.github.thamichele.smbcommander.data.SavedFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -82,12 +83,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _screen = MutableStateFlow<Screen>(if (repo.isConfigured) Screen.Shares else Screen.Setup)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
 
-    private val _shares = MutableStateFlow<List<String>>(emptyList())
-    val shares: StateFlow<List<String>> = _shares.asStateFlow()
-    private val _sharesError = MutableStateFlow<String?>(null)
-    val sharesError: StateFlow<String?> = _sharesError.asStateFlow()
-    private val _sharesLoading = MutableStateFlow(false)
-    val sharesLoading: StateFlow<Boolean> = _sharesLoading.asStateFlow()
+    private val _folders = MutableStateFlow(app.folders.all())
+    val folders: StateFlow<List<SavedFolder>> = _folders.asStateFlow()
+
+    /** Shares the NAS announces, offered as shortcuts when adding a folder. */
+    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
+    val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
+
+    private val _checkingFolder = MutableStateFlow(false)
+    val checkingFolder: StateFlow<Boolean> = _checkingFolder.asStateFlow()
 
     private val _browser = MutableStateFlow(BrowserState())
     val browser: StateFlow<BrowserState> = _browser.asStateFlow()
@@ -109,10 +113,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var listJob: Job? = null
     private val syncMutex = Mutex()
 
-    init {
-        if (repo.isConfigured) loadShares()
-    }
-
     fun savedServer(): NasServer? = repo.server()
 
     // --- connection -------------------------------------------------------------------------------------------------
@@ -123,7 +123,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             repo.connect(server)
             listingCache.clear()
             _screen.value = Screen.Shares
-            loadShares()
         } catch (e: Exception) {
             message(e.readable())
         } finally {
@@ -133,8 +132,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnect() {
         repo.forget()
+        app.folders.clear()
         listingCache.clear()
-        _shares.value = emptyList()
+        _folders.value = emptyList()
         _screen.value = Screen.Setup
     }
 
@@ -142,21 +142,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = Screen.Setup
     }
 
-    fun loadShares() = viewModelScope.launch {
-        _sharesLoading.value = true
-        _sharesError.value = null
-        try {
-            _shares.value = repo.io { it.listShares() }
-        } catch (e: Exception) {
-            _sharesError.value = e.readable()
-        } finally {
-            _sharesLoading.value = false
+    // --- the user's folders ------------------------------------------------------------------------------------------
+
+    fun loadSuggestions() = viewModelScope.launch {
+        _suggestions.value = runCatching { repo.io { it.listShares() } }.getOrDefault(emptyList())
+    }
+
+    /** Adds a folder typed by the user ("Multimedia/Foto", "Backup$") after checking it really opens. */
+    fun addFolder(input: String, onAdded: () -> Unit) {
+        val folder = SavedFolder.parse(input) ?: return message("Scrivi il nome di una cartella condivisa")
+        viewModelScope.launch {
+            _checkingFolder.value = true
+            try {
+                val entry = repo.io { fs ->
+                    fs.list(folder.share, folder.path)
+                    if (folder.path.isEmpty()) null else fs.stat(folder.share, folder.path)
+                }
+                if (entry != null && !entry.isDirectory) error("«${folder.fullPath}» è un file, non una cartella")
+                _folders.value = app.folders.add(folder)
+                onAdded()
+                message("«${folder.name}» aggiunta alle tue cartelle")
+            } catch (e: Exception) {
+                message("Non riesco ad aprire «${folder.fullPath}»: ${e.readable()}")
+            } finally {
+                _checkingFolder.value = false
+            }
         }
     }
 
-    // --- navigation -------------------------------------------------------------------------------------------------
+    fun removeFolder(folder: SavedFolder) {
+        _folders.value = app.folders.remove(folder)
+        message("«${folder.name}» tolta dall'elenco (sul NAS non cambia nulla)")
+    }
 
-    fun openShare(share: String) = navigate(share, "")
+    /** Adds the folder being browsed to the start screen. */
+    fun pinCurrent() {
+        val s = _screen.value as? Screen.Browser ?: return
+        val folder = SavedFolder(s.share, s.path)
+        _folders.value = app.folders.add(folder)
+        message("«${folder.name}» aggiunta alle tue cartelle")
+    }
+
+    fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
+
+    // --- navigation -------------------------------------------------------------------------------------------------
 
     fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
 

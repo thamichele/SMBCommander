@@ -73,7 +73,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (val s = screen) {
                 Screen.Setup -> SetupScreen(vm)
-                Screen.Shares -> SharesScreen(vm)
+                Screen.Shares -> FoldersScreen(vm)
                 is Screen.Browser -> BrowserScreen(vm, s)
             }
             transfer?.let { t ->

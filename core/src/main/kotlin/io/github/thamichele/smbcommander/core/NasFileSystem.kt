@@ -33,7 +33,10 @@ typealias Progress = (done: Long, total: Long) -> Unit
  */
 interface NasFileSystem : Closeable {
 
-    /** Disk shares visible to the user, hidden admin shares (ending in "$") excluded. */
+    /**
+     * Disk shares the NAS announces, administrative ones (ADMIN$, C$) excluded. Shares hidden from browsing are not
+     * announced at all: those can only be opened by name.
+     */
     fun listShares(): List<String>
 
     fun list(share: String, path: String): List<RemoteEntry>

@@ -138,7 +138,7 @@ fun SetupScreen(vm: AppViewModel) {
     if (confirmForget) {
         ConfirmDialog(
             title = "Dimenticare il NAS?",
-            text = "Indirizzo, utente e password vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
+            text = "Indirizzo, utente, password e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
             confirm = "Dimentica",
             danger = true,
             onDismiss = { confirmForget = false },

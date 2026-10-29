@@ -69,6 +69,8 @@ private sealed interface Dialog {
 @Composable
 fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     val state by vm.browser.collectAsStateWithLifecycle()
+    val folders by vm.folders.collectAsStateWithLifecycle()
+    val pinned = folders.any { it.share == screen.share && it.path == screen.path }
     val c = Arancio.colors
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     var addMenu by remember { mutableStateOf(false) }
@@ -113,6 +115,9 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                                 if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
                                 if (state.showHidden) "Nascondi file di sistema" else "Mostra file di sistema",
                             ) { moreMenu = false; vm.toggleHidden() }
+                            if (!pinned) {
+                                MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
+                            }
                             MenuItem(AppIcons.Server, "Impostazioni del NAS") { moreMenu = false; vm.openSettings() }
                         }
                     }
