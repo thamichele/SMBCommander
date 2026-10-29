@@ -45,6 +45,14 @@ data class RemoteEntry(
 /** Called with bytes transferred so far and the total (-1 when unknown). */
 typealias Progress = (done: Long, total: Long) -> Unit
 
+/** Reads a file at any position without downloading it: what video playback and video frames need. */
+interface RandomReader : Closeable {
+    val size: Long
+
+    /** Up to [length] bytes at [position] into [buffer]; -1 at the end of the file. */
+    fun read(position: Long, buffer: ByteArray, offset: Int, length: Int): Int
+}
+
 /**
  * File operations on the NAS. All functions block: call them from a background dispatcher.
  */
@@ -74,6 +82,14 @@ interface NasFileSystem : Closeable {
     fun delete(share: String, path: String)
 
     fun rename(share: String, from: String, to: String, replace: Boolean = false)
+
+    fun openRandom(share: String, path: String): RandomReader
+
+    /**
+     * Copies one file to [to], creating or truncating it. When both are on the same NAS the copy is done by the NAS
+     * itself where possible, so the data does not travel through the phone.
+     */
+    fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress = { _, _ -> })
 }
 
 class NasException(message: String, cause: Throwable? = null) : Exception(message, cause)

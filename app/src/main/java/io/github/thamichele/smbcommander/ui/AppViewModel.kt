@@ -14,7 +14,9 @@ import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
+import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.isImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,6 +80,9 @@ data class BrowserState(
         }
 }
 
+/** Entries waiting for "Incolla qui" in another folder. */
+data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
+
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
     data class OpenFile(val file: File, val name: String, val edit: Boolean) : UiEvent
@@ -114,6 +119,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _connecting = MutableStateFlow(false)
     val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
 
+    /** Paths selected in the folder being browsed; while not empty, taps select instead of opening. */
+    private val _selected = MutableStateFlow<Set<String>>(emptySet())
+    val selected: StateFlow<Set<String>> = _selected.asStateFlow()
+
+    private val _clipboard = MutableStateFlow<Clipboard?>(null)
+    val clipboard: StateFlow<Clipboard?> = _clipboard.asStateFlow()
+
+    val transfers: StateFlow<List<TransferJob>> = app.transfers.jobs
+
     private val events = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvents = events.receiveAsFlow()
 
@@ -121,6 +135,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val listingCache = HashMap<String, List<RemoteEntry>>()
     private var listJob: Job? = null
     private val syncMutex = Mutex()
+
+    init {
+        viewModelScope.launch {
+            app.transfers.finished.collect { job ->
+                // a copy or move changes other folders too: forget them all
+                listingCache.clear()
+                refresh()
+                if (job.state == TransferJob.State.Failed) message("${job.label}: ${job.error}")
+            }
+        }
+    }
 
     fun savedServer(): NasServer? = repo.server()
 
@@ -228,6 +253,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
 
     fun navigate(share: String, path: String) {
+        _selected.value = emptySet()
         _screen.value = Screen.Browser(share, RemotePath.normalize(path))
         _browser.update { it.copy(query = "", searching = false) }
         refresh()
@@ -254,7 +280,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 return true
             }
             is Screen.Browser -> {
-                if (_browser.value.searching) {
+                if (_selected.value.isNotEmpty()) {
+                    _selected.value = emptySet()
+                } else if (_browser.value.searching) {
                     _browser.update { it.copy(searching = false, query = "") }
                 } else if (s.path.isEmpty()) {
                     listJob?.cancel()
@@ -318,6 +346,75 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 error("Esiste già un elemento chiamato «${newName.trim()}»")
             }
             it.rename(share, entry.path, target, replace = false)
+        }
+    }
+
+    /** An empty text file, nothing more: editing it is left to the apps on the phone. */
+    fun createTextFile(name: String) = folderOperation("File creato") { share, dir ->
+        val clean = checkName(name).let { if (RemotePath.extension(it).isEmpty()) "$it.txt" else it }
+        val path = RemotePath.child(dir, clean)
+        repo.io {
+            if (it.stat(share, path) != null) error("Esiste già un elemento chiamato «$clean»")
+            it.upload(share, path, java.io.ByteArrayInputStream(ByteArray(0)), 0)
+        }
+    }
+
+    // --- selection, copy and move -----------------------------------------------------------------------------------
+
+    fun toggleSelected(entry: RemoteEntry) = _selected.update { if (entry.path in it) it - entry.path else it + entry.path }
+
+    fun clearSelection() {
+        _selected.value = emptySet()
+    }
+
+    fun selectAll() {
+        _selected.value = _browser.value.visible.mapTo(HashSet()) { it.path }
+    }
+
+    private fun selectedEntries(): List<RemoteEntry> {
+        val paths = _selected.value
+        return _browser.value.entries.filter { it.path in paths }
+    }
+
+    /** Puts the selection on the clipboard; it is pasted in whichever folder the user opens next. */
+    fun cut(move: Boolean) {
+        val entries = selectedEntries()
+        if (entries.isEmpty()) return
+        _clipboard.value = Clipboard(entries, move)
+        _selected.value = emptySet()
+        message("Apri la cartella di destinazione e premi «Incolla qui»")
+    }
+
+    fun clearClipboard() {
+        _clipboard.value = null
+    }
+
+    /** Queues one job per clipboard entry, into the folder being browsed. */
+    fun paste() {
+        val s = _screen.value as? Screen.Browser ?: return
+        val clip = _clipboard.value ?: return
+        val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
+        for (entry in clip.entries) {
+            val label = (if (clip.move) "Sposta" else "Copia") + " «${entry.name}» in $destination"
+            app.transfers.enqueue(label) { fs, progress ->
+                val listener = Transfers.Listener { name, done, total -> progress(name, done, total) }
+                if (clip.move) Transfers.move(fs, entry, s.share, s.path, listener)
+                else Transfers.copy(fs, entry, s.share, s.path, listener)
+            }
+        }
+        _clipboard.value = null
+    }
+
+    fun cancelTransfers() = app.transfers.cancelAll()
+
+    fun clearTransfers() = app.transfers.clearFinished()
+
+    fun deleteSelected() {
+        val entries = selectedEntries()
+        _selected.value = emptySet()
+        folderOperation(if (entries.size == 1) "«${entries[0].name}» eliminato" else "${entries.size} elementi eliminati") { share, _ ->
+            for (entry in entries) repo.io { it.delete(share, entry.path) }
+            app.deletedPhotos.emit(entries)
         }
     }
 

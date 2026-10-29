@@ -14,6 +14,7 @@ import io.github.thamichele.smbcommander.data.FolderStore
 import io.github.thamichele.smbcommander.data.NasRepository
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ThumbnailCache
+import io.github.thamichele.smbcommander.data.TransferQueue
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
 import kotlinx.coroutines.flow.MutableSharedFlow
 import java.io.File
@@ -34,6 +35,8 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var galleryPrefs: GalleryPrefs
         private set
+    lateinit var transfers: TransferQueue
+        private set
 
     /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
     val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)
@@ -46,6 +49,7 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         backupSettings = BackupSettingsStore(this)
         backupLedger = BackupLedger(File(filesDir, "backup-ledger.txt"))
         galleryPrefs = GalleryPrefs(this)
+        transfers = TransferQueue(repository)
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository)

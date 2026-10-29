@@ -68,5 +68,24 @@ class FakeNasFileSystem : NasFileSystem {
         modified[t] = modified.remove(f)!!
     }
 
+    override fun openRandom(share: String, path: String): RandomReader {
+        val bytes = files[key(share, path)] ?: throw NasException("not found")
+        return object : RandomReader {
+            override val size = bytes.size.toLong()
+            override fun read(position: Long, buffer: ByteArray, offset: Int, length: Int): Int {
+                if (position >= size) return -1
+                val n = minOf(length.toLong(), size - position).toInt()
+                System.arraycopy(bytes, position.toInt(), buffer, offset, n)
+                return n
+            }
+            override fun close() {}
+        }
+    }
+
+    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress) {
+        files[key(toShare, to)] = (files[key(fromShare, from)] ?: throw NasException("not found")).copyOf()
+        modified[key(toShare, to)] = ++clock
+    }
+
     override fun close() {}
 }

@@ -58,6 +58,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val screen by vm.screen.collectAsStateWithLifecycle()
     val transfer by vm.transfer.collectAsStateWithLifecycle()
     val prompt by vm.syncPrompt.collectAsStateWithLifecycle()
+    val jobs by vm.transfers.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -96,6 +97,9 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)
+            }
+            if (jobs.isNotEmpty() && transfer == null) {
+                TransferCard(jobs, onCancel = vm::cancelTransfers, onClose = vm::clearTransfers, modifier = Modifier.align(Alignment.BottomCenter))
             }
             transfer?.let { t ->
                 Column(

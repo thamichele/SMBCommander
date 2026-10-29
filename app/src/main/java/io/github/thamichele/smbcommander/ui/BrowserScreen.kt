@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -34,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +66,8 @@ import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 private sealed interface Dialog {
     data object NewFolder : Dialog
+    data object NewTextFile : Dialog
+    data object DeleteSelected : Dialog
     data class Rename(val entry: RemoteEntry) : Dialog
     data class Delete(val entry: RemoteEntry) : Dialog
 }
@@ -71,6 +77,8 @@ private sealed interface Dialog {
 fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     val state by vm.browser.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
+    val selected by vm.selected.collectAsStateWithLifecycle()
+    val clipboard by vm.clipboard.collectAsStateWithLifecycle()
     val pinned = folders.any { it.share == screen.share && it.path == screen.path }
     val c = Arancio.colors
     var dialog by remember { mutableStateOf<Dialog?>(null) }
@@ -86,8 +94,10 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     }
 
     val actions = EntryActions(
+        selected = selected,
         open = {
             when {
+                selected.isNotEmpty() -> vm.toggleSelected(it)
                 it.isDirectory -> vm.openFolder(it)
                 it.isImage -> vm.openViewer(it)
                 else -> vm.open(it, edit = false)
@@ -97,11 +107,36 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         download = { pendingDownload = it; saveFile.launch(it.name) },
         rename = { dialog = Dialog.Rename(it) },
         delete = { dialog = Dialog.Delete(it) },
+        select = vm::toggleSelected,
     )
+    val single = if (selected.size == 1) state.entries.firstOrNull { it.path in selected } else null
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            if (state.searching) {
+            if (selected.isNotEmpty()) {
+                PageHeader(
+                    context = "Selezione",
+                    title = if (selected.size == 1) "1 selezionato" else "${selected.size} selezionati",
+                    navigation = { ToolButton(AppIcons.Close, "Annulla selezione", vm::clearSelection) },
+                ) {
+                    ToolButton(AppIcons.Copy, "Copia", { vm.cut(move = false) })
+                    ToolButton(AppIcons.Move, "Sposta", { vm.cut(move = true) })
+                    ToolButton(AppIcons.Delete, "Elimina", { dialog = Dialog.DeleteSelected }, tint = c.danger)
+                    Box {
+                        ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
+                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }, containerColor = c.surfaceRaised) {
+                            MenuItem(AppIcons.Check, "Seleziona tutto") { moreMenu = false; vm.selectAll() }
+                            single?.let { entry ->
+                                if (!entry.isDirectory) {
+                                    MenuItem(AppIcons.OpenWith, "Modifica con…") { moreMenu = false; vm.clearSelection(); actions.edit(entry) }
+                                    MenuItem(AppIcons.Download, "Salva sul telefono") { moreMenu = false; vm.clearSelection(); actions.download(entry) }
+                                }
+                                MenuItem(AppIcons.Rename, "Rinomina") { moreMenu = false; vm.clearSelection(); actions.rename(entry) }
+                            }
+                        }
+                    }
+                }
+            } else if (state.searching) {
                 SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) })
             } else {
                 val title = if (screen.path.isEmpty()) screen.share else RemotePath.name(screen.path)
@@ -181,7 +216,11 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             }
         }
 
-        Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+        clipboard?.let { clip ->
+            ClipboardBar(clip, onPaste = vm::paste, onCancel = vm::clearClipboard, modifier = Modifier.align(Alignment.BottomCenter))
+        }
+
+        if (clipboard == null && selected.isEmpty()) Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
             FloatingActionButton(
                 onClick = { addMenu = true },
                 containerColor = c.accent,
@@ -193,6 +232,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, containerColor = c.surfaceRaised) {
                 MenuItem(AppIcons.Upload, "Carica file dal telefono") { addMenu = false; pickFiles.launch(arrayOf("*/*")) }
                 MenuItem(AppIcons.FolderPlus, "Nuova cartella") { addMenu = false; dialog = Dialog.NewFolder }
+                MenuItem(AppIcons.Document, "Nuovo file di testo") { addMenu = false; dialog = Dialog.NewTextFile }
             }
         }
     }
@@ -202,6 +242,21 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             dialog = null
             vm.createFolder(it)
         }
+        Dialog.NewTextFile -> NameDialog("Nuovo file di testo", "Nuovo documento.txt", "Crea", { dialog = null }) {
+            dialog = null
+            vm.createTextFile(it)
+        }
+        Dialog.DeleteSelected -> ConfirmDialog(
+            title = if (selected.size == 1) "Eliminare l'elemento selezionato?" else "Eliminare ${selected.size} elementi?",
+            text = "Verranno eliminati dal NAS, cartelle comprese con tutto il loro contenuto.",
+            confirm = "Elimina",
+            danger = true,
+            onDismiss = { dialog = null },
+            onConfirm = {
+                dialog = null
+                vm.deleteSelected()
+            },
+        )
         is Dialog.Rename -> NameDialog("Rinomina", d.entry.name, "Rinomina", { dialog = null }) {
             dialog = null
             vm.rename(d.entry, it)
@@ -223,31 +278,39 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
 }
 
 private class EntryActions(
+    val selected: Set<String>,
     val open: (RemoteEntry) -> Unit,
     val edit: (RemoteEntry) -> Unit,
     val download: (RemoteEntry) -> Unit,
     val rename: (RemoteEntry) -> Unit,
     val delete: (RemoteEntry) -> Unit,
+    /** Long press: starts the selection, or adds to it. */
+    val select: (RemoteEntry) -> Unit,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
     var menu by remember { mutableStateOf(false) }
+    val isSelected = entry.path in actions.selected
     Row(
         Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { menu = true })
+            .background(if (isSelected) Arancio.colors.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { actions.select(entry) })
             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Preview(entry, 44.dp)
+        Box {
+            Preview(entry, 44.dp)
+            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart))
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(entryDetails(entry), style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary, maxLines = 1)
         }
-        Box {
+        if (actions.selected.isEmpty()) Box {
             ToolButton(AppIcons.More, "Azioni per ${entry.name}", { menu = true }, tint = Arancio.colors.textSecondary)
             EntryMenu(entry, actions, menu) { menu = false }
         }
@@ -257,16 +320,17 @@ private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GridTile(entry: RemoteEntry, actions: EntryActions) {
-    var menu by remember { mutableStateOf(false) }
+    val isSelected = entry.path in actions.selected
     Column(
         Modifier
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { menu = true }),
+            .background(if (isSelected) Arancio.colors.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { actions.select(entry) }),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
             Preview(entry, null)
-            EntryMenu(entry, actions, menu) { menu = false }
+            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(6.dp))
         }
         Text(
             entry.name,
@@ -324,8 +388,40 @@ private fun EntryMenu(entry: RemoteEntry, actions: EntryActions, expanded: Boole
             MenuItem(AppIcons.OpenWith, "Modifica con…") { onDismiss(); actions.edit(entry) }
             MenuItem(AppIcons.Download, "Salva sul telefono") { onDismiss(); actions.download(entry) }
         }
+        MenuItem(AppIcons.Check, "Seleziona") { onDismiss(); actions.select(entry) }
         MenuItem(AppIcons.Rename, "Rinomina") { onDismiss(); actions.rename(entry) }
         MenuItem(AppIcons.Delete, "Elimina", danger = true) { onDismiss(); actions.delete(entry) }
+    }
+}
+
+@Composable
+private fun SelectedMark(modifier: Modifier) {
+    Box(modifier.size(20.dp).background(Arancio.colors.accent, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(AppIcons.Check, contentDescription = null, tint = Arancio.colors.background, modifier = Modifier.size(13.dp))
+    }
+}
+
+/** Shown while entries wait on the clipboard: open the destination folder, then paste. */
+@Composable
+private fun ClipboardBar(clip: Clipboard, onPaste: () -> Unit, onCancel: () -> Unit, modifier: Modifier) {
+    val c = Arancio.colors
+    val n = clip.entries.size
+    Row(
+        modifier
+            .padding(16.dp)
+            .fillMaxWidth()
+            .background(c.surfaceRaised, RoundedCornerShape(12.dp))
+            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            (if (n == 1) "1 elemento" else "$n elementi") + if (clip.move) " da spostare" else " da copiare",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onCancel) { Text("Annulla") }
+        Button(onClick = onPaste, shape = RoundedCornerShape(8.dp)) { Text("Incolla qui") }
     }
 }
 
