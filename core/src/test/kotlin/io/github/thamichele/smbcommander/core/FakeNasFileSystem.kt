@@ -10,6 +10,8 @@ class FakeNasFileSystem : NasFileSystem {
     val modified = mutableMapOf<String, Long>()
     var clock = 1_000L
     var failUploadAfter: Int = -1
+    /** Uploads and copies whose content arrives altered, as a faulty disk or link would. */
+    var corruptWrites: Int = 0
 
     private fun key(share: String, path: String) = "$share/${RemotePath.normalize(path)}"
 
@@ -49,8 +51,14 @@ class FakeNasFileSystem : NasFileSystem {
             modified[key(share, path)] = ++clock
             throw NasException("connection lost")
         }
-        files[key(share, path)] = bytes
+        files[key(share, path)] = corrupt(bytes)
         modified[key(share, path)] = ++clock
+    }
+
+    private fun corrupt(bytes: ByteArray): ByteArray {
+        if (corruptWrites <= 0 || bytes.isEmpty()) return bytes
+        corruptWrites--
+        return bytes.copyOf().also { it[0] = (it[0] + 1).toByte() }
     }
 
     override fun createDirectory(share: String, path: String) {}
@@ -82,9 +90,10 @@ class FakeNasFileSystem : NasFileSystem {
         }
     }
 
-    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress) {
-        files[key(toShare, to)] = (files[key(fromShare, from)] ?: throw NasException("not found")).copyOf()
+    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress): String? {
+        files[key(toShare, to)] = corrupt((files[key(fromShare, from)] ?: throw NasException("not found")).copyOf())
         modified[key(toShare, to)] = ++clock
+        return null
     }
 
     override fun close() {}

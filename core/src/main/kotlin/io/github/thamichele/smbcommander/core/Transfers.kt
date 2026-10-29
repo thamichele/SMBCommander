@@ -1,6 +1,10 @@
 package io.github.thamichele.smbcommander.core
 
-/** Copy and move between folders of the NAS, files or whole folders. A name already taken gets " (2)", " (3)"... */
+/**
+ * Copy and move between folders of the NAS, files or whole folders. A name already taken gets " (2)", " (3)"...
+ * Each copied file is compared with its original by SHA-256 before it takes its name, and a move deletes the original
+ * only after the whole copy matched.
+ */
 object Transfers {
 
     /** Called with the file being copied, its bytes so far and its size. */
@@ -44,7 +48,10 @@ object Transfers {
         // through a hidden temporary name, as uploads do: a copy cut short never looks like a complete file
         val temp = RemotePath.child(RemotePath.parent(target), RemotePath.uploadTempName(RemotePath.name(target)))
         try {
-            fs.copyFile(source.share, source.path, toShare, temp) { done, total -> listener.onProgress(source.name, done, total) }
+            val streamed = fs.copyFile(source.share, source.path, toShare, temp) { done, total -> listener.onProgress(source.name, done, total) }
+            listener.onProgress("Verifica di ${source.name}", -1, -1)
+            val original = streamed ?: Integrity.remoteSha256(fs, source.share, source.path)
+            if (Integrity.remoteSha256(fs, toShare, temp) != original) throw Integrity.mismatch(source.name, "la copia è diversa dall'originale")
             fs.rename(toShare, temp, target, replace = true)
         } catch (e: Exception) {
             runCatching { fs.delete(toShare, temp) }

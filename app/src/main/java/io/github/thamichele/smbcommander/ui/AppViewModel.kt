@@ -2,6 +2,7 @@ package io.github.thamichele.smbcommander.ui
 
 import android.app.Application
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,7 @@ import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
+import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
@@ -18,6 +20,8 @@ import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.isMedia
+import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -30,8 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.UUID
 
 sealed interface Screen {
     data object Setup : Screen
@@ -527,10 +529,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val resolver = getApplication<Application>().contentResolver
         try {
             repo.io { fs ->
-                (resolver.openOutputStream(uri) ?: error("Impossibile scrivere il file")).use { out ->
-                    fs.download(entry.share, entry.path, out) { done, total ->
+                val sent = (resolver.openOutputStream(uri) ?: error("Impossibile scrivere il file")).use { out ->
+                    Integrity.download(fs, entry.share, entry.path, out) { done, total ->
                         _transfer.value = Transfer("Scarico ${entry.name}", done, total)
                     }
+                }
+                // read back what the phone stored: a copy that differs is removed, never left looking complete
+                _transfer.value = Transfer("Verifico ${entry.name}", -1, -1)
+                val stored = (resolver.openInputStream(uri) ?: error("Impossibile rileggere il file")).use { Integrity.sha256(it) }
+                if (stored != sent) {
+                    runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+                    throw Integrity.mismatch(entry.name, "la copia sul telefono è diversa")
                 }
             }
             message("«${entry.name}» salvato sul telefono")
@@ -554,18 +563,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val session = repo.io { fs ->
                 dir.mkdirs()
-                local.outputStream().use { out ->
-                    fs.download(entry.share, entry.path, out) { done, total ->
+                val sent = local.outputStream().use { out ->
+                    Integrity.download(fs, entry.share, entry.path, out) { done, total ->
                         _transfer.value = Transfer("Apro ${entry.name}", done, total)
                     }
                 }
+                val stored = EditSync.sha256(local)
+                if (stored != sent) throw Integrity.mismatch(entry.name, "la copia sul telefono è diversa")
                 val remote = fs.stat(entry.share, entry.path) ?: entry
                 EditSession(
                     id = id,
                     share = entry.share,
                     path = entry.path,
                     localFile = local,
-                    baseHash = EditSync.sha256(local),
+                    baseHash = stored,
                     remoteSize = remote.size,
                     remoteModified = remote.modified,
                     openedAt = System.currentTimeMillis(),

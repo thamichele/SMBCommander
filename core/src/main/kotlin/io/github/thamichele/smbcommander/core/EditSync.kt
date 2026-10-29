@@ -2,7 +2,6 @@ package io.github.thamichele.smbcommander.core
 
 import java.io.File
 import java.io.InputStream
-import java.security.MessageDigest
 
 /**
  * A NAS file opened for editing: downloaded to [localFile] and handed to another app.
@@ -50,7 +49,11 @@ object EditSync {
     fun safeOverwrite(fs: NasFileSystem, share: String, path: String, local: File, progress: Progress = { _, _ -> }): RemoteEntry =
         safeUpload(fs, share, path, local.length(), { local.inputStream() }, progress)
 
-    /** Like [safeOverwrite], for content that is not a local file (a document picked from another app). */
+    /**
+     * Like [safeOverwrite], for content that is not a local file (a document picked from another app).
+     * Before the rename the temporary file is read back from the NAS: only when its SHA-256 equals the hash of the
+     * bytes sent does it replace the target. A mismatch is retried once, then reported; the target is never touched.
+     */
     fun safeUpload(
         fs: NasFileSystem,
         share: String,
@@ -59,13 +62,25 @@ object EditSync {
         open: () -> InputStream,
         progress: Progress = { _, _ -> },
     ): RemoteEntry {
-        val temp = RemotePath.child(RemotePath.parent(path), RemotePath.uploadTempName(RemotePath.name(path)))
-        try {
-            open().use { fs.upload(share, temp, it, length, progress) }
-            fs.rename(share, temp, path, replace = true)
-        } catch (e: Exception) {
-            runCatching { fs.delete(share, temp) }
-            throw e
+        val name = RemotePath.name(path)
+        val temp = RemotePath.child(RemotePath.parent(path), RemotePath.uploadTempName(name))
+        var attempt = 1
+        while (true) {
+            try {
+                val sent = open().use { input -> Integrity.HashingInputStream(input).also { fs.upload(share, temp, it, length, progress) } }
+                if (length >= 0 && sent.bytes != length) {
+                    throw Integrity.mismatch(name, "letti ${sent.bytes} byte invece di $length: il file è cambiato durante il caricamento")
+                }
+                if (Integrity.remoteSha256(fs, share, temp) == sent.sha256()) {
+                    fs.rename(share, temp, path, replace = true)
+                    break
+                }
+                runCatching { fs.delete(share, temp) }
+                if (attempt++ >= 2) throw Integrity.mismatch(name, "il contenuto arrivato sul NAS è diverso")
+            } catch (e: Exception) {
+                runCatching { fs.delete(share, temp) }
+                throw e
+            }
         }
         return fs.stat(share, path) ?: throw NasException("Il file caricato non risulta sul NAS")
     }
@@ -95,16 +110,5 @@ object EditSync {
         }
     }
 
-    fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(1 shl 16)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
+    fun sha256(file: File): String = file.inputStream().use { Integrity.sha256(it) }
 }
