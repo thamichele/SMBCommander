@@ -1,13 +1,21 @@
 package io.github.thamichele.smbcommander.backup
 
 import android.app.Application
+import android.content.IntentSender
+import android.os.Build
+import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.BackupPlacement
+import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +24,18 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** "Libera spazio": photos on the phone that are verified to be on the NAS, and may be deleted from the phone. */
+sealed interface FreeSpace {
+    data object Idle : FreeSpace
+    data class Checking(val done: Int, val total: Int) : FreeSpace
+    /** [continuing]: a batch was just deleted and the dialog for the next one should follow. */
+    data class Ready(val items: List<MediaItem>, val continuing: Boolean = false) : FreeSpace {
+        val bytes: Long get() = items.sumOf { it.size }
+    }
+    data class Freed(val count: Int, val bytes: Long) : FreeSpace
+    data class Failed(val message: String) : FreeSpace
+}
 
 /** What the backup screen shows about a run in progress. */
 data class BackupProgress(val running: Boolean, val done: Int, val total: Int)
@@ -95,6 +115,92 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     fun setChargingOnly(on: Boolean) = update(_settings.value.copy(chargingOnly = on))
 
     fun runNow() = BackupScheduler.runNow(app, _settings.value)
+
+    private val _freeSpace = MutableStateFlow<FreeSpace>(FreeSpace.Idle)
+    val freeSpace: StateFlow<FreeSpace> = _freeSpace.asStateFlow()
+    private var freeJob: Job? = null
+
+    /**
+     * Finds the photos of the chosen albums that are safely on the NAS: a file in the backup folder with the same size
+     * and the same SHA-256. The ledger alone is not proof, as the file may have been moved or deleted on the NAS since.
+     */
+    fun checkFreeSpace() {
+        val settings = _settings.value
+        val destination = settings.destination ?: return
+        freeJob?.cancel()
+        _freeSpace.value = FreeSpace.Checking(0, 0)
+        freeJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val items = MediaScanner(app).items(settings.albums, settings.includeVideos)
+                val fs = app.repository.fs()
+                val safe = ArrayList<MediaItem>()
+                for ((i, item) in items.withIndex()) {
+                    ensureActive()
+                    _freeSpace.value = FreeSpace.Checking(i, items.size)
+                    val folder = PhotoBackupWorker.folderFor(destination.path, item, settings.byMonth)
+                    val target = RemotePath.child(folder, PhotoBackupWorker.remoteName(item))
+                    // a photo unreadable on the phone hashes to "", which matches nothing: it stays
+                    val placement = BackupPlacement.find(fs, destination.share, target, item.size) {
+                        runCatching { PhotoBackupWorker.openOriginal(app, item).use { BackupPlacement.sha256(it) } }
+                            .getOrDefault("")
+                    }
+                    if (placement is BackupPlacement.AlreadyThere) safe += item
+                }
+                _freeSpace.value = FreeSpace.Ready(safe)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _freeSpace.value = FreeSpace.Failed("NAS non raggiungibile: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private var freedCount = 0
+    private var freedBytes = 0L
+
+    /**
+     * The system dialog that deletes the next batch from the phone. Batches keep the request small enough for Android;
+     * after each confirmed one the screen asks for the next.
+     */
+    fun deleteRequest(): IntentSender? {
+        val ready = _freeSpace.value as? FreeSpace.Ready ?: return null
+        if (ready.items.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        if (ready.continuing) _freeSpace.value = ready.copy(continuing = false)
+        val batch = ready.items.take(DELETE_BATCH).map { it.uri }
+        return MediaStore.createDeleteRequest(app.contentResolver, batch).intentSender
+    }
+
+    /** [deleted] is false when the user said no in the system dialog: then nothing is deleted. */
+    fun onDeleteResult(deleted: Boolean) {
+        val ready = _freeSpace.value as? FreeSpace.Ready ?: return
+        if (!deleted) {
+            if (freedCount > 0) finishFreeing()
+            return
+        }
+        val batch = ready.items.take(DELETE_BATCH)
+        freedCount += batch.size
+        freedBytes += batch.sumOf { it.size }
+        val left = ready.items.drop(DELETE_BATCH)
+        if (left.isEmpty()) finishFreeing() else _freeSpace.value = FreeSpace.Ready(left, continuing = true)
+    }
+
+    private fun finishFreeing() {
+        _freeSpace.value = FreeSpace.Freed(freedCount, freedBytes)
+        freedCount = 0
+        freedBytes = 0
+        loadAlbums()
+    }
+
+    fun resetFreeSpace() {
+        freeJob?.cancel()
+        freedCount = 0
+        freedBytes = 0
+        _freeSpace.value = FreeSpace.Idle
+    }
+
+    private companion object {
+        const val DELETE_BATCH = 1000
+    }
 
     private fun update(settings: BackupSettings) {
         _settings.value = settings

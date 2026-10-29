@@ -16,6 +16,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import io.github.thamichele.smbcommander.R
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.BackupPlacement
+import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
@@ -24,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.InputStream
 import java.util.Calendar
 
 /**
@@ -65,6 +68,10 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             return Result.retry()
         }
 
+        // photos deleted from the gallery on purpose: never uploaded again, even after a reinstall
+        val deleted = runCatching { DeletedPhotos.read(fs, destination.share, destination.path) }.getOrDefault(emptySet())
+        val deletedSizes = DeletedPhotos.sizes(deleted)
+
         val createdDirs = HashSet<String>()
         var uploaded = 0
         var lastError: String? = null
@@ -73,7 +80,9 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             setProgress(workDataOf(PROGRESS_DONE to i, PROGRESS_TOTAL to pending.size))
             if (i % 5 == 0) runCatching { setForeground(foregroundInfo(i, pending.size)) }
             try {
-                upload(fs, destination.share, folderFor(destination.path, item, settings.byMonth), item, createdDirs)
+                if (item.size !in deletedSizes || !wasDeleted(item, deleted)) {
+                    upload(fs, destination.share, folderFor(destination.path, item, settings.byMonth), item, createdDirs)
+                }
                 app.backupLedger.add(item.key)
                 uploaded++
             } catch (e: NasException) {
@@ -90,19 +99,17 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
 
     private fun upload(fs: NasFileSystem, share: String, folder: String, item: MediaItem, createdDirs: MutableSet<String>) {
         ensureFolder(fs, share, folder, createdDirs)
-        // the name comes from whichever app saved the photo: never let it pick another folder
-        val name = item.name.takeIf { RemotePath.isValidName(it) } ?: "media_${item.key.substringAfter(':').substringBefore(':')}"
-        val target = RemotePath.child(folder, name)
-        val existing = fs.stat(share, target)
-        if (existing != null && !existing.isDirectory && existing.size == item.size) return // already there
-        val path = if (existing == null) target else EditSync.freePath(fs, share, target)
-        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasLocationPermission()) {
-            // keeps the GPS position in the photo, which Android strips otherwise
-            MediaStore.setRequireOriginal(item.uri)
-        } else item.uri
-        EditSync.safeUpload(fs, share, path, item.size, {
-            applicationContext.contentResolver.openInputStream(uri) ?: throw IllegalStateException("file non leggibile")
-        })
+        val open = { openOriginal(applicationContext, item) }
+        // after a reinstall the ledger is empty: photos already on the NAS are recognised by size and hash
+        val placement = BackupPlacement.find(fs, share, RemotePath.child(folder, remoteName(item)), item.size) {
+            open().use { BackupPlacement.sha256(it) }
+        }
+        if (placement is BackupPlacement.Upload) EditSync.safeUpload(fs, share, placement.path, item.size, open)
+    }
+
+    private fun wasDeleted(item: MediaItem, deleted: Set<String>): Boolean {
+        val hash = openOriginal(applicationContext, item).use { BackupPlacement.sha256(it) }
+        return DeletedPhotos.entry(item.size, hash) in deleted
     }
 
     private fun ensureFolder(fs: NasFileSystem, share: String, folder: String, createdDirs: MutableSet<String>) {
@@ -114,17 +121,6 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             createdDirs += current
         }
     }
-
-    private fun folderFor(base: String, item: MediaItem, byMonth: Boolean): String {
-        if (!byMonth) return base
-        val cal = Calendar.getInstance().apply { timeInMillis = item.taken }
-        val month = "%02d".format(cal.get(Calendar.MONTH) + 1)
-        return RemotePath.child(RemotePath.child(base, cal.get(Calendar.YEAR).toString()), month)
-    }
-
-    private fun hasLocationPermission() =
-        ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_MEDIA_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
 
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(0, 0)
 
@@ -158,6 +154,29 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
 
         /** The periodic run and a manual "run now" must never upload the same photo twice. */
         private val runLock = Mutex()
+
+        /** The NAS folder of [item]: the destination, or its "2026/10" subfolder. */
+        fun folderFor(base: String, item: MediaItem, byMonth: Boolean): String {
+            if (!byMonth) return base
+            val cal = Calendar.getInstance().apply { timeInMillis = item.taken }
+            val month = "%02d".format(cal.get(Calendar.MONTH) + 1)
+            return RemotePath.child(RemotePath.child(base, cal.get(Calendar.YEAR).toString()), month)
+        }
+
+        /** The file name on the NAS; the name comes from whichever app saved the photo, so it must not pick a folder. */
+        fun remoteName(item: MediaItem): String =
+            item.name.takeIf { RemotePath.isValidName(it) } ?: "media_${item.key.substringAfter(':').substringBefore(':')}"
+
+        /** The bytes as uploaded: with the GPS position, which Android strips from the plain URI. */
+        fun openOriginal(context: Context, item: MediaItem): InputStream {
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_MEDIA_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                MediaStore.setRequireOriginal(item.uri)
+            } else item.uri
+            return context.contentResolver.openInputStream(uri) ?: throw IllegalStateException("file non leggibile")
+        }
 
         fun mediaPermissions(): Array<String> = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(

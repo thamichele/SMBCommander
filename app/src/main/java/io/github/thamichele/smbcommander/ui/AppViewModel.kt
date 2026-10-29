@@ -6,6 +6,8 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.BackupPlacement
+import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasServer
@@ -321,6 +323,72 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun delete(entry: RemoteEntry) = folderOperation("«${entry.name}» eliminato") { share, _ ->
         repo.io { it.delete(share, entry.path) }
+        app.deletedPhotos.emit(listOf(entry)) // the gallery may show it too
+    }
+
+    /**
+     * Deletes photos from the NAS, from the gallery or the viewer. Those in the backup folder are first written to its
+     * list of deleted photos (size and hash), so the backup does not upload them again, even after a reinstall.
+     */
+    fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
+        val destination = app.backupSettings.load().destination
+        val gone = ArrayList<RemoteEntry>()
+        var error: String? = null
+        try {
+            val inBackup = photos.filter { destination != null && it.share == destination.share && isInside(it.path, destination.path) }
+            if (destination != null && inBackup.isNotEmpty()) {
+                val entries = ArrayList<String>()
+                for ((i, photo) in inBackup.withIndex()) {
+                    _transfer.value = Transfer("Preparo l'eliminazione: ${i + 1} di ${inBackup.size}", i.toLong(), inBackup.size.toLong())
+                    entries += repo.io { fs ->
+                        DeletedPhotos.entry(photo.size, fs.openRead(photo.share, photo.path).use { BackupPlacement.sha256(it) })
+                    }
+                }
+                repo.io { DeletedPhotos.add(it, destination.share, destination.path, entries) }
+            }
+            for ((i, photo) in photos.withIndex()) {
+                if (photos.size > 1) _transfer.value = Transfer("Elimino ${i + 1} di ${photos.size}", i.toLong(), photos.size.toLong())
+                repo.io { it.delete(photo.share, photo.path) }
+                gone += photo
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            error = e.readable()
+        } finally {
+            _transfer.value = null
+        }
+        if (gone.isNotEmpty()) {
+            app.deletedPhotos.emit(gone)
+            dropDeleted(gone)
+        }
+        message(
+            error ?: if (gone.size == 1) "Foto eliminata dal NAS" else "${gone.size} foto eliminate dal NAS"
+        )
+    }
+
+    private fun isInside(path: String, folder: String): Boolean {
+        val dir = RemotePath.normalize(folder)
+        return dir.isEmpty() || RemotePath.normalize(path).startsWith("$dir/")
+    }
+
+    private val _deleteWithoutConfirm = MutableStateFlow(app.galleryPrefs.deleteWithoutConfirm)
+    /** Swiping a photo away in the gallery list deletes it at once, without asking. */
+    val deleteWithoutConfirm: StateFlow<Boolean> = _deleteWithoutConfirm.asStateFlow()
+
+    fun setDeleteWithoutConfirm(on: Boolean) {
+        app.galleryPrefs.deleteWithoutConfirm = on
+        _deleteWithoutConfirm.value = on
+    }
+
+    /** Takes deleted photos out of the viewer and of the folder listings already loaded. */
+    private fun dropDeleted(gone: List<RemoteEntry>) {
+        val keys = gone.map { it.share + "/" + it.path }.toSet()
+        val isGone = { e: RemoteEntry -> e.share + "/" + e.path in keys }
+        listingCache.replaceAll { _, list -> list.filterNot(isGone) }
+        _browser.update { it.copy(entries = it.entries.filterNot(isGone)) }
+        val s = _screen.value as? Screen.Viewer ?: return
+        val left = s.images.filterNot(isGone)
+        _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
     }
 
     /** Copies documents picked on the phone into the current folder; names already taken get " (2)", " (3)"... */

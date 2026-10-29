@@ -40,13 +40,24 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
   e quando apri l'app. Si può anche avviare a mano.
 - Divide le foto per anno e mese (`2026/10`), mantiene la posizione GPS delle foto, video facoltativi.
 - Ogni file passa da un nome temporaneo: un backup interrotto riprende da dove si era fermato e non lascia file a
-  metà. Le foto **non vengono mai cancellate dal telefono**.
+  metà. Il backup **non cancella mai nulla dal telefono** da solo.
+- **Libera spazio**: quando vuoi, l'app cerca le foto del telefono che sono già sul NAS e te le propone da eliminare.
+  Ogni foto viene confrontata con la sua copia sul NAS (stessa dimensione e stessa impronta SHA-256): se la copia manca
+  o è diversa, la foto resta sul telefono. Android chiede sempre l'ultima conferma (serve Android 11 o successivo).
+- Se reinstalli l'app e scegli la stessa cartella, le foto già sul NAS vengono riconosciute e non ricaricate: a parità
+  di nome e dimensione l'app confronta l'impronta (SHA-256) dei due file. Una foto diversa con lo stesso nome viene
+  salvata come `nome_2.jpg`.
 
 ## Galleria foto
 
 La sezione **Galleria** mostra solo le foto della cartella in cui finisce il backup, e nient'altro: niente
 indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
 recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
+Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
+nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
+di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
+backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le
+ricarica, nemmeno dopo aver reinstallato l'app.
 
 ## Privacy e sicurezza
 

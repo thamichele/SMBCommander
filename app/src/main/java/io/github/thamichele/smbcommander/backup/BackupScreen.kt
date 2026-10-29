@@ -1,7 +1,10 @@
 package io.github.thamichele.smbcommander.backup
 
+import android.app.Activity
+import android.os.Build
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +70,19 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         vm.loadAlbums()
     }
     LaunchedEffect(permitted) { if (permitted) vm.loadAlbums() }
+    val freeSpace by vm.freeSpace.collectAsStateWithLifecycle()
+    var confirmFree by remember { mutableStateOf(false) }
+    val deleteFromPhone = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        vm.onDeleteResult(it.resultCode == Activity.RESULT_OK)
+    }
+    // more than one batch: the next system dialog follows the confirmed one
+    val launchDelete = {
+        vm.deleteRequest()?.let { deleteFromPhone.launch(IntentSenderRequest.Builder(it).build()) }
+    }
+    LaunchedEffect(freeSpace) {
+        val f = freeSpace
+        if (f is FreeSpace.Ready && f.continuing) launchDelete()
+    }
     val c = Arancio.colors
 
     LazyColumn(
@@ -160,6 +177,10 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
             }
         }
 
+        if (settings.destination != null) {
+            item { FreeSpaceCard(freeSpace, onCheck = vm::checkFreeSpace, onFree = { confirmFree = true }, onClose = vm::resetFreeSpace) }
+        }
+
         item { SectionTitle("Album da salvare") }
         if (albums.isEmpty()) {
             item {
@@ -197,12 +218,39 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         item {
             Text(
                 "Il backup parte da solo ogni ora quando sei sul Wi-Fi di casa e il NAS risponde. " +
-                    "Le foto non vengono mai cancellate dal telefono.",
+                    "Le foto vengono cancellate dal telefono solo se lo chiedi tu con «Libera spazio».",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+    }
+
+    if (confirmFree) {
+        val ready = freeSpace as? FreeSpace.Ready
+        AlertDialog(
+            onDismissRequest = { confirmFree = false },
+            containerColor = c.surface,
+            title = { Text("Eliminare dal telefono?", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    "${ready?.items?.size ?: 0} foto e video (${formatSize(ready?.bytes ?: 0)}) verranno eliminati dal " +
+                        "telefono. Sul NAS restano, e li vedi nella Galleria. Android ti chiederà un'ultima conferma.",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmFree = false
+                        launchDelete()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = c.danger),
+                ) { Text("Elimina dal telefono") }
+            },
+            dismissButton = { TextButton(onClick = { confirmFree = false }) { Text("Annulla") } },
+        )
     }
 
     if (choosingFolder) {
@@ -216,6 +264,85 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
             },
         )
     }
+}
+
+@Composable
+private fun FreeSpaceCard(state: FreeSpace, onCheck: () -> Unit, onFree: () -> Unit, onClose: () -> Unit) {
+    val c = Arancio.colors
+    Card {
+        Text("Libera spazio sul telefono", style = MaterialTheme.typography.titleMedium)
+        when (state) {
+            FreeSpace.Idle -> {
+                Text(
+                    "Cerca le foto già salvate sul NAS e le elimina dal telefono. Ogni foto viene confrontata con la " +
+                        "copia sul NAS (stessa dimensione e stessa impronta SHA-256) prima di essere proposta.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    OutlinedButton(onClick = onCheck, shape = RoundedCornerShape(8.dp)) { Text("Controlla") }
+                } else {
+                    Text("Serve Android 11 o successivo.", style = MaterialTheme.typography.bodySmall, color = c.danger)
+                }
+            }
+            is FreeSpace.Checking -> {
+                Text(
+                    if (state.total > 0) "Controllo ${state.done} di ${state.total}…" else "Preparazione…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.accentText,
+                )
+                if (state.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.done.toFloat() / state.total },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = c.accent,
+                        trackColor = c.border,
+                    )
+                } else {
+                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
+                }
+                TextButton(onClick = onClose) { Text("Annulla") }
+            }
+            is FreeSpace.Ready -> if (state.items.isEmpty()) {
+                Text(
+                    "Nessuna foto da eliminare: quelle sul telefono non sono ancora tutte sul NAS, o sono già state tolte.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+                TextButton(onClick = onClose) { Text("Chiudi") }
+            } else {
+                Text(
+                    "${state.items.size} foto e video sono già sul NAS: ${formatSize(state.bytes)} da liberare.",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onFree,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = c.danger),
+                    ) { Text("Elimina dal telefono") }
+                    TextButton(onClick = onClose) { Text("Annulla") }
+                }
+            }
+            is FreeSpace.Freed -> {
+                Text(
+                    "Eliminati ${state.count} file dal telefono, liberati ${formatSize(state.bytes)}.",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                TextButton(onClick = onClose) { Text("Chiudi") }
+            }
+            is FreeSpace.Failed -> {
+                Text(state.message, style = MaterialTheme.typography.bodySmall, color = c.danger)
+                OutlinedButton(onClick = onCheck, shape = RoundedCornerShape(8.dp)) { Text("Riprova") }
+            }
+        }
+    }
+}
+
+private fun formatSize(bytes: Long): String = when {
+    bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
+    bytes >= 1L shl 20 -> "%.0f MB".format(bytes / (1L shl 20).toDouble())
+    else -> "%.0f KB".format(bytes / 1024.0)
 }
 
 private fun statusLine(settings: BackupSettings, status: BackupStatus, saved: Int): String = when {

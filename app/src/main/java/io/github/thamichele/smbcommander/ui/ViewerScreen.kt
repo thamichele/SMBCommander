@@ -51,6 +51,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
     val pager = rememberPagerState(initialPage = screen.index) { screen.images.size }
     var chrome by remember { mutableStateOf(true) }
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
+    var confirmDelete by remember { mutableStateOf<RemoteEntry?>(null) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/*")) { uri ->
         val entry = pendingDownload
         pendingDownload = null
@@ -94,8 +95,23 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
                     { pendingDownload = current; saveFile.launch(current.name) },
                     tint = Color.White,
                 )
+                ToolButton(AppIcons.Delete, "Elimina dal NAS", { confirmDelete = current }, tint = Color.White)
             }
         }
+    }
+
+    confirmDelete?.let { photo ->
+        ConfirmDialog(
+            title = "Eliminare «${photo.name}»?",
+            text = "La foto verrà eliminata dal NAS. Se era sul telefono, lì resta e il backup non la caricherà di nuovo.",
+            confirm = "Elimina",
+            danger = true,
+            onDismiss = { confirmDelete = null },
+            onConfirm = {
+                confirmDelete = null
+                vm.deletePhotos(listOf(photo))
+            },
+        )
     }
 }
 
