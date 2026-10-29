@@ -57,18 +57,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.Thumb
+import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import io.github.thamichele.smbcommander.ui.ErrorCard
 import io.github.thamichele.smbcommander.ui.PageHeader
 import io.github.thamichele.smbcommander.ui.ToolButton
+import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
-import kotlinx.coroutines.launch
 import java.text.DateFormatSymbols
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** Only the photos of the backup folder, by month, newest first: as a grid, or as a list where a swipe deletes. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -226,6 +228,7 @@ private fun PhotoGrid(
                             .padding(if (isSelected) 8.dp else 0.dp)
                             .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
                     )
+                    if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
                     if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
                 }
             }
@@ -269,6 +272,7 @@ private fun PhotoList(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(c.surface),
                             )
+                            if (photo.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 20.dp)
                             if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(2.dp))
                         }
                         Spacer(Modifier.width(12.dp))

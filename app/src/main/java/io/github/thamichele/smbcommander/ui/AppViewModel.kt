@@ -17,7 +17,7 @@ import io.github.thamichele.smbcommander.core.SyncDecision
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.TransferJob
-import io.github.thamichele.smbcommander.data.isImage
+import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -264,10 +264,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
-    /** Opens the photo viewer on [entry], with the other images of the folder as they are shown in the list. */
+    /** Opens the viewer on [entry], with the other photos and videos of the folder as they are shown in the list. */
     fun openViewer(entry: RemoteEntry) {
         val s = _screen.value as? Screen.Browser ?: return
-        val images = _browser.value.visible.filter { it.isImage }
+        val images = _browser.value.visible.filter { it.isMedia }
         _screen.value = Screen.Viewer(s, images, images.indexOf(entry).coerceAtLeast(0))
     }
 

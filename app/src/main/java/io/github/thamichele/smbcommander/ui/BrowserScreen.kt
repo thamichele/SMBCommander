@@ -60,8 +60,8 @@ import coil3.compose.SubcomposeAsyncImage
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.Thumb
-import io.github.thamichele.smbcommander.data.ThumbnailCache
-import io.github.thamichele.smbcommander.data.isImage
+import io.github.thamichele.smbcommander.data.isMedia
+import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 private sealed interface Dialog {
@@ -99,7 +99,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             when {
                 selected.isNotEmpty() -> vm.toggleSelected(it)
                 it.isDirectory -> vm.openFolder(it)
-                it.isImage -> vm.openViewer(it)
+                it.isMedia -> vm.openViewer(it)
                 else -> vm.open(it, edit = false)
             }
         },
@@ -342,20 +342,26 @@ private fun GridTile(entry: RemoteEntry, actions: EntryActions) {
     }
 }
 
-/** Thumbnail for photos, kind tile for everything else (and while the thumbnail loads or if it fails). */
+/** Thumbnail for photos and videos, kind tile for everything else (and while the thumbnail loads or if it fails). */
 @Composable
 private fun Preview(entry: RemoteEntry, size: Dp?) {
     val box = if (size != null) Modifier.size(size) else Modifier.fillMaxSize()
     val tileSize = size ?: 112.dp
-    if (!entry.isDirectory && entry.extension in ThumbnailCache.IMAGE_EXTENSIONS) {
-        SubcomposeAsyncImage(
-            model = Thumb(entry),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            loading = { FallbackTile(entry, size) },
-            error = { FallbackTile(entry, size) },
-            modifier = box.clip(RoundedCornerShape(if (size != null) 10.dp else 12.dp)).background(Arancio.colors.surface),
-        )
+    if (entry.isMedia) {
+        Box(box) {
+            SubcomposeAsyncImage(
+                model = Thumb(entry),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                loading = { FallbackTile(entry, size) },
+                error = { FallbackTile(entry, size) },
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(if (size != null) 10.dp else 12.dp))
+                    .background(Arancio.colors.surface),
+            )
+            if (entry.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = if (size != null) 18.dp else 32.dp)
+        }
     } else {
         FallbackTile(entry, size, tileSize)
     }

@@ -3,6 +3,8 @@ package io.github.thamichele.smbcommander.data
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.media.MediaDataSource
+import android.media.MediaMetadataRetriever
 import android.media.ExifInterface
 import coil3.ImageLoader
 import coil3.decode.DataSource
@@ -10,7 +12,9 @@ import coil3.decode.ImageSource
 import coil3.fetch.FetchResult
 import coil3.fetch.SourceFetchResult
 import coil3.request.Options
+import io.github.thamichele.smbcommander.core.RandomReader
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.RemotePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -23,6 +27,10 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 val RemoteEntry.isImage: Boolean get() = !isDirectory && extension in ThumbnailCache.IMAGE_EXTENSIONS
+val RemoteEntry.isVideo: Boolean get() = !isDirectory && extension in ThumbnailCache.VIDEO_EXTENSIONS
+
+/** Photos and videos: what the gallery and the viewer show. */
+val RemoteEntry.isMedia: Boolean get() = isImage || isVideo
 
 /** How big a cached copy of a NAS image is. */
 enum class ImageSize(val folder: String) {
@@ -91,6 +99,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val missing = variants.filter { !file(thumb, it).exists() }
         if (missing.isEmpty()) return
         dir.mkdirs()
+        if (RemotePath.extension(RemotePath.name(thumb.path)) in VIDEO_EXTENSIONS) return createFromVideo(thumb, missing)
         val source = File.createTempFile("src", null, dir)
         try {
             repository.fs().openRead(thumb.share, thumb.path).use { input ->
@@ -114,6 +123,45 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         } finally {
             source.delete()
         }
+    }
+
+    /** A frame near the start of the video, read straight from the NAS: only the parts the decoder asks for travel. */
+    private fun createFromVideo(thumb: Thumb, missing: List<ImageSize>) {
+        val frame = repository.fs().openRandom(thumb.share, thumb.path).use { reader ->
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(ReaderDataSource(reader))
+                retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: retriever.frameAtTime
+            } finally {
+                retriever.release()
+            }
+        } ?: throw IllegalStateException("Video non leggibile")
+        try {
+            for (variant in missing) {
+                val scale = if (variant == ImageSize.Thumb) min(1f, THUMB_PX.toFloat() / min(frame.width, frame.height)) else 1f
+                val w = (frame.width * scale).roundToInt().coerceAtLeast(1)
+                val h = (frame.height * scale).roundToInt().coerceAtLeast(1)
+                val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(frame, w, h, true) else frame
+                val target = file(thumb, variant)
+                target.parentFile?.mkdirs()
+                val temp = File(target.parentFile, target.name + ".part")
+                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                temp.renameTo(target)
+                if (bitmap !== frame) bitmap.recycle()
+            }
+        } finally {
+            frame.recycle()
+        }
+    }
+
+    private class ReaderDataSource(private val reader: RandomReader) : MediaDataSource() {
+        override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int =
+            if (position >= reader.size) -1 else reader.read(position, buffer, offset, size)
+
+        override fun getSize(): Long = reader.size
+
+        // the reader is closed by whoever opened it
+        override fun close() {}
     }
 
     private fun write(source: File, width: Int, height: Int, variant: ImageSize, exif: ExifInterface?, target: File) {
@@ -190,5 +238,6 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     companion object {
         const val THUMB_PX = 384
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
+        val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "mov", "3gp", "mkv", "webm")
     }
 }
