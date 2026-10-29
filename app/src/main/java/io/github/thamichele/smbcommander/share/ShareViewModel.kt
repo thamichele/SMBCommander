@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -110,6 +111,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     saved++
                 }
+                app.nasChanged.tryEmit(NasChange(folder.share, folder.path))
                 onDone(
                     (if (saved == 1) "1 file salvato" else "$saved file salvati") + " in ${folder.name}"
                 )

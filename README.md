@@ -29,6 +29,9 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
   non rovina mai l'originale.
+- **Ogni trasferimento è verificato**: caricamenti, copie, spostamenti e download confrontano l'impronta SHA-256 di
+  ciò che è partito con quella di ciò che è arrivato. Un file diverso non viene mai tenuto, e uno spostamento elimina
+  l'originale solo dopo che la copia è risultata identica.
 - Operazioni di base: carica dal telefono, scarica sul telefono, nuova cartella, nuovo file di testo vuoto, rinomina,
   elimina.
 - **Copia e sposta** tra cartelle del NAS: tieni premuto per selezionare uno o più elementi, scegli Copia o Sposta,
@@ -61,6 +64,10 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 La sezione **Galleria** mostra solo le foto e i video della cartella in cui finisce il backup, e nient'altro: niente
 indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
 recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
+Va bene qualunque struttura di sottocartelle, anche quelle vecchie di QuMagie o di altre app: il mese viene dal nome
+della cartella (`2026/10`, `2026-10`, `2019-03-14`...), altrimenti dalla data nel nome del file, altrimenti dalla data
+del file. Il contenuto della galleria resta salvato sul telefono, così si apre subito; ogni aggiornamento guarda solo
+cosa è cambiato sul NAS, e dopo un backup o un caricamento la galleria si aggiorna da sola.
 Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
 nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
 di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del

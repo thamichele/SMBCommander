@@ -14,6 +14,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.R
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
@@ -101,6 +102,8 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
     /** Remembers how the run went and shows it: status notification and home screen widget. */
     private fun finish(uploaded: Int, error: String?, pending: Int) {
         app.backupSettings.recordRun(uploaded, error, pending)
+        // the gallery shows the new photos without waiting for a manual refresh
+        if (uploaded > 0) app.backupSettings.load().destination?.let { app.nasChanged.tryEmit(NasChange(it.share, it.path)) }
         BackupNotifier.update(applicationContext)
         BackupWidget.updateAll(applicationContext)
     }

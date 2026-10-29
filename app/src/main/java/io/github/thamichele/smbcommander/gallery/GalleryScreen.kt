@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -52,6 +54,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -67,10 +70,10 @@ import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import kotlinx.coroutines.launch
 import java.text.DateFormatSymbols
 import java.util.Locale
 import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
 /** Only the photos of the backup folder, by month, newest first: as a grid, or as a list where a swipe deletes. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,7 +82,11 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val withoutConfirm by appVm.deleteWithoutConfirm.collectAsStateWithLifecycle()
     val c = Arancio.colors
-    LaunchedEffect(Unit) { vm.ensureLoaded() }
+    // each time the gallery comes into view: what the phone knows at once, then the NAS's news
+    LifecycleResumeEffect(Unit) {
+        vm.ensureLoaded()
+        onPauseOrDispose {}
+    }
 
     // paths of the selected photos: a long press starts the selection, then taps add or remove
     var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -120,7 +127,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                         if (state.listView) "Mostra a griglia" else "Mostra a elenco",
                         vm::toggleView,
                     )
-                    ToolButton(AppIcons.Refresh, "Aggiorna", vm::refresh)
+                    ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
                 }
             }
         } else {
@@ -138,6 +145,18 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             }
         }
         val folder = state.folder
+        // a quiet refresh: a thin bar, the photos stay where they are
+        if (state.loading && !state.pulling && state.months.isNotEmpty()) {
+            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background)
+        }
+        if (state.error != null && state.months.isNotEmpty()) {
+            Text(
+                state.error.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         when {
             folder == null -> Column(
                 Modifier.fillMaxWidth().padding(16.dp),
@@ -151,7 +170,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 Button(onClick = appVm::openBackup, shape = RoundedCornerShape(8.dp)) { Text("Vai al backup foto") }
             }
             state.error != null && state.months.isEmpty() ->
-                ErrorCard(state.error.orEmpty(), "Riprova", vm::refresh)
+                ErrorCard(state.error.orEmpty(), "Riprova", vm::pull)
             state.loading && state.months.isEmpty() ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
             state.months.isEmpty() ->
@@ -159,8 +178,8 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                     Text("Nessuna foto ancora nella cartella del backup", style = MaterialTheme.typography.bodyLarge, color = c.textSecondary)
                 }
             else -> PullToRefreshBox(
-                isRefreshing = state.loading,
-                onRefresh = vm::refresh,
+                isRefreshing = state.pulling,
+                onRefresh = vm::pull,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (state.listView) {

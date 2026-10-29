@@ -1,7 +1,6 @@
 package io.github.thamichele.smbcommander.core
 
 import java.io.InputStream
-import java.security.MessageDigest
 
 /** Where a photo of the backup goes: nowhere, because the NAS already has it, or to [Upload.path]. */
 sealed interface BackupPlacement {
@@ -32,15 +31,6 @@ sealed interface BackupPlacement {
             }
         }
 
-        fun sha256(input: InputStream): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val buffer = ByteArray(1 shl 16)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-            return digest.digest().joinToString("") { "%02x".format(it) }
-        }
+        fun sha256(input: InputStream): String = Integrity.sha256(input)
     }
 }

@@ -189,7 +189,7 @@ class SmbNasFileSystem(
         }
     }
 
-    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress) {
+    override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress): String? {
         val total = stat(fromShare, from)?.size ?: -1L
         progress(0, total)
         // server-side copy (FSCTL_SRV_COPYCHUNK): the NAS copies the bytes itself
@@ -216,10 +216,13 @@ class SmbNasFileSystem(
         }.isSuccess
         if (copiedOnNas) {
             progress(total, total)
-            return
+            return null
         }
         // the NAS refused (or copying between shares is not allowed): stream it through the phone
-        openRead(fromShare, from).use { input -> upload(toShare, to, input, total, progress) }
+        return Integrity.HashingInputStream(openRead(fromShare, from)).use { input ->
+            upload(toShare, to, input, total, progress)
+            input.sha256()
+        }
     }
 
     override fun close() {

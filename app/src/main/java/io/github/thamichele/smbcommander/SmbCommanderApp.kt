@@ -8,11 +8,13 @@ import coil3.request.crossfade
 import io.github.thamichele.smbcommander.backup.BackupLedger
 import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.backup.BackupSettingsStore
+import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.CredentialStore
 import io.github.thamichele.smbcommander.data.EditSessionStore
 import io.github.thamichele.smbcommander.data.FolderStore
 import io.github.thamichele.smbcommander.data.NasRepository
-import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.data.TransferQueue
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
@@ -41,6 +43,9 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
     /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
     val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)
 
+    /** Something was written to the NAS (a folder, or null when it could be anywhere): the gallery looks again. */
+    val nasChanged = MutableSharedFlow<NasChange?>(extraBufferCapacity = 16)
+
     override fun onCreate() {
         super.onCreate()
         repository = NasRepository(CredentialStore(this))
@@ -61,4 +66,16 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
             .components { add(ThumbnailCache.Fetcher.Factory(thumbnails)) }
             .crossfade(true)
             .build()
+}
+
+/** A folder of the NAS whose content just changed. */
+data class NasChange(val share: String, val path: String) {
+    /** True when the change is inside [folder], or moved or replaced a folder that contains it. */
+    fun affects(folder: SavedFolder): Boolean {
+        if (share != folder.share) return false
+        val changed = RemotePath.normalize(path)
+        val shown = RemotePath.normalize(folder.path)
+        return changed == shown || shown.isEmpty() || changed.isEmpty() ||
+            changed.startsWith("$shown/") || shown.startsWith("$changed/")
+    }
 }

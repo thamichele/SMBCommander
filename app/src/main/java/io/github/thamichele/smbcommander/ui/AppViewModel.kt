@@ -2,14 +2,16 @@ package io.github.thamichele.smbcommander.ui
 
 import android.app.Application
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
-import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
+import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
@@ -64,20 +66,19 @@ data class BrowserState(
     val showHidden: Boolean = false,
     val grid: Boolean = false,
 ) {
-    /** What the list shows: hidden and system entries filtered out, search applied, folders first. */
-    val visible: List<RemoteEntry>
-        get() {
-            val filtered = entries.filter { e ->
-                (showHidden || !(e.name.startsWith(".") || e.name.startsWith("@"))) &&
-                    (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true))
-            }
-            val order = when (sort) {
-                SortMode.Name -> compareBy<RemoteEntry> { it.name.lowercase() }
-                SortMode.Date -> compareByDescending { it.modified }
-                SortMode.Size -> compareByDescending<RemoteEntry> { it.size }.thenBy { it.name.lowercase() }
-            }
-            return filtered.sortedWith(compareByDescending<RemoteEntry> { it.isDirectory }.then(order))
+    /** What the list shows: hidden and system entries filtered out, search applied, folders first. Worked out once. */
+    val visible: List<RemoteEntry> by lazy {
+        val filtered = entries.filter { e ->
+            (showHidden || !(e.name.startsWith(".") || e.name.startsWith("@"))) &&
+                (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true))
         }
+        val order = when (sort) {
+            SortMode.Name -> compareBy<RemoteEntry> { it.name.lowercase() }
+            SortMode.Date -> compareByDescending { it.modified }
+            SortMode.Size -> compareByDescending<RemoteEntry> { it.size }.thenBy { it.name.lowercase() }
+        }
+        filtered.sortedWith(compareByDescending<RemoteEntry> { it.isDirectory }.then(order))
+    }
 }
 
 /** Entries waiting for "Incolla qui" in another folder. */
@@ -107,7 +108,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _checkingFolder = MutableStateFlow(false)
     val checkingFolder: StateFlow<Boolean> = _checkingFolder.asStateFlow()
 
-    private val _browser = MutableStateFlow(BrowserState())
+    private val browserPrefs = BrowserPrefs(application)
+    private val _browser = MutableStateFlow(
+        BrowserState(sort = browserPrefs.sort, grid = browserPrefs.grid, showHidden = browserPrefs.showHidden)
+    )
     val browser: StateFlow<BrowserState> = _browser.asStateFlow()
 
     private val _transfer = MutableStateFlow<Transfer?>(null)
@@ -141,6 +145,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             app.transfers.finished.collect { job ->
                 // a copy or move changes other folders too: forget them all
                 listingCache.clear()
+                app.nasChanged.tryEmit(null)
                 refresh()
                 if (job.state == TransferJob.State.Failed) message("${job.label}: ${job.error}")
             }
@@ -183,6 +188,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             File(cache, "edit").deleteRecursively()
             File(cache, "images").deleteRecursively()
+            File(getApplication<Application>().filesDir, "gallery").deleteRecursively()
         }
         listingCache.clear()
         _folders.value = emptyList()
@@ -327,11 +333,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSort(sort: SortMode) = _browser.update { it.copy(sort = sort) }
+    fun setSort(sort: SortMode) {
+        browserPrefs.sort = sort
+        _browser.update { it.copy(sort = sort) }
+    }
+
     fun setQuery(query: String) = _browser.update { it.copy(query = query) }
     fun setSearching(on: Boolean) = _browser.update { it.copy(searching = on, query = if (on) it.query else "") }
-    fun toggleHidden() = _browser.update { it.copy(showHidden = !it.showHidden) }
-    fun toggleGrid() = _browser.update { it.copy(grid = !it.grid) }
+    fun toggleHidden() = _browser.update { it.copy(showHidden = !it.showHidden).also { s -> browserPrefs.showHidden = s.showHidden } }
+    fun toggleGrid() = _browser.update { it.copy(grid = !it.grid).also { s -> browserPrefs.grid = s.grid } }
 
     // --- file operations --------------------------------------------------------------------------------------------
 
@@ -418,12 +428,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val entries = selectedEntries()
         _selected.value = emptySet()
         folderOperation(if (entries.size == 1) "«${entries[0].name}» eliminato" else "${entries.size} elementi eliminati") { share, _ ->
+            rememberDeletedBackupPhotos(entries)
             for (entry in entries) repo.io { it.delete(share, entry.path) }
             app.deletedPhotos.emit(entries)
         }
     }
 
     fun delete(entry: RemoteEntry) = folderOperation("«${entry.name}» eliminato") { share, _ ->
+        rememberDeletedBackupPhotos(listOf(entry))
         repo.io { it.delete(share, entry.path) }
         app.deletedPhotos.emit(listOf(entry)) // the gallery may show it too
     }
@@ -433,21 +445,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * list of deleted photos (size and hash), so the backup does not upload them again, even after a reinstall.
      */
     fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
-        val destination = app.backupSettings.load().destination
         val gone = ArrayList<RemoteEntry>()
         var error: String? = null
         try {
-            val inBackup = photos.filter { destination != null && it.share == destination.share && isInside(it.path, destination.path) }
-            if (destination != null && inBackup.isNotEmpty()) {
-                val entries = ArrayList<String>()
-                for ((i, photo) in inBackup.withIndex()) {
-                    _transfer.value = Transfer("Preparo l'eliminazione: ${i + 1} di ${inBackup.size}", i.toLong(), inBackup.size.toLong())
-                    entries += repo.io { fs ->
-                        DeletedPhotos.entry(photo.size, fs.openRead(photo.share, photo.path).use { BackupPlacement.sha256(it) })
-                    }
-                }
-                repo.io { DeletedPhotos.add(it, destination.share, destination.path, entries) }
-            }
+            rememberDeletedBackupPhotos(photos)
             for ((i, photo) in photos.withIndex()) {
                 if (photos.size > 1) _transfer.value = Transfer("Elimino ${i + 1} di ${photos.size}", i.toLong(), photos.size.toLong())
                 repo.io { it.delete(photo.share, photo.path) }
@@ -466,6 +467,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message(
             error ?: if (gone.size == 1) "Foto eliminata dal NAS" else "${gone.size} foto eliminate dal NAS"
         )
+    }
+
+    /**
+     * Photos and videos of the backup folder about to be deleted, wherever the deletion starts (gallery, viewer or
+     * file list): their size and hash go to the folder's list of deleted photos, so the backup never uploads them again.
+     */
+    private suspend fun rememberDeletedBackupPhotos(entries: List<RemoteEntry>) {
+        val destination = app.backupSettings.load().destination ?: return
+        val inBackup = entries.filter { !it.isDirectory && it.isMedia && it.share == destination.share && isInside(it.path, destination.path) }
+        if (inBackup.isEmpty()) return
+        try {
+            val lines = ArrayList<String>()
+            for ((i, photo) in inBackup.withIndex()) {
+                _transfer.value = Transfer("Preparo l'eliminazione: ${i + 1} di ${inBackup.size}", i.toLong(), inBackup.size.toLong())
+                lines += repo.io { fs -> DeletedPhotos.entry(photo.size, Integrity.remoteSha256(fs, photo.share, photo.path)) }
+            }
+            repo.io { DeletedPhotos.add(it, destination.share, destination.path, lines) }
+        } finally {
+            _transfer.value = null
+        }
     }
 
     private fun isInside(path: String, folder: String): Boolean {
@@ -517,6 +538,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 message(e.readable())
             } finally {
                 _transfer.value = null
+                app.nasChanged.tryEmit(NasChange(s.share, s.path))
                 refresh()
             }
         }
@@ -527,10 +549,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val resolver = getApplication<Application>().contentResolver
         try {
             repo.io { fs ->
-                (resolver.openOutputStream(uri) ?: error("Impossibile scrivere il file")).use { out ->
-                    fs.download(entry.share, entry.path, out) { done, total ->
+                val sent = (resolver.openOutputStream(uri) ?: error("Impossibile scrivere il file")).use { out ->
+                    Integrity.download(fs, entry.share, entry.path, out) { done, total ->
                         _transfer.value = Transfer("Scarico ${entry.name}", done, total)
                     }
+                }
+                // read back what the phone stored: a copy that differs is removed, never left looking complete
+                _transfer.value = Transfer("Verifico ${entry.name}", -1, -1)
+                val stored = (resolver.openInputStream(uri) ?: error("Impossibile rileggere il file")).use { Integrity.sha256(it) }
+                if (stored != sent) {
+                    runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+                    throw Integrity.mismatch(entry.name, "la copia sul telefono è diversa")
                 }
             }
             message("«${entry.name}» salvato sul telefono")
@@ -554,18 +583,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val session = repo.io { fs ->
                 dir.mkdirs()
-                local.outputStream().use { out ->
-                    fs.download(entry.share, entry.path, out) { done, total ->
+                val sent = local.outputStream().use { out ->
+                    Integrity.download(fs, entry.share, entry.path, out) { done, total ->
                         _transfer.value = Transfer("Apro ${entry.name}", done, total)
                     }
                 }
+                val stored = EditSync.sha256(local)
+                if (stored != sent) throw Integrity.mismatch(entry.name, "la copia sul telefono è diversa")
                 val remote = fs.stat(entry.share, entry.path) ?: entry
                 EditSession(
                     id = id,
                     share = entry.share,
                     path = entry.path,
                     localFile = local,
-                    baseHash = EditSync.sha256(local),
+                    baseHash = stored,
                     remoteSize = remote.size,
                     remoteModified = remote.modified,
                     openedAt = System.currentTimeMillis(),
@@ -575,6 +606,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             events.send(UiEvent.OpenFile(local, entry.name, edit))
         } catch (e: Exception) {
             dir.deleteRecursively()
+            if (e is kotlinx.coroutines.CancellationException) throw e
             message(e.readable())
         } finally {
             _transfer.value = null
@@ -600,7 +632,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         val hash = withContext(Dispatchers.IO) { EditSync.sha256(session.localFile) }
                         val remote = repo.io { it.stat(session.share, session.path) }
-                        when (val decision = EditSync.decide(session, hash, remote)) {
+                        when (EditSync.decide(session, hash, remote)) {
                             SyncDecision.Unchanged -> if (System.currentTimeMillis() - session.openedAt > KEEP_UNCHANGED_MS) {
                                 sessions.remove(session)
                             }
@@ -694,6 +726,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 message(e.readable())
             }
+            app.nasChanged.tryEmit(NasChange(s.share, s.path))
             refresh()
         }
     }

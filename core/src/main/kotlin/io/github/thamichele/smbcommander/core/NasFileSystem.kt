@@ -88,8 +88,9 @@ interface NasFileSystem : Closeable {
     /**
      * Copies one file to [to], creating or truncating it. When both are on the same NAS the copy is done by the NAS
      * itself where possible, so the data does not travel through the phone.
+     * Returns the SHA-256 of the bytes when they were streamed through the phone, null when the NAS copied them.
      */
-    fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress = { _, _ -> })
+    fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress = { _, _ -> }): String?
 }
 
 class NasException(message: String, cause: Throwable? = null) : Exception(message, cause)
