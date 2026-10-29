@@ -13,7 +13,7 @@ class NasRepository(private val credentials: CredentialStore) {
     @Volatile
     private var current: NasFileSystem? = null
 
-    val isConfigured: Boolean get() = current != null || credentials.load() != null
+    val isConfigured: Boolean get() = current != null || credentials.hasServer()
 
     fun server(): NasServer? = credentials.load()
 

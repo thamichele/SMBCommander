@@ -33,10 +33,20 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
 
 Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo QNAP: non usa API proprietarie.
 
-## In arrivo
+## Backup automatico delle foto
 
-- **Backup automatico delle foto** dalla fotocamera a una cartella del NAS, in background, quando il telefono è sul
-  Wi-Fi di casa.
+- Sceglie gli album del telefono da salvare (di default la fotocamera) e una delle tue cartelle sul NAS.
+- Parte da solo ogni ora, **solo sul Wi-Fi di casa** e con batteria sufficiente (facoltativo: solo in carica),
+  e quando apri l'app. Si può anche avviare a mano.
+- Divide le foto per anno e mese (`2026/10`), mantiene la posizione GPS delle foto, video facoltativi.
+- Ogni file passa da un nome temporaneo: un backup interrotto riprende da dove si era fermato e non lascia file a
+  metà. Le foto **non vengono mai cancellate dal telefono**.
+
+## Galleria foto
+
+La sezione **Galleria** mostra solo le foto della cartella in cui finisce il backup, e nient'altro: niente
+indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
+recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
 
 ## Privacy e sicurezza
 
@@ -46,8 +56,21 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 
 ## Scaricare l'app
 
-Ogni push su `main` compila l'APK di prova con GitHub Actions: lo trovi negli artifact della build
-(`smbcommander-debug-apk`) nella scheda **Actions**.
+### Con F-Droid (consigliato, aggiornamenti automatici)
+
+SMBCommander ha un suo repository F-Droid, aggiornato a ogni nuova versione:
+
+1. Apri F-Droid (o un client compatibile come Droid-ify o Neo Store) e vai su **Impostazioni → Repository**.
+2. Aggiungi il repository `https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo`.
+3. Cerca **SMBCommander** e installala. Gli aggiornamenti arrivano da F-Droid come per le altre app.
+
+### APK diretto
+
+Ogni versione è anche una [release su GitHub](https://github.com/thamichele/SMBCommander/releases) con l'APK firmato.
+L'APK di prova di ogni build si trova negli artifact (`smbcommander-debug-apk`) nella scheda **Actions**, ma è firmato
+con una chiave diversa e non si aggiorna sopra la versione F-Droid.
+
+Le versioni sono numerate `1.0.N`, dove N è il numero della build: ogni build di `main` è un aggiornamento.
 
 ## Sviluppo
 
@@ -56,5 +79,8 @@ Ogni push su `main` compila l'APK di prova con GitHub Actions: lo trovi negli ar
   [smbj-rpc](https://github.com/rapid7/smbj-rpc).
 - Modulo `core`: logica SMB e di sincronizzazione in Kotlin puro, con test (`./gradlew :core:test`).
 - Modulo `app`: interfaccia Android.
+- Rilascio: a ogni push su `main` GitHub Actions compila l'APK firmato, crea la release e aggiorna il repository
+  F-Droid (ramo `fdroid`). La chiave di firma non è nel repository: arriva dai secret `RELEASE_KEYSTORE_BASE64` e
+  `RELEASE_KEYSTORE_PASSWORD`.
 
 Il font IBM Plex Sans è distribuito con licenza SIL Open Font License 1.1 (`fonts/OFL.txt`).

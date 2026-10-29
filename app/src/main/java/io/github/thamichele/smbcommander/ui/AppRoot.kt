@@ -8,7 +8,18 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.thamichele.smbcommander.backup.BackupScreen
+import io.github.thamichele.smbcommander.gallery.GalleryScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,11 +80,19 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     Scaffold(
         containerColor = Arancio.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
+        // in the bar, not in the content, so snackbars appear above it
+        bottomBar = {
+            if (screen == Screen.Shares || screen == Screen.Gallery || screen == Screen.Backup) {
+                BottomNav(screen, vm)
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (val s = screen) {
                 Screen.Setup -> SetupScreen(vm)
                 Screen.Shares -> FoldersScreen(vm)
+                Screen.Gallery -> GalleryScreen(vm)
+                Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)
             }
@@ -143,6 +162,45 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                     }
                 }
             },
+        )
+    }
+}
+
+/** The sections of the app, as in the kit's bottom bar: pill behind the active icon. */
+@Composable
+private fun BottomNav(screen: Screen, vm: AppViewModel) {
+    val c = Arancio.colors
+    Column(Modifier.background(c.surface).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)) {
+            NavItem(AppIcons.Folder, "File", screen == Screen.Shares, vm::openFiles, Modifier.weight(1f))
+            NavItem(AppIcons.Image, "Galleria", screen == Screen.Gallery, vm::openGallery, Modifier.weight(1f))
+            NavItem(AppIcons.Upload, "Backup foto", screen == Screen.Backup, vm::openBackup, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val c = Arancio.colors
+    Column(
+        modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            Modifier
+                .width(56.dp)
+                .height(30.dp)
+                .background(if (active) c.accentSoft else Color.Transparent, RoundedCornerShape(999.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (active) c.text else c.textSecondary, modifier = Modifier.size(22.dp))
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (active) c.text else c.textSecondary,
         )
     }
 }

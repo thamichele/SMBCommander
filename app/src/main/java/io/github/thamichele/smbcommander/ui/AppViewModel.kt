@@ -32,10 +32,13 @@ import java.util.UUID
 sealed interface Screen {
     data object Setup : Screen
     data object Shares : Screen
+    data object Backup : Screen
     data class Browser(val share: String, val path: String) : Screen
 
-    /** Full-screen photos of [folder], swiping through [images] starting at [index]. */
-    data class Viewer(val folder: Browser, val images: List<RemoteEntry>, val index: Int) : Screen
+    data object Gallery : Screen
+
+    /** Full-screen photos, swiping through [images] starting at [index]; back returns to [returnTo]. */
+    data class Viewer(val returnTo: Screen, val images: List<RemoteEntry>, val index: Int) : Screen
 }
 
 enum class SortMode { Name, Date, Size }
@@ -137,9 +140,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         repo.forget()
         app.folders.clear()
+        // a different NAS starts from scratch: no backup towards a folder that may not exist there
+        app.backupSettings.clear()
+        app.backupLedger.clear()
+        io.github.thamichele.smbcommander.backup.BackupScheduler.apply(app, app.backupSettings.load())
         listingCache.clear()
         _folders.value = emptyList()
         _screen.value = Screen.Setup
+    }
+
+    fun openBackup() {
+        _screen.value = Screen.Backup
+    }
+
+    fun openGallery() {
+        _screen.value = Screen.Gallery
+    }
+
+    fun openFiles() {
+        _screen.value = Screen.Shares
     }
 
     fun openSettings() {
@@ -206,11 +225,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = Screen.Viewer(s, images, images.indexOf(entry).coerceAtLeast(0))
     }
 
+    /** Opens the viewer from the gallery, on its own list of photos. */
+    fun openViewer(images: List<RemoteEntry>, index: Int) {
+        if (images.isEmpty()) return
+        _screen.value = Screen.Viewer(_screen.value, images, index.coerceIn(0, images.lastIndex))
+    }
+
     /** Returns false when there is nothing left to go back to (the activity then closes). */
     fun back(): Boolean {
         when (val s = _screen.value) {
             is Screen.Viewer -> {
-                _screen.value = s.folder
+                _screen.value = s.returnTo
                 return true
             }
             is Screen.Browser -> {
@@ -225,6 +250,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 return true
             }
             Screen.Setup -> if (repo.isConfigured) {
+                _screen.value = Screen.Shares
+                return true
+            }
+            Screen.Backup, Screen.Gallery -> {
                 _screen.value = Screen.Shares
                 return true
             }
