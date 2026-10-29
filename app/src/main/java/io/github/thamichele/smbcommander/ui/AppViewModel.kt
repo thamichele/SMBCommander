@@ -124,10 +124,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- connection -------------------------------------------------------------------------------------------------
 
+    /** An empty password keeps the saved one, as long as address and user did not change. */
     fun connect(server: NasServer) = viewModelScope.launch {
         _connecting.value = true
         try {
-            repo.connect(server)
+            val saved = if (server.password.isEmpty()) repo.server() else null
+            repo.connect(
+                if (saved != null && saved.host == server.host && saved.username == server.username) {
+                    server.copy(password = saved.password)
+                } else server
+            )
             listingCache.clear()
             _screen.value = Screen.Shares
         } catch (e: Exception) {
@@ -144,6 +150,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         app.backupSettings.clear()
         app.backupLedger.clear()
         io.github.thamichele.smbcommander.backup.BackupScheduler.apply(app, app.backupSettings.load())
+        // nothing of the old NAS stays on the phone: copies opened for editing, thumbnails and previews
+        sessions.all().forEach(sessions::remove)
+        val cache = getApplication<Application>().cacheDir
+        viewModelScope.launch(Dispatchers.IO) {
+            File(cache, "edit").deleteRecursively()
+            File(cache, "images").deleteRecursively()
+        }
         listingCache.clear()
         _folders.value = emptyList()
         _screen.value = Screen.Setup

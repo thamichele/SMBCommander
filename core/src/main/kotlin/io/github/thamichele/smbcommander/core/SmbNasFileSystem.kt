@@ -12,6 +12,7 @@ import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
+import com.hierynomus.smbj.session.SMB2GuestSigningRequiredException
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
 import com.rapid7.client.dcerpc.mssrvs.ServerService
@@ -24,8 +25,12 @@ import java.util.concurrent.TimeUnit
 
 /**
  * [NasFileSystem] over SMB 2/3 with smbj. Keeps one authenticated session and reconnects on demand.
+ * [onPaired] receives the NAS identity the first time a server without one connects, so it can be stored.
  */
-class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
+class SmbNasFileSystem(
+    private val server: NasServer,
+    private val onPaired: (String) -> Unit = {},
+) : NasFileSystem {
 
     private val client = SMBClient(
         SmbConfig.builder()
@@ -34,12 +39,21 @@ class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
             // Android ships a stripped BouncyCastle: use the full one bundled with the app
             .withSecurityProvider(BCSecurityProvider())
             .withDfsEnabled(false)
+            // every message is signed, so nobody on the network can alter files on their way; with SMB 3 the
+            // traffic is also encrypted. NAS without SMB 3 encryption still work, signed but readable
+            .withSigningRequired(true)
+            .withEncryptData(true)
             .build()
     )
     private val lock = Any()
     private var connection: Connection? = null
     private var session: Session? = null
     private val shares = HashMap<String, DiskShare>()
+
+    /** Identity of the NAS this connects to: the paired one, or the one seen at the first connection. */
+    @Volatile
+    var serverId: String = server.serverId
+        private set
 
     /** Connects and authenticates, so wrong credentials surface right away. */
     fun connect() {
@@ -167,9 +181,28 @@ class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
         try {
             val conn = client.connect(server.host)
             connection = conn
+            val presented = conn.connectionContext.serverGuid?.takeIf { it != NO_GUID }?.toString()
+            if (!ServerIdentity.accepts(serverId, presented)) {
+                // checked before authenticating: an impostor never sees the login
+                disconnect()
+                throw NasException(
+                    "A questo indirizzo risponde un NAS diverso da quello collegato. Se hai cambiato o rinominato il " +
+                        "NAS, collegalo di nuovo dalle impostazioni."
+                )
+            }
             conn.authenticate(
                 AuthenticationContext(server.username, server.password.toCharArray(), server.domain)
-            ).also { session = it }
+            ).also {
+                session = it
+                if (serverId.isEmpty() && presented != null) {
+                    serverId = presented
+                    onPaired(presented)
+                }
+            }
+        } catch (e: SMB2GuestSigningRequiredException) {
+            // the NAS let us in as guest (unknown user): a guest session cannot be signed, so it is refused
+            disconnect()
+            throw NasException("Il NAS non riconosce l'utente: controlla utente e password", e)
         } catch (e: SMBApiException) {
             disconnect()
             throw NasException(
@@ -237,6 +270,7 @@ class SmbNasFileSystem(private val server: NasServer) : NasFileSystem {
     private companion object {
         const val BUFFER_SIZE = 1 shl 20
         const val STYPE_SPECIAL = 0x80000000.toInt()
+        val NO_GUID = java.util.UUID(0, 0)
         val NOT_FOUND = setOf(
             NtStatus.STATUS_OBJECT_NAME_NOT_FOUND,
             NtStatus.STATUS_OBJECT_PATH_NOT_FOUND,

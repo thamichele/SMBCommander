@@ -17,16 +17,16 @@ class NasRepository(private val credentials: CredentialStore) {
 
     fun server(): NasServer? = credentials.load()
 
-    /** Checks the settings by really connecting, then keeps them. */
+    /** Checks the settings by really connecting, then keeps them. Pairs again with whichever NAS answers now. */
     suspend fun connect(server: NasServer) = withContext(Dispatchers.IO) {
-        val fs = SmbNasFileSystem(server)
+        val fs = SmbNasFileSystem(server.copy(serverId = ""))
         try {
             fs.connect()
         } catch (e: Exception) {
             fs.close()
             throw e
         }
-        credentials.save(server)
+        credentials.save(server.copy(serverId = fs.serverId))
         current?.close()
         current = fs
     }
@@ -39,7 +39,10 @@ class NasRepository(private val credentials: CredentialStore) {
 
     /** The file system, created from the saved settings on first use. */
     fun fs(): NasFileSystem = current ?: synchronized(this) {
-        current ?: SmbNasFileSystem(credentials.load() ?: throw NasException("NAS non configurato")).also { current = it }
+        current ?: SmbNasFileSystem(
+            credentials.load() ?: throw NasException("NAS non configurato"),
+            onPaired = credentials::savePairing,
+        ).also { current = it }
     }
 
     suspend fun <T> io(block: (NasFileSystem) -> T): T = withContext(Dispatchers.IO) { block(fs()) }

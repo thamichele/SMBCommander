@@ -50,8 +50,14 @@ recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione
 
 ## Privacy e sicurezza
 
-- Indirizzo del NAS, utente e password si inseriscono nell'app e restano **cifrati sul telefono** (Android Keystore).
+- Indirizzo del NAS, utente e password si inseriscono nell'app e restano solo sul telefono, nella memoria privata
+  dell'app; la password è **cifrata** con una chiave dell'Android Keystore. Non finiscono nei backup né nel
+  trasferimento a un nuovo telefono, e la password salvata non si può più rileggere dalle impostazioni.
   Nel codice non c'è nessun dato personale.
+- Il traffico SMB è sempre **firmato** (nessuno in rete può alterare i file in transito) e, con SMB 3, **cifrato**.
+- Al primo collegamento l'app memorizza l'identità del NAS: se a quell'indirizzo risponde un'altra macchina (per
+  esempio su un'altra rete Wi-Fi), si ferma prima di inviare il login.
+- "Scollega e dimentica questo NAS" cancella anche le copie aperte in modifica, le miniature e le anteprime.
 - L'app non invia dati a nessun servizio esterno.
 
 ## Scaricare l'app
@@ -61,14 +67,18 @@ recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione
 SMBCommander ha un suo repository F-Droid, aggiornato a ogni nuova versione:
 
 1. Apri F-Droid (o un client compatibile come Droid-ify o Neo Store) e vai su **Impostazioni → Repository**.
-2. Aggiungi il repository `https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo`.
+2. Aggiungi il repository `https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo` e, quando F-Droid
+   lo chiede, controlla che l'impronta (fingerprint) della chiave sia
+   `46FF8711DA0635E81A46ED3A71A6BC8EC19CF8D7F7766829B8F8AD090F539065`. Puoi anche aggiungerlo già verificato con
+   `https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo?fingerprint=46FF8711DA0635E81A46ED3A71A6BC8EC19CF8D7F7766829B8F8AD090F539065`.
 3. Cerca **SMBCommander** e installala. Gli aggiornamenti arrivano da F-Droid come per le altre app.
 
 ### APK diretto
 
 Ogni versione è anche una [release su GitHub](https://github.com/thamichele/SMBCommander/releases) con l'APK firmato.
-L'APK di prova di ogni build si trova negli artifact (`smbcommander-debug-apk`) nella scheda **Actions**, ma è firmato
-con una chiave diversa e non si aggiorna sopra la versione F-Droid.
+L'APK di prova di ogni build si trova negli artifact (`smbcommander-debug-apk`) nella scheda **Actions**: è firmato con
+una chiave di debug pubblica e si installa come app separata (`io.github.thamichele.smbcommander.debug`), accanto a
+quella vera e senza accesso ai suoi dati. Per l'uso quotidiano installa la versione F-Droid o la release firmata.
 
 Le versioni sono numerate `1.0.N`, dove N è il numero della build: ogni build di `main` è un aggiornamento.
 

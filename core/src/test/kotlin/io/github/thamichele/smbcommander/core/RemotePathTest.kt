@@ -15,6 +15,13 @@ class RemotePathTest {
     }
 
     @Test
+    fun neverClimbsOut() {
+        assertEquals("Foto/2026/x.jpg", RemotePath.child("Foto/2026", "../x.jpg"))
+        assertEquals("Foto/x", RemotePath.normalize("Foto/../../x"))
+        assertEquals("", RemotePath.normalize(".."))
+    }
+
+    @Test
     fun childParentName() {
         assertEquals("foto", RemotePath.child("", "foto"))
         assertEquals("foto/2026", RemotePath.child("foto/", "2026"))

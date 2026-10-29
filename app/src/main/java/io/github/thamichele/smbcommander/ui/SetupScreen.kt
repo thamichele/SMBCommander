@@ -43,7 +43,8 @@ fun SetupScreen(vm: AppViewModel) {
     val connecting by vm.connecting.collectAsStateWithLifecycle()
     var host by rememberSaveable { mutableStateOf(saved?.host.orEmpty()) }
     var user by rememberSaveable { mutableStateOf(saved?.username.orEmpty()) }
-    var password by rememberSaveable { mutableStateOf(saved?.password.orEmpty()) }
+    // the saved password is never shown again: left empty, the saved one is kept
+    var password by rememberSaveable { mutableStateOf("") }
     var domain by rememberSaveable { mutableStateOf(saved?.domain.orEmpty()) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var confirmForget by remember { mutableStateOf(false) }
@@ -82,7 +83,7 @@ fun SetupScreen(vm: AppViewModel) {
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password") },
+                label = { Text(if (saved != null) "Password (vuota = quella salvata)" else "Password") },
                 singleLine = true,
                 shape = RoundedCornerShape(8.dp),
                 colors = arancioFieldColors(),
