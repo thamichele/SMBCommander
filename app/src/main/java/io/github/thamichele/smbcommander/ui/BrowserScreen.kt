@@ -57,6 +57,7 @@ import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.ThumbnailCache
+import io.github.thamichele.smbcommander.data.isImage
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 private sealed interface Dialog {
@@ -85,7 +86,13 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     }
 
     val actions = EntryActions(
-        open = { if (it.isDirectory) vm.openFolder(it) else vm.open(it, edit = false) },
+        open = {
+            when {
+                it.isDirectory -> vm.openFolder(it)
+                it.isImage -> vm.openViewer(it)
+                else -> vm.open(it, edit = false)
+            }
+        },
         edit = { vm.open(it, edit = true) },
         download = { pendingDownload = it; saveFile.launch(it.name) },
         rename = { dialog = Dialog.Rename(it) },

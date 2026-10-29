@@ -13,6 +13,7 @@ import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.isImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -32,6 +33,9 @@ sealed interface Screen {
     data object Setup : Screen
     data object Shares : Screen
     data class Browser(val share: String, val path: String) : Screen
+
+    /** Full-screen photos of [folder], swiping through [images] starting at [index]. */
+    data class Viewer(val folder: Browser, val images: List<RemoteEntry>, val index: Int) : Screen
 }
 
 enum class SortMode { Name, Date, Size }
@@ -195,9 +199,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
+    /** Opens the photo viewer on [entry], with the other images of the folder as they are shown in the list. */
+    fun openViewer(entry: RemoteEntry) {
+        val s = _screen.value as? Screen.Browser ?: return
+        val images = _browser.value.visible.filter { it.isImage }
+        _screen.value = Screen.Viewer(s, images, images.indexOf(entry).coerceAtLeast(0))
+    }
+
     /** Returns false when there is nothing left to go back to (the activity then closes). */
     fun back(): Boolean {
         when (val s = _screen.value) {
+            is Screen.Viewer -> {
+                _screen.value = s.folder
+                return true
+            }
             is Screen.Browser -> {
                 if (_browser.value.searching) {
                     _browser.update { it.copy(searching = false, query = "") }

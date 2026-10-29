@@ -75,6 +75,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Setup -> SetupScreen(vm)
                 Screen.Shares -> FoldersScreen(vm)
                 is Screen.Browser -> BrowserScreen(vm, s)
+                is Screen.Viewer -> ViewerScreen(vm, s)
             }
             transfer?.let { t ->
                 Column(

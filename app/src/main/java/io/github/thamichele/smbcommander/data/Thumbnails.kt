@@ -8,7 +8,6 @@ import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.decode.ImageSource
 import coil3.fetch.FetchResult
-import coil3.fetch.Fetcher
 import coil3.fetch.SourceFetchResult
 import coil3.request.Options
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -20,33 +19,76 @@ import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.security.MessageDigest
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
-/** Coil model for the thumbnail of an image on the NAS. Size and date are part of it, so an edited photo refreshes. */
-data class Thumb(val share: String, val path: String, val size: Long, val modified: Long) {
-    constructor(entry: RemoteEntry) : this(entry.share, entry.path, entry.size, entry.modified)
+val RemoteEntry.isImage: Boolean get() = !isDirectory && extension in ThumbnailCache.IMAGE_EXTENSIONS
+
+/** How big a cached copy of a NAS image is. */
+enum class ImageSize(val folder: String) {
+    /** Small square-ish tile for lists and grids: the shorter side is at least 384 px. */
+    Thumb("thumbs"),
+
+    /** Full-screen preview: the longer side is at most 1600 px, JPEG quality 72. Light, but clearly readable. */
+    Preview("previews"),
+}
+
+/** Coil model for a cached copy of an image on the NAS. Size and date are part of it, so an edited photo refreshes. */
+data class Thumb(
+    val share: String,
+    val path: String,
+    val size: Long,
+    val modified: Long,
+    val variant: ImageSize = ImageSize.Thumb,
+) {
+    constructor(entry: RemoteEntry, variant: ImageSize = ImageSize.Thumb) :
+        this(entry.share, entry.path, entry.size, entry.modified, variant)
 }
 
 /**
- * Makes each thumbnail once: the photo is read over SMB, scaled down to [TARGET_PX], turned upright and saved as a
- * small JPEG in the cache. Every later view of the folder loads it from the phone, without touching the NAS.
+ * Makes each reduced copy once: the photo is read over SMB, scaled down, turned upright and saved as a small JPEG in
+ * the cache. Every later view loads it from the phone without touching the NAS; the original stays on the NAS.
  */
 class ThumbnailCache(private val dir: File, private val repository: NasRepository) {
 
-    // a few at a time: the NAS serves the visible ones quickly instead of everything at once
-    private val permits = Semaphore(3)
+    // a few at a time, so the NAS serves the visible ones quickly; previews get their own lane and never queue
+    // behind a grid full of thumbnails
+    private val thumbPermits = Semaphore(3)
+    private val previewPermits = Semaphore(2)
 
     suspend fun get(thumb: Thumb): File {
-        val target = File(dir, key(thumb) + ".jpg")
-        if (target.exists()) return target
+        val target = file(thumb, thumb.variant)
+        if (target.exists()) {
+            target.setLastModified(System.currentTimeMillis())
+            return target
+        }
+        val permits = if (thumb.variant == ImageSize.Preview) previewPermits else thumbPermits
         return permits.withPermit {
             withContext(Dispatchers.IO) {
-                if (!target.exists()) create(thumb, target)
+                if (!target.exists()) create(thumb)
                 target
             }
         }
     }
 
-    private fun create(thumb: Thumb, target: File) {
+    /** Keeps the previews under [maxBytes], dropping the least recently viewed first. */
+    fun trimPreviews(maxBytes: Long = 400L * 1024 * 1024) {
+        val files = File(dir, ImageSize.Preview.folder).listFiles()?.sortedByDescending { it.lastModified() } ?: return
+        var total = 0L
+        for (f in files) {
+            total += f.length()
+            if (total > maxBytes) f.delete()
+        }
+    }
+
+    private fun file(thumb: Thumb, variant: ImageSize): File = File(File(dir, variant.folder), key(thumb) + ".jpg")
+
+    /** Downloads the original once and writes the requested copy; a preview also leaves its thumbnail behind. */
+    private fun create(thumb: Thumb) {
+        val variants = if (thumb.variant == ImageSize.Preview) listOf(ImageSize.Preview, ImageSize.Thumb) else listOf(ImageSize.Thumb)
+        val missing = variants.filter { !file(thumb, it).exists() }
+        if (missing.isEmpty()) return
         dir.mkdirs()
         val source = File.createTempFile("src", null, dir)
         try {
@@ -55,17 +97,38 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             }
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(source.path, bounds)
-            var sample = 1
-            while (bounds.outWidth / (sample * 2) >= TARGET_PX && bounds.outHeight / (sample * 2) >= TARGET_PX) sample *= 2
-            val bitmap = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample })
-                ?: throw IllegalStateException("Immagine non leggibile")
-            val upright = rotate(bitmap, runCatching { ExifInterface(source.path) }.getOrNull())
-            val temp = File(dir, target.name + ".part")
-            temp.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-            temp.renameTo(target)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalStateException("Immagine non leggibile")
+            val exif = runCatching { ExifInterface(source.path) }.getOrNull()
+            for (variant in missing) {
+                val bitmap = decode(source, bounds.outWidth, bounds.outHeight, variant)
+                val upright = rotate(bitmap, exif)
+                val target = file(thumb, variant)
+                target.parentFile?.mkdirs()
+                val temp = File(target.parentFile, target.name + ".part")
+                temp.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, if (variant == ImageSize.Preview) 72 else 85, it) }
+                temp.renameTo(target)
+                if (upright !== bitmap) upright.recycle()
+                bitmap.recycle()
+            }
         } finally {
             source.delete()
         }
+    }
+
+    private fun decode(source: File, width: Int, height: Int, variant: ImageSize): Bitmap {
+        // sample down by powers of two while the result stays at least as big as needed, then scale exactly
+        val scale = when (variant) {
+            ImageSize.Thumb -> min(1f, THUMB_PX.toFloat() / min(width, height))
+            ImageSize.Preview -> min(1f, PREVIEW_PX.toFloat() / max(width, height))
+        }
+        var sample = 1
+        while (width / (sample * 2) >= width * scale && height / (sample * 2) >= height * scale) sample *= 2
+        val decoded = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: throw IllegalStateException("Immagine non leggibile")
+        val w = (width * scale).roundToInt().coerceAtLeast(1)
+        val h = (height * scale).roundToInt().coerceAtLeast(1)
+        if (decoded.width <= w || decoded.height <= h) return decoded
+        return Bitmap.createScaledBitmap(decoded, w, h, true).also { if (it !== decoded) decoded.recycle() }
     }
 
     private fun rotate(bitmap: Bitmap, exif: ExifInterface?): Bitmap {
@@ -103,7 +166,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     }
 
     companion object {
-        const val TARGET_PX = 384
+        const val THUMB_PX = 384
+        const val PREVIEW_PX = 1600
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
     }
 }

@@ -28,7 +28,8 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         repository = NasRepository(CredentialStore(this))
         editSessions = EditSessionStore(this)
         folders = FolderStore(this)
-        thumbnails = ThumbnailCache(File(cacheDir, "thumbs"), repository)
+        thumbnails = ThumbnailCache(File(cacheDir, "images"), repository)
+        Thread { runCatching { thumbnails.trimPreviews() } }.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
