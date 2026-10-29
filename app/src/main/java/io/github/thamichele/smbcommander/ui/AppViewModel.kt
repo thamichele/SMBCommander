@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.DeletedPhotos
@@ -20,8 +21,6 @@ import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.isMedia
-import java.io.File
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -34,6 +33,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
 
 sealed interface Screen {
     data object Setup : Screen
@@ -143,6 +144,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             app.transfers.finished.collect { job ->
                 // a copy or move changes other folders too: forget them all
                 listingCache.clear()
+                app.nasChanged.tryEmit(null)
                 refresh()
                 if (job.state == TransferJob.State.Failed) message("${job.label}: ${job.error}")
             }
@@ -519,6 +521,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 message(e.readable())
             } finally {
                 _transfer.value = null
+                app.nasChanged.tryEmit(NasChange(s.share, s.path))
                 refresh()
             }
         }
@@ -705,6 +708,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 message(e.readable())
             }
+            app.nasChanged.tryEmit(NasChange(s.share, s.path))
             refresh()
         }
     }

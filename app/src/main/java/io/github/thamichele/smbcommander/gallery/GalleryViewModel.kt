@@ -4,21 +4,27 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.GalleryDates
+import io.github.thamichele.smbcommander.core.GalleryIndex
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Photos of one month, newest month first. */
@@ -27,7 +33,10 @@ data class MonthGroup(val year: Int, val month: Int, val photos: List<RemoteEntr
 data class GalleryState(
     val folder: SavedFolder? = null,
     val months: List<MonthGroup> = emptyList(),
+    /** A walk of the NAS is running; what is shown stays usable meanwhile. */
     val loading: Boolean = false,
+    /** The user pulled to refresh: only then the spinner shows over the photos. */
+    val pulling: Boolean = false,
     val error: String? = null,
     /** A list with names and details instead of the grid of thumbnails. */
     val listView: Boolean = false,
@@ -37,34 +46,60 @@ data class GalleryState(
 }
 
 /**
- * The photos in the backup folder and nowhere else. Folders are walked a few levels deep ("2026/10"), and the grid
- * fills in as each folder arrives.
+ * The photos and videos in the backup folder and nowhere else, at any depth and in any folder layout (the backup's
+ * "2026/10", older QuMagie or camera-upload folders). The last known content is shown at once; a refresh lists the
+ * folders again, several at a time, and changes the gallery only where the NAS changed.
  */
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as SmbCommanderApp
+    private val store = GalleryStore(File(application.filesDir, "gallery"))
     private val _state = MutableStateFlow(GalleryState(listView = app.galleryPrefs.listView))
     val state: StateFlow<GalleryState> = _state.asStateFlow()
     private var job: Job? = null
+    private var index = GalleryIndex()
+    private var lastWalk = 0L
 
-    /** Deleted while a walk may still be running: kept out of what it finds. */
+    /** Deleted from the gallery while a walk may have listed them already: kept out until the next walk. */
     private val deleted = ConcurrentHashMap.newKeySet<String>()
+
+    /** Dates worked out once per file, not at every regrouping. */
+    private val dates = ConcurrentHashMap<RemoteEntry, GalleryDates.Taken>()
 
     init {
         viewModelScope.launch {
             app.deletedPhotos.collect { gone ->
-                deleted += gone.map { key(it) }
-                _state.update { s -> s.copy(months = s.months.withoutDeleted()) }
+                val keys = gone.map { key(it) }
+                deleted += keys
+                index.remove(::isDeleted)
+                publish()
+                _state.value.folder?.let { folder -> launch(Dispatchers.IO) { store.save(folder, index.all()) } }
+            }
+        }
+        viewModelScope.launch {
+            // a backup run, an upload or a copy into the backup folder: look again, quietly
+            app.nasChanged.collect { change ->
+                val folder = _state.value.folder ?: return@collect
+                if (change == null || change.affects(folder)) {
+                    delay(1_000)
+                    refresh()
+                }
             }
         }
     }
 
-    /** Loads on first show, or again when the backup folder changed meanwhile. */
+    /** Shows the gallery: from the phone at once, then a refresh when the last one is old or the folder changed. */
     fun ensureLoaded() {
         val folder = app.backupSettings.load().destination
         val current = _state.value
-        if (folder == current.folder && (current.months.isNotEmpty() || current.loading)) return
-        refresh()
+        if (folder != current.folder) {
+            job?.cancel()
+            index = GalleryIndex(folder?.let(store::load).orEmpty())
+            _state.value = GalleryState(folder = folder, listView = current.listView)
+            publish()
+            lastWalk = 0
+        }
+        if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
 
     fun toggleView() {
@@ -73,59 +108,103 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         _state.update { it.copy(listView = list) }
     }
 
-    fun refresh() {
-        val folder = app.backupSettings.load().destination
+    /** Pull to refresh or the button: like [refresh], with the spinner. */
+    fun pull() = refresh(pulling = true)
+
+    fun refresh(pulling: Boolean = false) {
+        val folder = _state.value.folder ?: app.backupSettings.load().destination ?: return
+        if (folder != _state.value.folder) return ensureLoaded()
         job?.cancel()
-        // a fresh walk only finds what is still on the NAS
         deleted.clear()
-        if (folder == null) {
-            _state.value = GalleryState(listView = _state.value.listView)
-            return
-        }
-        _state.value = _state.value.copy(folder = folder, loading = true, error = null)
+        _state.update { it.copy(loading = true, pulling = pulling, error = null) }
+        // a walk only ever writes to the index of its own folder, even if the folder changes meanwhile
+        val idx = index
         job = viewModelScope.launch(Dispatchers.IO) {
-            val found = ArrayList<RemoteEntry>()
+            val seen = ConcurrentHashMap.newKeySet<String>()
+            val failed = ConcurrentHashMap.newKeySet<String>()
+            val ticker = launch {
+                // the grid follows the walk a few times a second, not at every folder
+                while (isActive) {
+                    delay(400)
+                    if (dirty) publish()
+                }
+            }
             try {
                 val fs = app.repository.fs()
-                walk(fs, folder.share, folder.path, 0) { batch ->
-                    found += batch
-                    _state.update { it.copy(months = group(found.filterNot(::isDeleted))) }
+                // the backup folder itself must be readable, otherwise nothing is known
+                val root = fs.list(folder.share, folder.path)
+                walk(idx, fs, folder.share, RemotePath.normalize(folder.path), root, 0, seen, failed, Semaphore(PARALLEL_LISTINGS))
+                if (idx.retain(seen, failed)) dirty = true
+                ticker.cancel()
+                publish()
+                lastWalk = System.currentTimeMillis()
+                store.save(folder, idx.all())
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        pulling = false,
+                        error = if (failed.isEmpty()) null else "Alcune cartelle non si sono potute leggere (${failed.size})",
+                    )
                 }
-                _state.update { it.copy(months = group(found.filterNot(::isDeleted)), loading = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.value = _state.value.copy(loading = false, error = e.message ?: e.javaClass.simpleName)
+                ticker.cancel()
+                _state.update { it.copy(loading = false, pulling = false, error = e.message ?: e.javaClass.simpleName) }
             }
         }
     }
 
-    private suspend fun walk(fs: NasFileSystem, share: String, path: String, depth: Int, found: (List<RemoteEntry>) -> Unit) {
-        currentCoroutineContext().ensureActive()
-        val entries = fs.list(share, path).filterNot { it.name.startsWith(".") || it.name.startsWith("@") }
-        val photos = entries.filter { it.isMedia }
-        if (photos.isNotEmpty()) found(photos)
+    @Volatile
+    private var dirty = false
+
+    private suspend fun walk(
+        idx: GalleryIndex,
+        fs: NasFileSystem,
+        share: String,
+        dir: String,
+        entries: List<RemoteEntry>,
+        depth: Int,
+        seen: MutableSet<String>,
+        failed: MutableSet<String>,
+        permits: Semaphore,
+    ) {
+        seen += dir
+        val visible = entries.filterNot { hidden(it.name) }
+        if (idx.replace(dir, visible.filter { it.isMedia && !isDeleted(it) })) dirty = true
         if (depth >= MAX_DEPTH) return
         // newest folders first, so "2026/10" shows before "2019/01"
-        for (dir in entries.filter { it.isDirectory }.sortedByDescending { it.name }) walk(fs, share, dir.path, depth + 1, found)
-    }
-
-    private fun group(photos: List<RemoteEntry>): List<MonthGroup> =
-        photos.groupBy { monthOf(it) }
-            .map { (ym, list) -> MonthGroup(ym.first, ym.second, list.sortedByDescending { it.name }) }
-            .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
-
-    /** From a "…/2026/10/…" folder when the backup sorts by month, otherwise from the file date. */
-    private fun monthOf(photo: RemoteEntry): Pair<Int, Int> {
-        val parts = photo.path.split('/')
-        for (i in parts.size - 2 downTo 1) {
-            val year = parts[i - 1].toIntOrNull()
-            val month = parts[i].toIntOrNull()
-            if (year != null && month != null && year in 1970..2100 && month in 1..12) return year to month
+        val dirs = visible.filter { it.isDirectory }.sortedByDescending { it.name }
+        coroutineScope {
+            for (sub in dirs) {
+                launch {
+                    val children = try {
+                        permits.withPermit { fs.list(share, sub.path) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // an unreadable folder keeps what the gallery knew about it
+                        failed += sub.path
+                        return@launch
+                    }
+                    walk(idx, fs, share, sub.path, children, depth + 1, seen, failed, permits)
+                }
+            }
         }
-        val cal = Calendar.getInstance().apply { timeInMillis = photo.modified }
-        return cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) + 1
     }
+
+    private fun publish() {
+        dirty = false
+        val months = index.all()
+            .groupBy { taken(it).let { t -> t.year to t.month } }
+            .map { (ym, list) ->
+                MonthGroup(ym.first, ym.second, list.sortedWith(compareByDescending<RemoteEntry> { taken(it).sortKey }.thenByDescending { it.name }))
+            }
+            .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
+        _state.update { it.copy(months = months) }
+    }
+
+    private fun taken(e: RemoteEntry) = dates.getOrPut(e) { GalleryDates.of(e) }
 
     private fun key(e: RemoteEntry) = e.share + "/" + e.path
 
@@ -136,10 +215,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         return deleted.any { k == it || k.startsWith("$it/") }
     }
 
-    private fun List<MonthGroup>.withoutDeleted(): List<MonthGroup> =
-        map { g -> g.copy(photos = g.photos.filterNot(::isDeleted)) }.filter { it.photos.isNotEmpty() }
-
     private companion object {
-        const val MAX_DEPTH = 3
+        /** Deep enough for any archive layout, short of a folder that links back into itself. */
+        const val MAX_DEPTH = 12
+        const val PARALLEL_LISTINGS = 4
+        const val AUTO_REFRESH_MS = 60_000L
+
+        /** Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots. */
+        fun hidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#") ||
+            name.equals("Thumbs.db", ignoreCase = true) || name.startsWith("~")
     }
 }
