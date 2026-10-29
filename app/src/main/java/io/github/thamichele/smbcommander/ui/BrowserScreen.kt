@@ -70,6 +70,7 @@ private sealed interface Dialog {
     data object DeleteSelected : Dialog
     data class Rename(val entry: RemoteEntry) : Dialog
     data class Delete(val entry: RemoteEntry) : Dialog
+    data class Info(val entry: RemoteEntry) : Dialog
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,6 +108,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         download = { pendingDownload = it; saveFile.launch(it.name) },
         rename = { dialog = Dialog.Rename(it) },
         delete = { dialog = Dialog.Delete(it) },
+        info = { dialog = Dialog.Info(it) },
         select = vm::toggleSelected,
     )
     val single = if (selected.size == 1) state.entries.firstOrNull { it.path in selected } else null
@@ -132,6 +134,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                                     MenuItem(AppIcons.Download, "Salva sul telefono") { moreMenu = false; vm.clearSelection(); actions.download(entry) }
                                 }
                                 MenuItem(AppIcons.Rename, "Rinomina") { moreMenu = false; vm.clearSelection(); actions.rename(entry) }
+                                MenuItem(AppIcons.Info, "Info") { moreMenu = false; actions.info(entry) }
                             }
                         }
                     }
@@ -273,6 +276,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 vm.delete(d.entry)
             },
         )
+        is Dialog.Info -> InfoDialog(d.entry, onDismiss = { dialog = null })
         null -> Unit
     }
 }
@@ -284,6 +288,8 @@ private class EntryActions(
     val download: (RemoteEntry) -> Unit,
     val rename: (RemoteEntry) -> Unit,
     val delete: (RemoteEntry) -> Unit,
+    /** Path, size, dates and what the file says about itself. */
+    val info: (RemoteEntry) -> Unit,
     /** Long press: starts the selection, or adds to it. */
     val select: (RemoteEntry) -> Unit,
 )
@@ -396,6 +402,7 @@ private fun EntryMenu(entry: RemoteEntry, actions: EntryActions, expanded: Boole
         }
         MenuItem(AppIcons.Check, "Seleziona") { onDismiss(); actions.select(entry) }
         MenuItem(AppIcons.Rename, "Rinomina") { onDismiss(); actions.rename(entry) }
+        MenuItem(AppIcons.Info, "Info") { onDismiss(); actions.info(entry) }
         MenuItem(AppIcons.Delete, "Elimina", danger = true) { onDismiss(); actions.delete(entry) }
     }
 }

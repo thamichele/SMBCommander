@@ -65,6 +65,7 @@ import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import io.github.thamichele.smbcommander.ui.ErrorCard
+import io.github.thamichele.smbcommander.ui.InfoDialog
 import io.github.thamichele.smbcommander.ui.PageHeader
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
@@ -92,6 +93,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     var selected by remember { mutableStateOf(emptySet<String>()) }
     // photos waiting for "Elimina" in the confirmation dialog
     var toDelete by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    var info by remember { mutableStateOf<RemoteEntry?>(null) }
     // photos deleted or reloaded meanwhile leave the selection
     val shown = state.photos
     LaunchedEffect(shown) {
@@ -136,6 +138,9 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 title = if (selected.size == 1) "1 foto selezionata" else "${selected.size} foto selezionate",
                 navigation = { ToolButton(AppIcons.Close, "Annulla selezione", { selected = emptySet() }) },
             ) {
+                if (selected.size == 1) {
+                    ToolButton(AppIcons.Info, "Informazioni", { info = shown.firstOrNull { it.path in selected } })
+                }
                 ToolButton(
                     AppIcons.Delete,
                     "Elimina dal NAS",
@@ -190,6 +195,8 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             }
         }
     }
+
+    info?.let { InfoDialog(it, onDismiss = { info = null }) }
 
     if (toDelete.isNotEmpty()) {
         val photos = toDelete

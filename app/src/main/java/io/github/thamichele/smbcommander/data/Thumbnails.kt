@@ -3,7 +3,6 @@ package io.github.thamichele.smbcommander.data
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.MediaDataSource
 import android.media.MediaMetadataRetriever
 import android.media.ExifInterface
 import coil3.ImageLoader
@@ -12,7 +11,6 @@ import coil3.decode.ImageSource
 import coil3.fetch.FetchResult
 import coil3.fetch.SourceFetchResult
 import coil3.request.Options
-import io.github.thamichele.smbcommander.core.RandomReader
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import kotlinx.coroutines.Dispatchers
@@ -152,16 +150,6 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         } finally {
             frame.recycle()
         }
-    }
-
-    private class ReaderDataSource(private val reader: RandomReader) : MediaDataSource() {
-        override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int =
-            if (position >= reader.size) -1 else reader.read(position, buffer, offset, size)
-
-        override fun getSize(): Long = reader.size
-
-        // the reader is closed by whoever opened it
-        override fun close() {}
     }
 
     private fun write(source: File, width: Int, height: Int, variant: ImageSize, exif: ExifInterface?, target: File) {

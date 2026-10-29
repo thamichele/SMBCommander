@@ -76,6 +76,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
     var chrome by remember { mutableStateOf(true) }
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
     var confirmDelete by remember { mutableStateOf<RemoteEntry?>(null) }
+    var info by remember { mutableStateOf<RemoteEntry?>(null) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val entry = pendingDownload
         pendingDownload = null
@@ -127,6 +128,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
                         maxLines = 1,
                     )
                 }
+                ToolButton(AppIcons.Info, "Informazioni", { info = current }, tint = Color.White)
                 ToolButton(AppIcons.OpenWith, "Apri l'originale", { vm.open(current, edit = false) }, tint = Color.White)
                 ToolButton(
                     AppIcons.Download,
@@ -138,6 +140,8 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
             }
         }
     }
+
+    info?.let { InfoDialog(it, onDismiss = { info = null }) }
 
     confirmDelete?.let { photo ->
         ConfirmDialog(

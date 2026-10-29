@@ -29,6 +29,9 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
   non rovina mai l'originale.
+- **Info** su ogni file, dal visualizzatore, dalla selezione in Galleria o dal menu di un elemento: percorso sul NAS e
+  percorso di rete da copiare, dimensione, date e, per foto e video, risoluzione, data di scatto, fotocamera, durata e
+  posizione.
 - **Ogni trasferimento è verificato**: caricamenti, copie, spostamenti e download confrontano l'impronta SHA-256 di
   ciò che è partito con quella di ciò che è arrivato. Un file diverso non viene mai tenuto, e uno spostamento elimina
   l'originale solo dopo che la copia è risultata identica.
