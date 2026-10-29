@@ -1,0 +1,41 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Test core (SMB and edit sync logic)
+        run: ./gradlew --no-daemon :core:test
+
+      # the runner image ships the Android SDK (ANDROID_HOME), missing platforms are fetched by AGP
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Show APK name, id and version
+        run: |
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          for apk in app/build/outputs/apk/debug/*.apk; do
+            echo "== $apk"
+            "$AAPT2" dump badging "$apk" | grep -E "^(package|application-label|launchable-activity)"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smbcommander-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
