@@ -35,6 +35,12 @@ object RemotePath {
         return if (dot <= 0) "$name ($suffix)" else "${name.substring(0, dot)} ($suffix)${name.substring(dot)}"
     }
 
+    /** "photo.jpg" numbered [n] becomes "photo_2.jpg", as the photo backup names a different file with a taken name. */
+    fun numbered(name: String, n: Int): String {
+        val dot = name.lastIndexOf('.')
+        return if (dot <= 0) "${name}_$n" else "${name.substring(0, dot)}_$n${name.substring(dot)}"
+    }
+
     /** Hidden temporary name used while uploading, next to the target file. */
     fun uploadTempName(name: String): String = ".$name.smbcommander-tmp"
 

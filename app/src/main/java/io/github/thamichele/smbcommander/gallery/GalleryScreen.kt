@@ -1,7 +1,17 @@
 package io.github.thamichele.smbcommander.gallery
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,16 +52,36 @@ import java.text.DateFormatSymbols
 import java.util.Locale
 
 /** Only the photos of the backup folder, by month, newest first. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val c = Arancio.colors
     LaunchedEffect(Unit) { vm.ensureLoaded() }
 
+    // paths of the selected photos: a long press starts the selection, then taps add or remove
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    // photos deleted or reloaded meanwhile leave the selection
+    val shown = state.photos
+    LaunchedEffect(shown) {
+        if (selected.isNotEmpty()) selected = selected intersect shown.mapTo(HashSet()) { it.path }
+    }
+    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
+
     Column(Modifier.fillMaxSize()) {
-        PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = "Galleria") {
-            if (state.folder != null) ToolButton(AppIcons.Refresh, "Aggiorna", vm::refresh)
+        if (selected.isEmpty()) {
+            PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = "Galleria") {
+                if (state.folder != null) ToolButton(AppIcons.Refresh, "Aggiorna", vm::refresh)
+            }
+        } else {
+            PageHeader(
+                context = "Galleria",
+                title = if (selected.size == 1) "1 foto selezionata" else "${selected.size} foto selezionate",
+                navigation = { ToolButton(AppIcons.Close, "Annulla selezione", { selected = emptySet() }) },
+            ) {
+                ToolButton(AppIcons.Delete, "Elimina dal NAS", { confirmDelete = true }, tint = c.danger)
+            }
         }
         val folder = state.folder
         when {
@@ -99,20 +129,66 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                         }
                         itemsIndexed(group.photos, key = { _, photo -> photo.path }) { i, photo ->
                             val index = offsets[m] + i
-                            AsyncImage(
-                                model = Thumb(photo),
-                                contentDescription = photo.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
+                            val isSelected = photo.path in selected
+                            Box(
+                                Modifier
                                     .aspectRatio(1f)
                                     .background(c.surface, RoundedCornerShape(4.dp))
-                                    .clickable { appVm.openViewer(all, index) },
-                            )
+                                    .combinedClickable(
+                                        onClick = {
+                                            when {
+                                                selected.isEmpty() -> appVm.openViewer(all, index)
+                                                isSelected -> selected = selected - photo.path
+                                                else -> selected = selected + photo.path
+                                            }
+                                        },
+                                        onLongClick = { selected = selected + photo.path },
+                                    ),
+                            ) {
+                                AsyncImage(
+                                    model = Thumb(photo),
+                                    contentDescription = photo.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(if (isSelected) 8.dp else 0.dp)
+                                        .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
+                                )
+                                if (isSelected) {
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(4.dp)
+                                            .size(22.dp)
+                                            .background(c.accent, CircleShape),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(AppIcons.Check, contentDescription = null, tint = c.background, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (confirmDelete) {
+        val photos = shown.filter { it.path in selected }
+        ConfirmDialog(
+            title = if (photos.size == 1) "Eliminare la foto dal NAS?" else "Eliminare ${photos.size} foto dal NAS?",
+            text = "Verranno eliminate dalla cartella del backup. Le foto sul telefono restano dove sono e il backup " +
+                "non le caricherà di nuovo.",
+            confirm = "Elimina",
+            danger = true,
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                selected = emptySet()
+                appVm.deletePhotos(photos)
+            },
+        )
     }
 }
 

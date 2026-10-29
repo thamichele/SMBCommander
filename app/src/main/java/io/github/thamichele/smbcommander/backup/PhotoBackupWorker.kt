@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import io.github.thamichele.smbcommander.R
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
@@ -92,17 +93,18 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         ensureFolder(fs, share, folder, createdDirs)
         // the name comes from whichever app saved the photo: never let it pick another folder
         val name = item.name.takeIf { RemotePath.isValidName(it) } ?: "media_${item.key.substringAfter(':').substringBefore(':')}"
-        val target = RemotePath.child(folder, name)
-        val existing = fs.stat(share, target)
-        if (existing != null && !existing.isDirectory && existing.size == item.size) return // already there
-        val path = if (existing == null) target else EditSync.freePath(fs, share, target)
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasLocationPermission()) {
             // keeps the GPS position in the photo, which Android strips otherwise
             MediaStore.setRequireOriginal(item.uri)
         } else item.uri
-        EditSync.safeUpload(fs, share, path, item.size, {
+        val open = {
             applicationContext.contentResolver.openInputStream(uri) ?: throw IllegalStateException("file non leggibile")
-        })
+        }
+        // after a reinstall the ledger is empty: photos already on the NAS are recognised by size and hash
+        val placement = BackupPlacement.find(fs, share, RemotePath.child(folder, name), item.size) {
+            open().use { BackupPlacement.sha256(it) }
+        }
+        if (placement is BackupPlacement.Upload) EditSync.safeUpload(fs, share, placement.path, item.size, open)
     }
 
     private fun ensureFolder(fs: NasFileSystem, share: String, folder: String, createdDirs: MutableSet<String>) {
