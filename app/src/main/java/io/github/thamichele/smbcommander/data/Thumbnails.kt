@@ -19,7 +19,6 @@ import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.security.MessageDigest
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -30,8 +29,8 @@ enum class ImageSize(val folder: String) {
     /** Small square-ish tile for lists and grids: the shorter side is at least 384 px. */
     Thumb("thumbs"),
 
-    /** Full-screen preview: the longer side is at most 1600 px, JPEG quality 72. Light, but clearly readable. */
-    Preview("previews"),
+    /** What the viewer opens: the same pixels as the original, only recompressed as JPEG quality 90. */
+    Preview("full"),
 }
 
 /** Coil model for a cached copy of an image on the NAS. Size and date are part of it, so an edited photo refreshes. */
@@ -73,7 +72,9 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     }
 
     /** Keeps the previews under [maxBytes], dropping the least recently viewed first. */
-    fun trimPreviews(maxBytes: Long = 400L * 1024 * 1024) {
+    fun trimPreviews(maxBytes: Long = 800L * 1024 * 1024) {
+        // the reduced 1600 px previews of older versions are no longer used
+        File(dir, "previews").deleteRecursively()
         val files = File(dir, ImageSize.Preview.folder).listFiles()?.sortedByDescending { it.lastModified() } ?: return
         var total = 0L
         for (f in files) {
@@ -100,26 +101,47 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalStateException("Immagine non leggibile")
             val exif = runCatching { ExifInterface(source.path) }.getOrNull()
             for (variant in missing) {
-                val bitmap = decode(source, bounds.outWidth, bounds.outHeight, variant)
-                val upright = rotate(bitmap, exif)
                 val target = file(thumb, variant)
                 target.parentFile?.mkdirs()
                 val temp = File(target.parentFile, target.name + ".part")
-                temp.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, if (variant == ImageSize.Preview) 72 else 85, it) }
+                write(source, bounds.outWidth, bounds.outHeight, variant, exif, temp)
+                // a JPEG already lighter than our copy stays as it is: same pixels, fewer bytes, nothing lost
+                if (variant == ImageSize.Preview && bounds.outMimeType == "image/jpeg" && source.length() <= temp.length()) {
+                    source.copyTo(temp, overwrite = true)
+                }
                 temp.renameTo(target)
-                if (upright !== bitmap) upright.recycle()
-                bitmap.recycle()
             }
         } finally {
             source.delete()
         }
     }
 
-    private fun decode(source: File, width: Int, height: Int, variant: ImageSize): Bitmap {
+    private fun write(source: File, width: Int, height: Int, variant: ImageSize, exif: ExifInterface?, target: File) {
+        // a very large photo may not fit in memory at full size: then it is halved until it does
+        var reduce = 1
+        while (true) {
+            try {
+                val bitmap = decode(source, width, height, variant, reduce)
+                val upright = rotate(bitmap, exif)
+                try {
+                    target.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, if (variant == ImageSize.Preview) 90 else 85, it) }
+                } finally {
+                    if (upright !== bitmap) upright.recycle()
+                    bitmap.recycle()
+                }
+                return
+            } catch (e: OutOfMemoryError) {
+                if (reduce >= 8) throw IllegalStateException("Immagine troppo grande")
+                reduce *= 2
+            }
+        }
+    }
+
+    private fun decode(source: File, width: Int, height: Int, variant: ImageSize, reduce: Int = 1): Bitmap {
         // sample down by powers of two while the result stays at least as big as needed, then scale exactly
         val scale = when (variant) {
             ImageSize.Thumb -> min(1f, THUMB_PX.toFloat() / min(width, height))
-            ImageSize.Preview -> min(1f, PREVIEW_PX.toFloat() / max(width, height))
+            ImageSize.Preview -> 1f / reduce
         }
         var sample = 1
         while (width / (sample * 2) >= width * scale && height / (sample * 2) >= height * scale) sample *= 2
@@ -167,7 +189,6 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     companion object {
         const val THUMB_PX = 384
-        const val PREVIEW_PX = 1600
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
     }
 }

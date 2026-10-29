@@ -35,15 +35,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ImageSize
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /**
- * Photos of a folder, one per page. Each shows the light preview cached on the phone (1600 px), with the thumbnail
- * as placeholder while it is made; the original is opened only on request.
+ * Photos of a folder, one per page. Each shows the full-size copy cached on the phone (same pixels as the original,
+ * JPEG compressed), with the thumbnail as placeholder while it is made; the original is opened only on request.
  */
 @Composable
 fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
@@ -149,8 +152,13 @@ private fun ZoomableImage(entry: RemoteEntry, onTap: () -> Unit) {
             translationX = offset.x
             translationY = offset.y
         }
+        val context = LocalPlatformContext.current
+        // decoded at its own size, not the screen's, so zooming in shows the real detail
+        val full = remember(entry) {
+            ImageRequest.Builder(context).data(Thumb(entry, ImageSize.Preview)).size(Size.ORIGINAL).build()
+        }
         SubcomposeAsyncImage(
-            model = Thumb(entry, ImageSize.Preview),
+            model = full,
             contentDescription = entry.name,
             contentScale = ContentScale.Fit,
             loading = {
