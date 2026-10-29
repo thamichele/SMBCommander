@@ -15,8 +15,8 @@ android {
         minSdk = 26
         targetSdk = 37
         // MAJOR.MINOR.<GitHub Actions build number>: every CI build installs as an update
-        val appVersionMajor = 0
-        val appVersionMinor = 1
+        val appVersionMajor = 1
+        val appVersionMinor = 0
         val ciRunNumber: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
         versionCode = appVersionMajor * 100000 + appVersionMinor * 1000 + ciRunNumber
         versionName = "$appVersionMajor.$appVersionMinor.$ciRunNumber"
@@ -30,11 +30,23 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // release key: never committed - GitHub Actions decodes it from the repository secrets (see .github/workflows/build-apk.yml)
+        val releaseKeystore: String? = System.getenv("RELEASE_KEYSTORE_FILE")
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storeType = "pkcs12"
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = "smbcommander"
+                keyPassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

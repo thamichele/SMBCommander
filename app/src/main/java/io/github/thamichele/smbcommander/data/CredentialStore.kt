@@ -19,6 +19,9 @@ class CredentialStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("server", Context.MODE_PRIVATE)
 
+    /** Cheap check, without decrypting the password. */
+    fun hasServer(): Boolean = prefs.contains(KEY_HOST) && prefs.contains(KEY_PASSWORD)
+
     fun load(): NasServer? {
         val host = prefs.getString(KEY_HOST, null) ?: return null
         val password = prefs.getString(KEY_PASSWORD, null)?.let { runCatching { decrypt(it) }.getOrNull() } ?: return null

@@ -12,12 +12,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.thamichele.smbcommander.backup.BackupScreen
+import io.github.thamichele.smbcommander.gallery.GalleryScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,21 +80,21 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     Scaffold(
         containerColor = Arancio.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
+        // in the bar, not in the content, so snackbars appear above it
+        bottomBar = {
+            if (screen == Screen.Shares || screen == Screen.Gallery || screen == Screen.Backup) {
+                BottomNav(screen, vm)
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f)) {
-                    when (val s = screen) {
-                        Screen.Setup -> SetupScreen(vm)
-                        Screen.Shares -> FoldersScreen(vm)
-                        Screen.Backup -> BackupScreen()
-                        is Screen.Browser -> BrowserScreen(vm, s)
-                        is Screen.Viewer -> ViewerScreen(vm, s)
-                    }
-                }
-                if (screen == Screen.Shares || screen == Screen.Backup) {
-                    BottomNav(files = screen == Screen.Shares, onFiles = vm::openFiles, onBackup = vm::openBackup)
-                }
+            when (val s = screen) {
+                Screen.Setup -> SetupScreen(vm)
+                Screen.Shares -> FoldersScreen(vm)
+                Screen.Gallery -> GalleryScreen(vm)
+                Screen.Backup -> BackupScreen()
+                is Screen.Browser -> BrowserScreen(vm, s)
+                is Screen.Viewer -> ViewerScreen(vm, s)
             }
             transfer?.let { t ->
                 Column(
@@ -164,15 +166,16 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     }
 }
 
-/** The two sections of the app, as in the kit's bottom bar: pill behind the active icon. */
+/** The sections of the app, as in the kit's bottom bar: pill behind the active icon. */
 @Composable
-private fun BottomNav(files: Boolean, onFiles: () -> Unit, onBackup: () -> Unit) {
+private fun BottomNav(screen: Screen, vm: AppViewModel) {
     val c = Arancio.colors
-    Column {
+    Column(Modifier.background(c.surface).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
-        Row(Modifier.fillMaxWidth().background(c.surface).padding(top = 8.dp, bottom = 8.dp)) {
-            NavItem(AppIcons.Folder, "File", files, onFiles, Modifier.weight(1f))
-            NavItem(AppIcons.Image, "Backup foto", !files, onBackup, Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)) {
+            NavItem(AppIcons.Folder, "File", screen == Screen.Shares, vm::openFiles, Modifier.weight(1f))
+            NavItem(AppIcons.Image, "Galleria", screen == Screen.Gallery, vm::openGallery, Modifier.weight(1f))
+            NavItem(AppIcons.Upload, "Backup foto", screen == Screen.Backup, vm::openBackup, Modifier.weight(1f))
         }
     }
 }
