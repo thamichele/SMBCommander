@@ -16,6 +16,10 @@ import kotlin.math.roundToInt
  */
 object MediaDetails {
 
+    // EXIF tag names the platform ExifInterface reads but has no constant for
+    private const val TAG_LENS_MODEL = "LensModel"
+    private const val TAG_ISO = "ISOSpeedRatings"
+
     fun read(fs: NasFileSystem, entry: RemoteEntry): List<Pair<String, String>> = when {
         entry.isImage -> photo(fs, entry)
         entry.isVideo -> video(fs, entry)
@@ -27,7 +31,8 @@ object MediaDetails {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         runCatching { fs.openRead(entry.share, entry.path).use { BitmapFactory.decodeStream(it, null, bounds) } }
         val exif = runCatching { fs.openRead(entry.share, entry.path).use { ExifInterface(it) } }.getOrNull()
-        val rotated = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1) in setOf(5, 6, 7, 8)
+        val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1) ?: 1
+        val rotated = orientation in 5..8
         if (bounds.outWidth > 0 && bounds.outHeight > 0) {
             val (w, h) = if (rotated) bounds.outHeight to bounds.outWidth else bounds.outWidth to bounds.outHeight
             rows += "Risoluzione" to "$w × $h px (${"%.1f".format(Locale.ITALY, w.toLong() * h / 1_000_000.0)} MP)"
@@ -42,16 +47,15 @@ object MediaDetails {
                 val camera = if (parts.size == 2 && model != null && model.startsWith(parts[0], ignoreCase = true)) model else parts.joinToString(" ")
                 if (camera.isNotEmpty()) rows += "Fotocamera" to camera
             }
-        exif.getAttribute(ExifInterface.TAG_LENS_MODEL)?.trim()?.takeIf { it.isNotEmpty() }?.let { rows += "Obiettivo" to it }
+        exif.getAttribute(TAG_LENS_MODEL)?.trim()?.takeIf { it.isNotEmpty() }?.let { rows += "Obiettivo" to it }
         val shot = listOfNotNull(
             exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0).takeIf { it > 0 }?.let { "f/" + "%.1f".format(Locale.ITALY, it) },
             exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0).takeIf { it > 0 }?.let(::exposure),
-            exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0).takeIf { it > 0 }?.let { "ISO $it" },
+            exif.getAttributeInt(TAG_ISO, 0).takeIf { it > 0 }?.let { "ISO $it" },
             exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0).takeIf { it > 0 }?.let { "${trim(it)} mm" },
         )
         if (shot.isNotEmpty()) rows += "Scatto" to shot.joinToString(" · ")
         val latLong = FloatArray(2)
-        @Suppress("DEPRECATION")
         if (exif.getLatLong(latLong)) rows += "Posizione" to coordinates(latLong[0].toDouble(), latLong[1].toDouble())
         return rows
     }
@@ -67,7 +71,8 @@ object MediaDetails {
                     val h = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
                     val rotation = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
                     if (w != null && h != null) {
-                        rows += "Risoluzione" to if (rotation % 180 != 0) "$h × $w px" else "$w × $h px"
+                        val size = if (rotation % 180 != 0) "$h × $w px" else "$w × $h px"
+                        rows += "Risoluzione" to size
                     }
                     r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.let { rows += "Durata" to duration(it) }
                     r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)?.let(::videoDate)?.let { rows += "Registrato il" to it }
