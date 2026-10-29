@@ -53,6 +53,11 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 La sezione **Galleria** mostra solo le foto della cartella in cui finisce il backup, e nient'altro: niente
 indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
 recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
+Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
+nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
+di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
+backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le
+ricarica, nemmeno dopo aver reinstallato l'app.
 
 ## Privacy e sicurezza
 

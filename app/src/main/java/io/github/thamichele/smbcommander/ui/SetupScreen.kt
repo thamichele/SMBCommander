@@ -1,7 +1,9 @@
 package io.github.thamichele.smbcommander.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,6 +22,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -41,6 +47,7 @@ import io.github.thamichele.smbcommander.ui.theme.Arancio
 fun SetupScreen(vm: AppViewModel) {
     val saved = remember { vm.savedServer() }
     val connecting by vm.connecting.collectAsStateWithLifecycle()
+    val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
     var host by rememberSaveable { mutableStateOf(saved?.host.orEmpty()) }
     var user by rememberSaveable { mutableStateOf(saved?.username.orEmpty()) }
     // the saved password is never shown again: left empty, the saved one is kept
@@ -130,6 +137,32 @@ fun SetupScreen(vm: AppViewModel) {
             if (saved != null) {
                 TextButton(onClick = { confirmForget = true }, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS", color = Arancio.colors.danger)
+                }
+                Text("Galleria", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
+                                "dal NAS. Se è spento, prima chiede conferma.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Arancio.colors.textSecondary,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = withoutConfirm,
+                        onCheckedChange = vm::setDeleteWithoutConfirm,
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = Arancio.colors.accent,
+                            checkedThumbColor = Arancio.colors.onAccent,
+                            uncheckedTrackColor = Arancio.colors.surfaceRaised,
+                            uncheckedBorderColor = Arancio.colors.border,
+                        ),
+                    )
                 }
             }
             Spacer(Modifier.height(24.dp))

@@ -17,6 +17,7 @@ import androidx.work.workDataOf
 import io.github.thamichele.smbcommander.R
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
+import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
@@ -67,6 +68,10 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             return Result.retry()
         }
 
+        // photos deleted from the gallery on purpose: never uploaded again, even after a reinstall
+        val deleted = runCatching { DeletedPhotos.read(fs, destination.share, destination.path) }.getOrDefault(emptySet())
+        val deletedSizes = DeletedPhotos.sizes(deleted)
+
         val createdDirs = HashSet<String>()
         var uploaded = 0
         var lastError: String? = null
@@ -75,7 +80,9 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             setProgress(workDataOf(PROGRESS_DONE to i, PROGRESS_TOTAL to pending.size))
             if (i % 5 == 0) runCatching { setForeground(foregroundInfo(i, pending.size)) }
             try {
-                upload(fs, destination.share, folderFor(destination.path, item, settings.byMonth), item, createdDirs)
+                if (item.size !in deletedSizes || !wasDeleted(item, deleted)) {
+                    upload(fs, destination.share, folderFor(destination.path, item, settings.byMonth), item, createdDirs)
+                }
                 app.backupLedger.add(item.key)
                 uploaded++
             } catch (e: NasException) {
@@ -98,6 +105,11 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             open().use { BackupPlacement.sha256(it) }
         }
         if (placement is BackupPlacement.Upload) EditSync.safeUpload(fs, share, placement.path, item.size, open)
+    }
+
+    private fun wasDeleted(item: MediaItem, deleted: Set<String>): Boolean {
+        val hash = openOriginal(applicationContext, item).use { BackupPlacement.sha256(it) }
+        return DeletedPhotos.entry(item.size, hash) in deleted
     }
 
     private fun ensureFolder(fs: NasFileSystem, share: String, folder: String, createdDirs: MutableSet<String>) {
