@@ -34,6 +34,25 @@
             </intent-filter>
         </activity>
 
+        <!-- "Condividi" from other apps: saves what is shared into one of the user's NAS folders -->
+        <activity
+            android:name=".share.ShareActivity"
+            android:exported="true"
+            android:label="Salva sul NAS"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <!-- hands the cached copies of NAS files to editor apps, with write access -->
         <provider
             android:name="androidx.core.content.FileProvider"
