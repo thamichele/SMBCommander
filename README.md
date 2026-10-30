@@ -76,7 +76,9 @@ nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), opp
 di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
 backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le
 ricarica, nemmeno dopo aver reinstallato l'app. Se nel frattempo un file non è più sul NAS (eliminato o spostato da
-un altro dispositivo) viene saltato, gli altri vanno avanti, e non resta nell'elenco delle eliminate.
+un altro dispositivo) viene saltato, gli altri vanno avanti, e non resta nell'elenco delle eliminate. Quando ne elimini
+più di uno, una finestra mostra il file in corso, la barra con quanti ne mancano e l'esito di ognuno (eliminato,
+saltato o non eliminato); si può interrompere, e si chiude da sola se è andato tutto bene.
 
 ## Privacy e sicurezza
 
