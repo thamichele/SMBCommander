@@ -188,7 +188,7 @@ class KeptPhotos(lines: Collection<String> = emptyList()) {
 
     private fun nameKey(l: String) = l.substringBefore('\t') + "\t" + l.substringAfterLast('/').substringAfter('\t').lowercase()
 
-    private fun line(entry: RemoteEntry, root: String) = "${entry.size}\t${CleanupRules.relative(entry.path, root)}"
+    private fun line(entry: RemoteEntry, root: String) = lineOf(entry, root)
 
     companion object {
         const val FILE_NAME = ".smbcommander-tenute.txt"
@@ -206,6 +206,7 @@ class KeptPhotos(lines: Collection<String> = emptyList()) {
             EditSync.safeUpload(fs, share, RemotePath.child(folder, FILE_NAME), bytes.size.toLong(), { ByteArrayInputStream(bytes) })
         }
 
+        /** The line [entry] has in the file: its size and its path inside the backup folder. */
         fun lineOf(entry: RemoteEntry, root: String) = "${entry.size}\t${CleanupRules.relative(entry.path, root)}"
     }
 }

@@ -95,6 +95,8 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
     private val _state = MutableStateFlow(CleanupState())
     val state: StateFlow<CleanupState> = _state.asStateFlow()
 
+    // replaced by the loading coroutine, read by the swipes on the main thread
+    @Volatile
     private var kept = KeptPhotos()
     private val keptRemoved = HashSet<String>()
     private val deletedToAdd = LinkedHashSet<String>()

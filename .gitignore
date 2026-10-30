@@ -5,5 +5,6 @@
 /.idea
 /build
 /captures
-/app/release/app/build
+/app/release
+/app/build
 /core/build

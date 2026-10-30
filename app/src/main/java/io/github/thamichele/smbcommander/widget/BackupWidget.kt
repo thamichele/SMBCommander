@@ -3,6 +3,7 @@ package io.github.thamichele.smbcommander.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -25,25 +26,7 @@ class BackupWidget : AppWidgetProvider() {
         ids.forEach { WidgetPrefs(context).remove(it) }
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action != ACTION_BACKUP_NOW) return
-        val app = context.applicationContext as SmbCommanderApp
-        val settings = app.backupSettings.load()
-        val text = when {
-            settings.destination == null -> "Scegli prima la cartella del backup nell'app"
-            !settings.enabled -> "Attiva prima il backup nell'app"
-            else -> {
-                BackupScheduler.runNow(context, settings)
-                "Backup avviato: parte appena sei sul Wi-Fi"
-            }
-        }
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
-    }
-
     companion object {
-        private const val ACTION_BACKUP_NOW = "io.github.thamichele.smbcommander.BACKUP_NOW"
-
         /** Redraws every widget, e.g. after a backup run changed the status line. */
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -75,13 +58,33 @@ class BackupWidget : AppWidgetProvider() {
                     else -> "In attesa"
                 },
             )
-            val backup = Intent(context, BackupWidget::class.java).setAction(ACTION_BACKUP_NOW)
+            val backup = Intent(context, BackupNowReceiver::class.java)
             views.setOnClickPendingIntent(
                 R.id.widget_backup,
                 PendingIntent.getBroadcast(context, 0, backup, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE),
             )
             manager.updateAppWidget(id, views)
         }
+    }
+}
+
+/**
+ * "Backup ora" of the widget. A receiver of its own, not exported: the widget provider must be reachable by the
+ * launcher, and this way no other app can start a backup by sending it a broadcast.
+ */
+class BackupNowReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val app = context.applicationContext as SmbCommanderApp
+        val settings = app.backupSettings.load()
+        val text = when {
+            settings.destination == null -> "Scegli prima la cartella del backup nell'app"
+            !settings.enabled -> "Attiva prima il backup nell'app"
+            else -> {
+                BackupScheduler.runNow(context, settings)
+                "Backup avviato: parte appena sei sul Wi-Fi"
+            }
+        }
+        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }
 }
 

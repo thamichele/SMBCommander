@@ -20,6 +20,7 @@ import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSync
+import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemotePath
@@ -113,13 +114,13 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         val open = { openOriginal(applicationContext, item) }
         // after a reinstall the ledger is empty: photos already on the NAS are recognised by size and hash
         val placement = BackupPlacement.find(fs, share, RemotePath.child(folder, remoteName(item)), item.size) {
-            open().use { BackupPlacement.sha256(it) }
+            open().use { Integrity.sha256(it) }
         }
         if (placement is BackupPlacement.Upload) EditSync.safeUpload(fs, share, placement.path, item.size, open)
     }
 
     private fun wasDeleted(item: MediaItem, deleted: Set<String>): Boolean {
-        val hash = openOriginal(applicationContext, item).use { BackupPlacement.sha256(it) }
+        val hash = openOriginal(applicationContext, item).use { Integrity.sha256(it) }
         return DeletedPhotos.entry(item.size, hash) in deleted
     }
 

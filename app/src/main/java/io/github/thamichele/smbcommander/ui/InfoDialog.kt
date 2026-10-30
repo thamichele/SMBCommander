@@ -51,7 +51,7 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext as SmbCommanderApp
     val c = Arancio.colors
-    val host = remember { app.repository.server()?.host.orEmpty() }
+    val host = remember { app.repository.host().orEmpty() }
     val path = if (entry.path.isEmpty()) entry.share else "${entry.share}/${entry.path}"
     val network = if (host.isEmpty()) null else "\\\\$host\\${entry.share}" + RemotePath.toSmb(entry.path).let { if (it.isEmpty()) "" else "\\$it" }
 

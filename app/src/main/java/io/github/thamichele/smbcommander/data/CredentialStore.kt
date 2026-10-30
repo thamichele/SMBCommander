@@ -23,6 +23,9 @@ class CredentialStore(context: Context) {
     /** Cheap check, without decrypting the password. */
     fun hasServer(): Boolean = prefs.contains(KEY_HOST) && prefs.contains(KEY_PASSWORD)
 
+    /** The address alone, for screens that only show it: no Keystore round trip for the password. */
+    fun host(): String? = prefs.getString(KEY_HOST, null)
+
     fun load(): NasServer? {
         val host = prefs.getString(KEY_HOST, null) ?: return null
         val password = prefs.getString(KEY_PASSWORD, null)?.let { runCatching { decrypt(it) }.getOrNull() } ?: return null

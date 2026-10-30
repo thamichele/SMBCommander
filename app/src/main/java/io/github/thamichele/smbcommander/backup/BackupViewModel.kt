@@ -10,6 +10,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.BackupPlacement
+import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.widget.BackupWidget
@@ -144,7 +145,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
                     val target = RemotePath.child(folder, PhotoBackupWorker.remoteName(item))
                     // a photo unreadable on the phone hashes to "", which matches nothing: it stays
                     val placement = BackupPlacement.find(fs, destination.share, target, item.size) {
-                        runCatching { PhotoBackupWorker.openOriginal(app, item).use { BackupPlacement.sha256(it) } }
+                        runCatching { PhotoBackupWorker.openOriginal(app, item).use { Integrity.sha256(it) } }
                             .getOrDefault("")
                     }
                     if (placement is BackupPlacement.AlreadyThere) safe += item

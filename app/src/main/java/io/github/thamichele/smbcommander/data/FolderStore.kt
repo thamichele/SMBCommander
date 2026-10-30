@@ -3,6 +3,7 @@ package io.github.thamichele.smbcommander.data
 import android.content.Context
 import io.github.thamichele.smbcommander.core.RemotePath
 import org.json.JSONArray
+import org.json.JSONObject
 
 /** A folder the user chose to manage from the app: a whole share or a folder inside one. */
 data class SavedFolder(val share: String, val path: String) {
@@ -49,7 +50,7 @@ class FolderStore(context: Context) {
 
     private fun save(folders: List<SavedFolder>) {
         val array = JSONArray()
-        folders.forEach { array.put(org.json.JSONObject().put("share", it.share).put("path", it.path)) }
+        folders.forEach { array.put(JSONObject().put("share", it.share).put("path", it.path)) }
         prefs.edit().putString(KEY, array.toString()).apply()
     }
 

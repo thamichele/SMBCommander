@@ -1,7 +1,5 @@
 package io.github.thamichele.smbcommander.core
 
-import java.io.InputStream
-
 /** Where a photo of the backup goes: nowhere, because the NAS already has it, or to [Upload.path]. */
 sealed interface BackupPlacement {
     data class AlreadyThere(val path: String) : BackupPlacement
@@ -23,14 +21,12 @@ sealed interface BackupPlacement {
                 val candidate = if (n == 1) target else RemotePath.child(parent, RemotePath.numbered(name, n))
                 val existing = fs.stat(share, candidate) ?: return Upload(candidate)
                 if (!existing.isDirectory && existing.size == size &&
-                    fs.openRead(share, candidate).use { sha256(it) } == local
+                    fs.openRead(share, candidate).use { Integrity.sha256(it) } == local
                 ) {
                     return AlreadyThere(candidate)
                 }
                 n++
             }
         }
-
-        fun sha256(input: InputStream): String = Integrity.sha256(input)
     }
 }

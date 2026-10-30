@@ -1,5 +1,6 @@
 package io.github.thamichele.smbcommander.share
 
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -33,7 +34,16 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    private fun streams(intent: Intent): List<Uri> = when (intent.action) {
+    /**
+     * Only documents another app really hands over (content://, from someone else's provider). A file:// path or a
+     * URI of our own provider would be read with this app's rights: another app could make it upload the app's
+     * private files.
+     */
+    private fun streams(intent: Intent): List<Uri> = sharedUris(intent).filter {
+        it.scheme == ContentResolver.SCHEME_CONTENT && it.authority != "$packageName.files"
+    }
+
+    private fun sharedUris(intent: Intent): List<Uri> = when (intent.action) {
         Intent.ACTION_SEND -> listOfNotNull(
             if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
             else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
