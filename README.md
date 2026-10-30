@@ -71,7 +71,8 @@ Va bene qualunque struttura di sottocartelle, anche quelle vecchie di QuMagie o 
 della cartella (`2026/10`, `2026-10`, `2019-03-14`...), altrimenti dalla data nel nome del file, altrimenti dalla data
 del file. Il contenuto della galleria resta salvato sul telefono, così si apre subito; ogni aggiornamento guarda solo
 cosa è cambiato sul NAS, e dopo un backup o un caricamento la galleria si aggiorna da sola.
-Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
+Si può vedere a griglia, a mosaico (foto più grandi, ognuna con la sua forma, che si incastrano in righe piene;
+le proporzioni si ricordano sul telefono, senza rileggere il NAS) o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
 nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
 di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
 backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le
@@ -112,7 +113,9 @@ L'APK di prova di ogni build si trova negli artifact (`smbcommander-debug-apk`) 
 una chiave di debug pubblica e si installa come app separata (`io.github.thamichele.smbcommander.debug`), accanto a
 quella vera e senza accesso ai suoi dati. Per l'uso quotidiano installa la versione F-Droid o la release firmata.
 
-Le versioni sono numerate `1.0.N`, dove N è il numero della build: ogni build di `main` è un aggiornamento.
+Le versioni sono `MAGGIORE.MINORE.CORREZIONE`: la correzione sale per i piccoli fix, la minore per ogni funzione nuova
+o modifica, la maggiore quando l'app raggiunge una nuova maturità. Ogni build di `main` è un aggiornamento (fino alla
+1.0.46 l'ultimo numero era quello della build).
 
 ## Sviluppo
 

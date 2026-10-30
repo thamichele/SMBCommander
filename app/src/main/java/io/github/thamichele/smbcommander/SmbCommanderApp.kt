@@ -10,6 +10,7 @@ import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.backup.BackupSettingsStore
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.data.AspectRatios
 import io.github.thamichele.smbcommander.data.CredentialStore
 import io.github.thamichele.smbcommander.data.EditSessionStore
 import io.github.thamichele.smbcommander.data.FolderStore
@@ -57,7 +58,7 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         transfers = TransferQueue(repository)
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
-        thumbnails = ThumbnailCache(File(cacheDir, "images"), repository)
+        thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
         Thread { runCatching { thumbnails.trimPreviews() } }.start()
     }
 

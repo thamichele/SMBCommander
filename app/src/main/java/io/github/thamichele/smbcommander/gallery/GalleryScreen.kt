@@ -8,11 +8,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,10 +27,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,9 +52,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -57,6 +64,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
+import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
@@ -71,6 +79,7 @@ import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DateFormatSymbols
 import java.util.Locale
@@ -124,11 +133,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
         if (selected.isEmpty()) {
             PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = "Galleria") {
                 if (state.folder != null) {
-                    ToolButton(
-                        if (state.listView) AppIcons.Grid else AppIcons.List,
-                        if (state.listView) "Mostra a griglia" else "Mostra a elenco",
-                        vm::toggleView,
-                    )
+                    ViewMenu(state.view, vm::setView)
                     ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
                     ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
                 }
@@ -188,10 +193,10 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 onRefresh = vm::pull,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (state.listView) {
-                    PhotoList(state.months, selected, onTap, onLongPress, onSwipe)
-                } else {
-                    PhotoGrid(state.months, selected, onTap, onLongPress)
+                when (state.view) {
+                    GalleryView.List -> PhotoList(state.months, selected, onTap, onLongPress, onSwipe)
+                    GalleryView.Mosaic -> PhotoMosaic(state.months, selected, onTap, onLongPress)
+                    GalleryView.Grid -> PhotoGrid(state.months, selected, onTap, onLongPress)
                 }
             }
         }
@@ -262,6 +267,131 @@ private fun PhotoGrid(
         }
     }
 }
+
+/** The three ways of showing the gallery, from the button with the current one's icon. */
+@Composable
+private fun ViewMenu(current: GalleryView, onPick: (GalleryView) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ToolButton(current.icon, "Visualizzazione: ${current.label}", { open = true })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Arancio.colors.surfaceRaised) {
+            for (view in GalleryView.entries) {
+                val color = if (view == current) Arancio.colors.accent else Arancio.colors.text
+                DropdownMenuItem(
+                    text = { Text(view.label, style = MaterialTheme.typography.bodyLarge, color = color) },
+                    leadingIcon = { Icon(view.icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) },
+                    trailingIcon = { if (view == current) Icon(AppIcons.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        open = false
+                        onPick(view)
+                    },
+                    modifier = Modifier.height(48.dp),
+                )
+            }
+        }
+    }
+}
+
+private val GalleryView.icon: ImageVector
+    get() = when (this) {
+        GalleryView.Grid -> AppIcons.Grid
+        GalleryView.Mosaic -> AppIcons.Mosaic
+        GalleryView.List -> AppIcons.List
+    }
+
+/** A row of the mosaic: its photos with their shapes, and where it starts in the whole gallery. */
+private class MosaicRow(val photos: List<RemoteEntry>, val ratios: List<Float>, val first: Int, val height: Float, val full: Boolean)
+
+/**
+ * Lays [photos] out in rows of the given [width] (dp): each photo keeps its own shape, and photos join a row until it
+ * is as wide as the screen at about [target] height; then the row is scaled to fill the width exactly. The last row
+ * of a month keeps the target height and stays short. Shapes not known yet count as squares.
+ */
+private fun mosaicRows(photos: List<RemoteEntry>, first: Int, width: Float, target: Float, gap: Float, ratioOf: (RemoteEntry) -> Float?): List<MosaicRow> {
+    val rows = ArrayList<MosaicRow>()
+    var start = 0
+    var sum = 0f
+    for (i in photos.indices) {
+        // very long panoramas and thin strips are shown a little cropped, so a row never becomes a sliver
+        sum += (ratioOf(photos[i]) ?: 1f).coerceIn(0.5f, 3f)
+        val count = i - start + 1
+        if (sum * target + gap * (count - 1) >= width) {
+            val slice = photos.subList(start, i + 1)
+            rows += MosaicRow(slice, slice.map { (ratioOf(it) ?: 1f).coerceIn(0.5f, 3f) }, first + start, (width - gap * (count - 1)) / sum, full = true)
+            start = i + 1
+            sum = 0f
+        }
+    }
+    if (start < photos.size) {
+        val slice = photos.subList(start, photos.size)
+        rows += MosaicRow(slice, slice.map { (ratioOf(it) ?: 1f).coerceIn(0.5f, 3f) }, first + start, target, full = false)
+    }
+    return rows
+}
+
+@Composable
+private fun PhotoMosaic(
+    months: List<MonthGroup>,
+    selected: Set<String>,
+    onTap: (RemoteEntry, Int) -> Unit,
+    onLongPress: (RemoteEntry) -> Unit,
+) {
+    val c = Arancio.colors
+    val thumbnails = (LocalContext.current.applicationContext as SmbCommanderApp).thumbnails
+    // shapes arrive as thumbnails load: the rows are arranged again at most a few times a second
+    var shapes by remember { mutableIntStateOf(thumbnails.ratios.version.value) }
+    LaunchedEffect(thumbnails) {
+        thumbnails.ratios.version.collect {
+            shapes = it
+            delay(500)
+        }
+    }
+    val gap = 3f
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val width = maxWidth.value - 32f
+        val rows = remember(months, width, shapes) {
+            val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+            months.mapIndexed { m, group -> mosaicRows(group.photos, offsets[m], width, MOSAIC_ROW_HEIGHT, gap, thumbnails::ratio) }
+        }
+        LazyColumn(
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(gap.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            months.forEachIndexed { m, group ->
+                item(key = "h${group.year}-${group.month}") { MonthHeader(group, first = m == 0) }
+                listItems(rows[m], key = { "r" + it.photos.first().path }) { row ->
+                    Row(Modifier.fillMaxWidth().height(row.height.dp), horizontalArrangement = Arrangement.spacedBy(gap.dp)) {
+                        row.photos.forEachIndexed { i, photo ->
+                            val isSelected = photo.path in selected
+                            Box(
+                                (if (row.full) Modifier.weight(row.ratios[i]) else Modifier.width((row.ratios[i] * row.height).dp))
+                                    .fillMaxHeight()
+                                    .background(c.surface, RoundedCornerShape(4.dp))
+                                    .pressable(onClick = { onTap(photo, row.first + i) }, onLongClick = { onLongPress(photo) }),
+                            ) {
+                                AsyncImage(
+                                    model = Thumb(photo),
+                                    contentDescription = photo.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(if (isSelected) 8.dp else 0.dp)
+                                        .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
+                                )
+                                if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
+                                if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Row height the mosaic aims at: bigger than the grid's tiles, and still sharp with the cached thumbnails. */
+private const val MOSAIC_ROW_HEIGHT = 150f
 
 @Composable
 private fun PhotoList(
