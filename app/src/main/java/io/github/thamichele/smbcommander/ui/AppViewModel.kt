@@ -3,11 +3,11 @@ package io.github.thamichele.smbcommander.ui
 import android.app.Application
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
@@ -20,7 +20,9 @@ import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.TransferJob
+import io.github.thamichele.smbcommander.data.describe
 import io.github.thamichele.smbcommander.data.isMedia
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -34,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
 
@@ -194,6 +197,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun savedServer(): NasServer? = repo.server()
 
+    fun savedHost(): String = repo.host().orEmpty()
+
     // --- connection -------------------------------------------------------------------------------------------------
 
     /** An empty password keeps the saved one, as long as address and user did not change. */
@@ -221,7 +226,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // a different NAS starts from scratch: no backup towards a folder that may not exist there
         app.backupSettings.clear()
         app.backupLedger.clear()
-        io.github.thamichele.smbcommander.backup.BackupScheduler.apply(app, app.backupSettings.load())
+        BackupScheduler.apply(app, app.backupSettings.load())
         // nothing of the old NAS stays on the phone: copies opened for editing, thumbnails and previews
         sessions.all().forEach(sessions::remove)
         val cache = getApplication<Application>().cacheDir
@@ -298,9 +303,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
 
-    /** A folder opened from a widget. */
+    /**
+     * A folder opened from a widget. The intent can come from any app, so only one of the user's folders (or a folder
+     * inside one) is opened.
+     */
     fun openFromOutside(share: String, path: String) {
-        if (repo.isConfigured) navigate(share, path)
+        if (!repo.isConfigured) return
+        val dir = RemotePath.normalize(path)
+        val allowed = app.folders.all().any {
+            it.share.equals(share, ignoreCase = true) && (dir == RemotePath.normalize(it.path) || isInside(dir, it.path))
+        }
+        if (allowed) navigate(share, dir)
     }
 
     // --- navigation -------------------------------------------------------------------------------------------------
@@ -375,7 +388,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 listingCache[key] = list
                 if (_screen.value == s) _browser.update { it.copy(entries = list, loading = false) }
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is CancellationException) throw e
                 if (_screen.value == s) _browser.update { it.copy(loading = false, error = e.readable()) }
             }
         }
@@ -418,7 +431,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val path = RemotePath.child(dir, clean)
         repo.io {
             if (it.stat(share, path) != null) error("Esiste già un elemento chiamato «$clean»")
-            it.upload(share, path, java.io.ByteArrayInputStream(ByteArray(0)), 0)
+            it.upload(share, path, ByteArrayInputStream(ByteArray(0)), 0)
         }
     }
 
@@ -504,7 +517,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val result = deleteFromNas(photos)
             if (photos.size == 1) message(result.message("Foto eliminata dal NAS"))
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             if (photos.size == 1) message(e.readable())
         }
     }
@@ -556,7 +569,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
                     if (done != null) DeletionStep(entry, DeletionStep.Outcome.Deleted) else DeletionStep(entry, DeletionStep.Outcome.Skipped)
                 } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (e is CancellationException) throw e
                     DeletionStep(entry, DeletionStep.Outcome.Failed, e.readable())
                 }
                 publish(state.copy(steps = state.steps + outcome))
@@ -646,7 +659,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             var count = 0
             try {
                 for ((i, uri) in uris.withIndex()) {
-                    val (name, size) = withContext(Dispatchers.IO) { describe(uri) }
+                    val (name, size) = withContext(Dispatchers.IO) { resolver.describe(uri) }
                     val label = if (uris.size > 1) "Carico ${i + 1} di ${uris.size}: $name" else "Carico $name"
                     repo.io { fs ->
                         val target = EditSync.freePath(fs, s.share, RemotePath.child(s.path, name))
@@ -729,7 +742,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             events.send(UiEvent.OpenFile(local, entry.name, edit))
         } catch (e: Exception) {
             dir.deleteRecursively()
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             message(e.readable())
         } finally {
             _transfer.value = null
@@ -860,22 +873,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return n
     }
 
-    private fun describe(uri: Uri): Pair<String, Long> {
-        val resolver = getApplication<Application>().contentResolver
-        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                val name = c.getString(0)?.takeIf { RemotePath.isValidName(it) } ?: "file"
-                val size = if (c.isNull(1)) -1L else c.getLong(1)
-                return name to size
-            }
-        }
-        return (uri.lastPathSegment?.substringAfterLast('/')?.takeIf { RemotePath.isValidName(it) } ?: "file") to -1L
-    }
-
     private fun message(text: String) {
         events.trySend(UiEvent.Message(text))
     }
-
 
     private companion object {
         /** Unchanged copies are forgotten after a week: the editor is long closed by then. */

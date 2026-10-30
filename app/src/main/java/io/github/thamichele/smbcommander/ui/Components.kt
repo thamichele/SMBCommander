@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -105,7 +106,7 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .height(36.dp)
             .then(if (selected) Modifier else Modifier.border(1.dp, c.border, shape)),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp),
     ) {
         Text(text, style = MaterialTheme.typography.labelMedium)
     }
@@ -113,7 +114,7 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Square tile with the icon of the entry's kind, tinted by category. */
 @Composable
-fun KindTile(entry: RemoteEntry, size: androidx.compose.ui.unit.Dp, iconSize: androidx.compose.ui.unit.Dp = 22.dp) {
+fun KindTile(entry: RemoteEntry, size: Dp, iconSize: Dp = 22.dp) {
     val (icon, tint) = kindOf(entry)
     Box(
         Modifier.size(size).background(tint.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
@@ -137,7 +138,8 @@ fun kindOf(entry: RemoteEntry): Pair<ImageVector, Color> {
     }
 }
 
-private val VIDEO = setOf("mp4", "mkv", "avi", "mov", "m4v", "webm", "wmv", "ts", "3gp")
+// the formats the viewer plays, plus a few the icon alone covers
+private val VIDEO = ThumbnailCache.VIDEO_EXTENSIONS + setOf("avi", "wmv", "ts")
 private val AUDIO = setOf("mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma")
 private val ARCHIVE = setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso")
 private val DOCUMENT = setOf(
@@ -249,6 +251,15 @@ fun ConfirmDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
     )
+}
+
+/** Tick in the corner of a selected entry. */
+@Composable
+fun SelectedMark(modifier: Modifier, size: Dp = 22.dp) {
+    val c = Arancio.colors
+    Box(modifier.size(size).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(AppIcons.Check, contentDescription = null, tint = c.background, modifier = Modifier.size(size * 0.64f))
+    }
 }
 
 /** Small play mark on the thumbnail of a video. */

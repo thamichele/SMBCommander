@@ -23,11 +23,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -87,7 +91,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     val c = Arancio.colors
     val context = LocalContext.current
     var trashDialog by remember { mutableStateOf(false) }
-    var info by remember { mutableStateOf<io.github.thamichele.smbcommander.core.RemoteEntry?>(null) }
+    var info by remember { mutableStateOf<RemoteEntry?>(null) }
 
     LaunchedEffect(galleryState.folder, galleryState.loading) {
         // once the gallery knows the folder's content; it is the phone's copy, so this is immediate
@@ -131,9 +135,9 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            item { Pill("Da verificare (${state.suspectsLeft})", state.tab == CleanupTab.Suspects) { vm.showTab(CleanupTab.Suspects) } }
-            item { Pill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
-            item { Pill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
+            item { TabPill("Da verificare (${state.suspectsLeft})", state.tab == CleanupTab.Suspects) { vm.showTab(CleanupTab.Suspects) } }
+            item { TabPill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
+            item { TabPill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
         }
         state.error?.let { error ->
             Text(
@@ -370,7 +374,7 @@ private fun Done(
 }
 
 @Composable
-private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color, enabled: Boolean, big: Boolean, onClick: () -> Unit) {
+private fun RoundButton(icon: ImageVector, label: String, tint: Color, enabled: Boolean, big: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
     val size = if (big) 64.dp else 48.dp
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -391,7 +395,7 @@ private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 }
 
 @Composable
-private fun Pill(text: String, active: Boolean, onClick: () -> Unit) {
+private fun TabPill(text: String, active: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
     Text(
         text,
@@ -409,7 +413,7 @@ private fun Pill(text: String, active: Boolean, onClick: () -> Unit) {
 @Composable
 private fun TrashDialog(count: Int, size: String, onDismiss: () -> Unit, onEmpty: () -> Unit, onRestore: () -> Unit) {
     val c = Arancio.colors
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = c.surface,
         title = { Text("Cestino: ${if (count == 1) "1 elemento" else "$count elementi"}, $size", style = MaterialTheme.typography.titleLarge) },
@@ -424,13 +428,13 @@ private fun TrashDialog(count: Int, size: String, onDismiss: () -> Unit, onEmpty
             Button(
                 onClick = onEmpty,
                 shape = RoundedCornerShape(8.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = c.danger, contentColor = c.onAccent),
+                colors = ButtonDefaults.buttonColors(containerColor = c.danger, contentColor = c.onAccent),
             ) { Text("Svuota") }
         },
         dismissButton = {
             Row {
-                androidx.compose.material3.TextButton(onClick = onRestore) { Text("Ripristina tutto") }
-                androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Chiudi") }
+                TextButton(onClick = onRestore) { Text("Ripristina tutto") }
+                TextButton(onClick = onDismiss) { Text("Chiudi") }
             }
         },
     )

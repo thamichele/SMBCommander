@@ -51,7 +51,7 @@ import io.github.thamichele.smbcommander.ui.theme.Arancio
 @Composable
 fun FoldersScreen(vm: AppViewModel) {
     val folders by vm.folders.collectAsStateWithLifecycle()
-    val host = remember { vm.savedServer()?.host.orEmpty() }
+    val host = remember { vm.savedHost() }
     val c = Arancio.colors
     var adding by remember { mutableStateOf(false) }
 

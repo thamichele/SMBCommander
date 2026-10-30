@@ -2,7 +2,6 @@ package io.github.thamichele.smbcommander.share
 
 import android.app.Application
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.NasChange
@@ -11,6 +10,7 @@ import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.describe
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,7 +98,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     saved = 1
                 }
                 for ((i, uri) in uris.withIndex()) {
-                    val (name, size) = describe(uri)
+                    val (name, size) = resolver.describe(uri)
                     val label = if (uris.size > 1) "Carico ${i + 1} di ${uris.size}: $name" else "Carico $name"
                     _state.update { it.copy(progress = label, fraction = null) }
                     app.repository.io { fs ->
@@ -121,19 +121,5 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-    }
-
-    private fun describe(uri: Uri): Pair<String, Long> {
-        val resolver = getApplication<Application>().contentResolver
-        runCatching {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-                if (c.moveToFirst()) {
-                    val name = c.getString(0)?.takeIf { RemotePath.isValidName(it) } ?: "file"
-                    val size = if (c.isNull(1)) -1L else c.getLong(1)
-                    return name to size
-                }
-            }
-        }
-        return (uri.lastPathSegment?.substringAfterLast('/')?.takeIf { RemotePath.isValidName(it) } ?: "file") to -1L
     }
 }

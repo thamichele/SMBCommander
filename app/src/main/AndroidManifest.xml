@@ -67,6 +67,11 @@
                 android:resource="@xml/widget_backup_info" />
         </receiver>
 
+        <!-- "Backup ora" of the widget: only the app's own PendingIntent reaches it -->
+        <receiver
+            android:name=".widget.BackupNowReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".widget.WidgetConfigActivity"
             android:exported="true"

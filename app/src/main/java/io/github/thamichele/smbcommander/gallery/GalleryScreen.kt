@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +66,7 @@ import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import io.github.thamichele.smbcommander.ui.ErrorCard
 import io.github.thamichele.smbcommander.ui.InfoDialog
 import io.github.thamichele.smbcommander.ui.PageHeader
+import io.github.thamichele.smbcommander.ui.SelectedMark
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
@@ -378,14 +378,6 @@ private fun MonthHeader(group: MonthGroup, first: Boolean) {
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(top = if (first) 0.dp else 16.dp, bottom = 8.dp),
     )
-}
-
-@Composable
-private fun SelectedMark(modifier: Modifier) {
-    val c = Arancio.colors
-    Box(modifier.size(22.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(AppIcons.Check, contentDescription = null, tint = c.background, modifier = Modifier.size(14.dp))
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

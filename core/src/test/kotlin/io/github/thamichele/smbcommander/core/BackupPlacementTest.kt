@@ -12,7 +12,7 @@ class BackupPlacementTest {
         var hashed = 0
         val result = BackupPlacement.find(fs, "home", target, content.length.toLong()) {
             hashed++
-            BackupPlacement.sha256(content.byteInputStream())
+            Integrity.sha256(content.byteInputStream())
         }
         assertTrue(hashed <= 1)
         return result

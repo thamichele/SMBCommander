@@ -2,6 +2,7 @@ package io.github.thamichele.smbcommander
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -65,6 +66,6 @@ class MainActivity : ComponentActivity() {
             .putExtra(EXTRA_SHARE, share)
             .putExtra(EXTRA_PATH, path)
             // one PendingIntent per folder: extras alone do not make intents different
-            .setData(android.net.Uri.parse("smbcommander://folder/" + android.net.Uri.encode(share) + "/" + android.net.Uri.encode(path)))
+            .setData(Uri.parse("smbcommander://folder/" + Uri.encode(share) + "/" + Uri.encode(path)))
     }
 }

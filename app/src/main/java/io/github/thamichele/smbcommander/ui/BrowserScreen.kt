@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -302,14 +302,14 @@ private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (isSelected) Arancio.colors.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .background(if (isSelected) Arancio.colors.accentSoft else Color.Transparent)
             .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { actions.select(entry) })
             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
             Preview(entry, 44.dp)
-            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart))
+            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart), size = 20.dp)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -330,13 +330,13 @@ private fun GridTile(entry: RemoteEntry, actions: EntryActions) {
     Column(
         Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) Arancio.colors.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+            .background(if (isSelected) Arancio.colors.accentSoft else Color.Transparent)
             .combinedClickable(onClick = { actions.open(entry) }, onLongClick = { actions.select(entry) }),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
             Preview(entry, null)
-            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(6.dp))
+            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(6.dp), size = 20.dp)
         }
         Text(
             entry.name,
@@ -404,13 +404,6 @@ private fun EntryMenu(entry: RemoteEntry, actions: EntryActions, expanded: Boole
         MenuItem(AppIcons.Rename, "Rinomina") { onDismiss(); actions.rename(entry) }
         MenuItem(AppIcons.Info, "Info") { onDismiss(); actions.info(entry) }
         MenuItem(AppIcons.Delete, "Elimina", danger = true) { onDismiss(); actions.delete(entry) }
-    }
-}
-
-@Composable
-private fun SelectedMark(modifier: Modifier) {
-    Box(modifier.size(20.dp).background(Arancio.colors.accent, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(AppIcons.Check, contentDescription = null, tint = Arancio.colors.background, modifier = Modifier.size(13.dp))
     }
 }
 

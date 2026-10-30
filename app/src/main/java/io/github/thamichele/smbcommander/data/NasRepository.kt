@@ -17,6 +17,8 @@ class NasRepository(private val credentials: CredentialStore) {
 
     fun server(): NasServer? = credentials.load()
 
+    fun host(): String? = credentials.host()
+
     /** Checks the settings by really connecting, then keeps them. Pairs again with whichever NAS answers now. */
     suspend fun connect(server: NasServer) = withContext(Dispatchers.IO) {
         val fs = SmbNasFileSystem(server.copy(serverId = ""))
