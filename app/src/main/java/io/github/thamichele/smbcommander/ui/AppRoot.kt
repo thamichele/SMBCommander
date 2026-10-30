@@ -60,6 +60,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val transfer by vm.transfer.collectAsStateWithLifecycle()
     val prompt by vm.syncPrompt.collectAsStateWithLifecycle()
     val jobs by vm.transfers.collectAsStateWithLifecycle()
+    val deletion by vm.deletion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -107,6 +108,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
             if (jobs.isNotEmpty() && transfer == null) {
                 TransferCard(jobs, onCancel = vm::cancelTransfers, onClose = vm::clearTransfers, modifier = Modifier.align(Alignment.BottomCenter))
             }
+            deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
             transfer?.let { t ->
                 Column(
                     Modifier

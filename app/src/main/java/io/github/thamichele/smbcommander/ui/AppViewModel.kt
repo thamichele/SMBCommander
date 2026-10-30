@@ -58,6 +58,40 @@ data class Transfer(val label: String, val done: Long, val total: Long) {
     val fraction: Float? get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
 }
 
+/** How one file of a deletion went. */
+data class DeletionStep(val entry: RemoteEntry, val outcome: Outcome, val error: String? = null) {
+    enum class Outcome { Deleted, Skipped, Failed }
+}
+
+/**
+ * A deletion of several files, step by step: first the photos of the backup are hashed for the list of deleted ones
+ * ([preparing] of [preparingTotal]), then each file is deleted in turn ([current]) and its outcome added to [steps].
+ */
+data class Deletion(
+    val total: Int,
+    val preparing: Int? = null,
+    val preparingTotal: Int = 0,
+    val current: RemoteEntry? = null,
+    val steps: List<DeletionStep> = emptyList(),
+    val stopping: Boolean = false,
+    val finished: Boolean = false,
+    val error: String? = null,
+) {
+    val left: Int get() = total - steps.size
+    val deleted: List<RemoteEntry> get() = steps.filter { it.outcome == DeletionStep.Outcome.Deleted }.map { it.entry }
+    val skipped: List<RemoteEntry> get() = steps.filter { it.outcome == DeletionStep.Outcome.Skipped }.map { it.entry }
+    val failed: List<DeletionStep> get() = steps.filter { it.outcome == DeletionStep.Outcome.Failed }
+
+    /** For a single file: [done] if it was deleted, otherwise why not. */
+    fun message(done: String): String = steps.firstOrNull()?.let {
+        when (it.outcome) {
+            DeletionStep.Outcome.Deleted -> done
+            DeletionStep.Outcome.Skipped -> "«${it.entry.name}» non era più sul NAS: saltato"
+            DeletionStep.Outcome.Failed -> it.error ?: "«${it.entry.name}» non eliminato"
+        }
+    } ?: error ?: done
+}
+
 /** A file changed on the phone that cannot simply be uploaded. */
 data class SyncPrompt(val session: EditSession, val remoteMissing: Boolean)
 
@@ -449,10 +483,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val s = _screen.value as? Screen.Browser ?: return
         viewModelScope.launch {
             try {
-                val (deleted, skipped) = deleteFromNas(entries)
-                message(deletionMessage(deleted, skipped, if (deleted.size == 1) "«${deleted[0].name}» eliminato" else "${deleted.size} elementi eliminati"))
+                val result = deleteFromNas(entries)
+                if (entries.size == 1) message(result.message("«${entries[0].name}» eliminato"))
             } catch (e: Exception) {
-                message(e.readable())
+                // with more than one file the deletion window shows what went wrong
+                if (entries.size == 1) message(e.readable())
             }
             app.nasChanged.tryEmit(NasChange(s.share, s.path))
             refresh()
@@ -465,58 +500,87 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
         try {
-            val (deleted, skipped) = deleteFromNas(photos)
-            message(deletionMessage(deleted, skipped, if (deleted.size == 1) "Foto eliminata dal NAS" else "${deleted.size} foto eliminate dal NAS"))
+            val result = deleteFromNas(photos)
+            if (photos.size == 1) message(result.message("Foto eliminata dal NAS"))
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            message(e.readable())
+            if (photos.size == 1) message(e.readable())
         }
     }
 
-    private fun deletionMessage(deleted: List<RemoteEntry>, skipped: List<RemoteEntry>, done: String): String {
-        val note = when (skipped.size) {
-            0 -> return done
-            1 -> "«${skipped[0].name}» non era più sul NAS: saltato"
-            else -> "${skipped.size} non erano più sul NAS: saltati"
-        }
-        return if (deleted.isEmpty()) note else "$done. $note"
+    private val _deletion = MutableStateFlow<Deletion?>(null)
+    /** A deletion of several files under way, or just finished: shown file by file in a window of its own. */
+    val deletion: StateFlow<Deletion?> = _deletion.asStateFlow()
+
+    @Volatile
+    private var stopDeletion = false
+
+    /** Stops the deletion after the file being deleted now; the others stay where they are. */
+    fun stopDeletion() {
+        stopDeletion = true
+        _deletion.update { it?.copy(stopping = true) }
+    }
+
+    fun closeDeletion() {
+        if (_deletion.value?.finished == true) _deletion.value = null
     }
 
     /**
-     * Deletes [entries] from the NAS one by one. One that is no longer there (deleted or moved from another device in
-     * the meantime) is skipped and the others go on. Those of the backup folder are written to its list of deleted
-     * photos first, and taken off it again if they were skipped or not deleted: a photo moved elsewhere must not stay
-     * remembered as deleted. Returns the deleted entries and the skipped ones.
+     * Deletes [entries] from the NAS one by one; with more than one, each step is shown by [deletion]. One that is no
+     * longer there (deleted or moved from another device in the meantime) is skipped, and one that fails does not stop
+     * the others. Those of the backup folder are written to its list of deleted photos first, and taken off it again
+     * if they were skipped or not deleted: a photo moved elsewhere must not stay remembered as deleted.
      */
-    private suspend fun deleteFromNas(entries: List<RemoteEntry>): Pair<List<RemoteEntry>, List<RemoteEntry>> {
-        val remembered = rememberDeletedBackupPhotos(entries)
-        val deleted = ArrayList<RemoteEntry>()
-        val skipped = ArrayList<RemoteEntry>()
+    private suspend fun deleteFromNas(entries: List<RemoteEntry>): Deletion {
+        val many = entries.size > 1
+        stopDeletion = false
+        var state = Deletion(total = entries.size, preparing = 0)
+        fun publish(next: Deletion) {
+            state = next
+            if (many) _deletion.value = next
+        }
+        publish(state)
+        val remembered = try {
+            rememberDeletedBackupPhotos(entries) { done, total -> publish(state.copy(preparing = done, preparingTotal = total)) }
+        } catch (e: Exception) {
+            publish(state.copy(preparing = null, finished = true, error = e.readable()))
+            throw e
+        }
+        publish(state.copy(preparing = null))
         try {
-            for ((i, entry) in entries.withIndex()) {
-                if (entries.size > 1) _transfer.value = Transfer("Elimino ${i + 1} di ${entries.size}", i.toLong(), entries.size.toLong())
-                val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
-                if (done != null) deleted += entry else skipped += entry
+            for (entry in entries) {
+                if (stopDeletion) break
+                publish(state.copy(current = entry))
+                val outcome = try {
+                    val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
+                    if (done != null) DeletionStep(entry, DeletionStep.Outcome.Deleted) else DeletionStep(entry, DeletionStep.Outcome.Skipped)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    DeletionStep(entry, DeletionStep.Outcome.Failed, e.readable())
+                }
+                publish(state.copy(steps = state.steps + outcome))
             }
         } finally {
-            _transfer.value = null
+            publish(state.copy(current = null, finished = true))
+            val deleted = state.deleted.toSet()
             // two identical photos share a line: it stays while one of them was deleted
             val stillDeleted = deleted.mapNotNull { remembered[it] }.toSet()
             val forget = remembered.filterKeys { it !in deleted }.values.filter { it !in stillDeleted }
             if (forget.isNotEmpty()) withContext(NonCancellable) { forgetDeletedBackupPhotos(forget) }
-            if (deleted.isNotEmpty() || skipped.isNotEmpty()) {
-                app.deletedPhotos.emit(deleted + skipped) // the gallery may show them too
-                dropDeleted(deleted + skipped)
+            val gone = state.deleted + state.skipped
+            if (gone.isNotEmpty()) {
+                app.deletedPhotos.emit(gone) // the gallery may show them too
+                dropDeleted(gone)
             }
         }
-        return deleted to skipped
+        return state
     }
 
     /**
      * Photos and videos of the backup folder about to be deleted, wherever the deletion starts (gallery, viewer or
      * file list): their size and hash go to the folder's list of deleted photos, so the backup never uploads them again.
      */
-    private suspend fun rememberDeletedBackupPhotos(entries: List<RemoteEntry>): Map<RemoteEntry, String> {
+    private suspend fun rememberDeletedBackupPhotos(entries: List<RemoteEntry>, progress: (done: Int, total: Int) -> Unit): Map<RemoteEntry, String> {
         val destination = app.backupSettings.load().destination ?: return emptyMap()
         val inBackup = entries.filter { !it.isDirectory && it.isMedia && it.share == destination.share && isInside(it.path, destination.path) }
         if (inBackup.isEmpty()) return emptyMap()
@@ -524,7 +588,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val known = repo.io { DeletedPhotos.read(it, destination.share, destination.path) }
             val lines = LinkedHashMap<RemoteEntry, String>()
             for ((i, photo) in inBackup.withIndex()) {
-                _transfer.value = Transfer("Preparo l'eliminazione: ${i + 1} di ${inBackup.size}", i.toLong(), inBackup.size.toLong())
+                progress(i, inBackup.size)
                 // a photo already gone from the NAS is skipped here and by the deletion
                 val hash = repo.io { fs -> fs.unlessGone(photo.share, photo.path) { Integrity.remoteSha256(fs, photo.share, photo.path) } }
                 if (hash != null) lines[photo] = DeletedPhotos.entry(photo.size, hash)
@@ -533,7 +597,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             // lines that were already on the list (an earlier copy of the same photo) are never taken off it again
             return lines.filterValues { it !in known }
         } finally {
-            _transfer.value = null
+            progress(inBackup.size, inBackup.size)
         }
     }
 
