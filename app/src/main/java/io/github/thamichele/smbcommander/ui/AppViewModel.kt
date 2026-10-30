@@ -17,11 +17,13 @@ import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
 import io.github.thamichele.smbcommander.core.Transfers
+import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -438,17 +440,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteSelected() {
         val entries = selectedEntries()
         _selected.value = emptySet()
-        folderOperation(if (entries.size == 1) "«${entries[0].name}» eliminato" else "${entries.size} elementi eliminati") { share, _ ->
-            rememberDeletedBackupPhotos(entries)
-            for (entry in entries) repo.io { it.delete(share, entry.path) }
-            app.deletedPhotos.emit(entries)
-        }
+        deleteInBrowser(entries)
     }
 
-    fun delete(entry: RemoteEntry) = folderOperation("«${entry.name}» eliminato") { share, _ ->
-        rememberDeletedBackupPhotos(listOf(entry))
-        repo.io { it.delete(share, entry.path) }
-        app.deletedPhotos.emit(listOf(entry)) // the gallery may show it too
+    fun delete(entry: RemoteEntry) = deleteInBrowser(listOf(entry))
+
+    private fun deleteInBrowser(entries: List<RemoteEntry>) {
+        val s = _screen.value as? Screen.Browser ?: return
+        viewModelScope.launch {
+            try {
+                val (deleted, skipped) = deleteFromNas(entries)
+                message(deletionMessage(deleted, skipped, if (deleted.size == 1) "«${deleted[0].name}» eliminato" else "${deleted.size} elementi eliminati"))
+            } catch (e: Exception) {
+                message(e.readable())
+            }
+            app.nasChanged.tryEmit(NasChange(s.share, s.path))
+            refresh()
+        }
     }
 
     /**
@@ -456,47 +464,86 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * list of deleted photos (size and hash), so the backup does not upload them again, even after a reinstall.
      */
     fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
-        val gone = ArrayList<RemoteEntry>()
-        var error: String? = null
         try {
-            rememberDeletedBackupPhotos(photos)
-            for ((i, photo) in photos.withIndex()) {
-                if (photos.size > 1) _transfer.value = Transfer("Elimino ${i + 1} di ${photos.size}", i.toLong(), photos.size.toLong())
-                repo.io { it.delete(photo.share, photo.path) }
-                gone += photo
-            }
+            val (deleted, skipped) = deleteFromNas(photos)
+            message(deletionMessage(deleted, skipped, if (deleted.size == 1) "Foto eliminata dal NAS" else "${deleted.size} foto eliminate dal NAS"))
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = e.readable()
+            message(e.readable())
+        }
+    }
+
+    private fun deletionMessage(deleted: List<RemoteEntry>, skipped: List<RemoteEntry>, done: String): String {
+        val note = when (skipped.size) {
+            0 -> return done
+            1 -> "«${skipped[0].name}» non era più sul NAS: saltato"
+            else -> "${skipped.size} non erano più sul NAS: saltati"
+        }
+        return if (deleted.isEmpty()) note else "$done. $note"
+    }
+
+    /**
+     * Deletes [entries] from the NAS one by one. One that is no longer there (deleted or moved from another device in
+     * the meantime) is skipped and the others go on. Those of the backup folder are written to its list of deleted
+     * photos first, and taken off it again if they were skipped or not deleted: a photo moved elsewhere must not stay
+     * remembered as deleted. Returns the deleted entries and the skipped ones.
+     */
+    private suspend fun deleteFromNas(entries: List<RemoteEntry>): Pair<List<RemoteEntry>, List<RemoteEntry>> {
+        val remembered = rememberDeletedBackupPhotos(entries)
+        val deleted = ArrayList<RemoteEntry>()
+        val skipped = ArrayList<RemoteEntry>()
+        try {
+            for ((i, entry) in entries.withIndex()) {
+                if (entries.size > 1) _transfer.value = Transfer("Elimino ${i + 1} di ${entries.size}", i.toLong(), entries.size.toLong())
+                val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
+                if (done != null) deleted += entry else skipped += entry
+            }
         } finally {
             _transfer.value = null
+            // two identical photos share a line: it stays while one of them was deleted
+            val stillDeleted = deleted.mapNotNull { remembered[it] }.toSet()
+            val forget = remembered.filterKeys { it !in deleted }.values.filter { it !in stillDeleted }
+            if (forget.isNotEmpty()) withContext(NonCancellable) { forgetDeletedBackupPhotos(forget) }
+            if (deleted.isNotEmpty() || skipped.isNotEmpty()) {
+                app.deletedPhotos.emit(deleted + skipped) // the gallery may show them too
+                dropDeleted(deleted + skipped)
+            }
         }
-        if (gone.isNotEmpty()) {
-            app.deletedPhotos.emit(gone)
-            dropDeleted(gone)
-        }
-        message(
-            error ?: if (gone.size == 1) "Foto eliminata dal NAS" else "${gone.size} foto eliminate dal NAS"
-        )
+        return deleted to skipped
     }
 
     /**
      * Photos and videos of the backup folder about to be deleted, wherever the deletion starts (gallery, viewer or
      * file list): their size and hash go to the folder's list of deleted photos, so the backup never uploads them again.
      */
-    private suspend fun rememberDeletedBackupPhotos(entries: List<RemoteEntry>) {
-        val destination = app.backupSettings.load().destination ?: return
+    private suspend fun rememberDeletedBackupPhotos(entries: List<RemoteEntry>): Map<RemoteEntry, String> {
+        val destination = app.backupSettings.load().destination ?: return emptyMap()
         val inBackup = entries.filter { !it.isDirectory && it.isMedia && it.share == destination.share && isInside(it.path, destination.path) }
-        if (inBackup.isEmpty()) return
+        if (inBackup.isEmpty()) return emptyMap()
         try {
-            val lines = ArrayList<String>()
+            val known = repo.io { DeletedPhotos.read(it, destination.share, destination.path) }
+            val lines = LinkedHashMap<RemoteEntry, String>()
             for ((i, photo) in inBackup.withIndex()) {
                 _transfer.value = Transfer("Preparo l'eliminazione: ${i + 1} di ${inBackup.size}", i.toLong(), inBackup.size.toLong())
-                lines += repo.io { fs -> DeletedPhotos.entry(photo.size, Integrity.remoteSha256(fs, photo.share, photo.path)) }
+                // a photo already gone from the NAS is skipped here and by the deletion
+                val hash = repo.io { fs -> fs.unlessGone(photo.share, photo.path) { Integrity.remoteSha256(fs, photo.share, photo.path) } }
+                if (hash != null) lines[photo] = DeletedPhotos.entry(photo.size, hash)
             }
-            repo.io { DeletedPhotos.add(it, destination.share, destination.path, lines) }
+            repo.io { DeletedPhotos.add(it, destination.share, destination.path, lines.values) }
+            // lines that were already on the list (an earlier copy of the same photo) are never taken off it again
+            return lines.filterValues { it !in known }
         } finally {
             _transfer.value = null
+        }
+    }
+
+    /** Takes lines written by [rememberDeletedBackupPhotos] off the list again, for photos that were not deleted. */
+    private suspend fun forgetDeletedBackupPhotos(lines: Collection<String>) {
+        val destination = app.backupSettings.load().destination ?: return
+        try {
+            repo.io { DeletedPhotos.remove(it, destination.share, destination.path, lines) }
+        } catch (e: Exception) {
+            message("Elenco delle foto eliminate non aggiornato: ${e.readable()}")
         }
     }
 

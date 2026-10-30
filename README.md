@@ -75,7 +75,8 @@ Si può vedere a griglia o a elenco. Per eliminare una foto dal NAS: nell'elenco
 nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
 di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
 backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le
-ricarica, nemmeno dopo aver reinstallato l'app.
+ricarica, nemmeno dopo aver reinstallato l'app. Se nel frattempo un file non è più sul NAS (eliminato o spostato da
+un altro dispositivo) viene saltato, gli altri vanno avanti, e non resta nell'elenco delle eliminate.
 
 ## Privacy e sicurezza
 
