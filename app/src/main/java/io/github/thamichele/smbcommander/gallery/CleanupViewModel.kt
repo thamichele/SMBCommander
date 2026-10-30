@@ -13,6 +13,7 @@ import io.github.thamichele.smbcommander.core.GalleryDates
 import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.KeptPhotos
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableJob
@@ -148,7 +149,13 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                 nas.withLock {
                     try {
                         val fs = app.repository.fs()
-                        val inTrash = CleanupTrash.discard(fs, card.entry, folder.path)
+                        val inTrash = fs.unlessGone(card.entry.share, card.entry.path) { CleanupTrash.discard(fs, card.entry, folder.path) }
+                        if (inTrash == null) {
+                            // already gone from the NAS (deleted or moved from another device): nothing to do, and
+                            // nothing goes on the deleted list
+                            app.deletedPhotos.emit(listOf(card.entry))
+                            return@withLock
+                        }
                         action.inTrash = inTrash
                         // hashed where it now is: the backup will recognise the photo and never upload it again
                         val entry = DeletedPhotos.entry(card.entry.size, Integrity.remoteSha256(fs, card.entry.share, inTrash))
@@ -220,7 +227,8 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             nas.withLock {
                 try {
-                    CleanupTrash.empty(app.repository.fs(), folder.share, folder.path)
+                    val skipped = CleanupTrash.empty(app.repository.fs(), folder.share, folder.path)
+                    forgetDeleted(skipped)
                     // what was in the bin can no longer be put back
                     val more = synchronized(history) { history.removeAll { it is Action.Discard }; history.isNotEmpty() }
                     _state.update { it.copy(canUndo = more) }
@@ -229,6 +237,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     _state.update { it.copy(error = "Cestino non svuotato: ${e.message ?: e.javaClass.simpleName}") }
                 }
             }
+            scheduleFlush()
             refreshTrash()
         }
     }
@@ -241,10 +250,16 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                 try {
                     val fs = app.repository.fs()
                     val entries = ArrayList<String>()
+                    val skipped = ArrayList<String>()
                     for (file in CleanupTrash.contents(fs, folder.share, folder.path)) {
-                        entries += DeletedPhotos.entry(file.size, Integrity.remoteSha256(fs, folder.share, file.path))
-                        CleanupTrash.restore(fs, folder.share, file.path, CleanupTrash.originalOf(file.path, folder.path))
+                        val restored = fs.unlessGone(folder.share, file.path) {
+                            val entry = DeletedPhotos.entry(file.size, Integrity.remoteSha256(fs, folder.share, file.path))
+                            CleanupTrash.restore(fs, folder.share, file.path, CleanupTrash.originalOf(file.path, folder.path))
+                            entry
+                        }
+                        if (restored != null) entries += restored else skipped += file.path
                     }
+                    forgetDeleted(skipped)
                     synchronized(this@CleanupViewModel) {
                         deletedToAdd.removeAll(entries.toSet())
                         deletedToRemove += entries
@@ -259,6 +274,23 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
             }
             flush()
             refreshTrash()
+        }
+    }
+
+    /**
+     * Files of the bin that were gone when it was emptied or restored (deleted or moved from another device) come off
+     * the deleted list, so a photo moved elsewhere is not remembered as deleted. Their line is known for the photos
+     * discarded since this screen was opened.
+     */
+    private fun forgetDeleted(gone: List<String>) {
+        if (gone.isEmpty()) return
+        val paths = gone.toSet()
+        val lines = synchronized(history) {
+            history.mapNotNull { action -> (action as? Action.Discard)?.takeIf { it.inTrash in paths }?.deletedEntry }
+        }
+        synchronized(this) {
+            deletedToAdd.removeAll(lines.toSet())
+            deletedToRemove += lines
         }
     }
 

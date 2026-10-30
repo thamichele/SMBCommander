@@ -212,7 +212,7 @@ object CleanupTrash {
         if (fs.stat(share, dir) == null) return emptyList()
         val found = ArrayList<RemoteEntry>()
         fun walk(path: String) {
-            for (e in fs.list(share, path)) if (e.isDirectory) walk(e.path) else found += e
+            for (e in fs.unlessGone(share, path) { fs.list(share, path) }.orEmpty()) if (e.isDirectory) walk(e.path) else found += e
         }
         walk(dir)
         return found
@@ -225,9 +225,15 @@ object CleanupTrash {
         return RemotePath.child(r, rel)
     }
 
-    fun empty(fs: NasFileSystem, share: String, root: String) {
+    /**
+     * Deletes the bin for good, file by file: one that is already gone (deleted or moved from another device) is
+     * skipped. Returns the paths of the skipped ones.
+     */
+    fun empty(fs: NasFileSystem, share: String, root: String): List<String> {
         val dir = RemotePath.child(RemotePath.normalize(root), DIR)
-        if (fs.stat(share, dir) != null) fs.delete(share, dir)
+        val skipped = contents(fs, share, root).filter { fs.unlessGone(share, it.path) { fs.delete(share, it.path) } == null }
+        if (fs.stat(share, dir) != null) fs.unlessGone(share, dir) { fs.delete(share, dir) }
+        return skipped.map { it.path }
     }
 
     private fun ensureDirs(fs: NasFileSystem, share: String, dir: String) {

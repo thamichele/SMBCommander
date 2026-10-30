@@ -3,6 +3,7 @@ package io.github.thamichele.smbcommander.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,6 +88,31 @@ class CleanupTest {
         CleanupTrash.discard(fs, fs.stat("foto", "Backup/2026/10/a.jpg")!!, "Backup")
         CleanupTrash.empty(fs, "foto", "Backup")
         assertTrue(fs.files.isEmpty())
+    }
+
+    @Test
+    fun emptyingSkipsFilesGoneMeanwhile() {
+        val fs = FakeNasFileSystem()
+        for (name in listOf("a", "b", "c")) {
+            fs.put("foto", "Backup/2026/10/$name.jpg", name)
+            CleanupTrash.discard(fs, fs.stat("foto", "Backup/2026/10/$name.jpg")!!, "Backup")
+        }
+        fs.put("foto", "Backup/2026/10/d.jpg", "d")
+        // b is deleted from another device while the bin is being emptied
+        fs.beforeDelete = { if (it.endsWith("a.jpg")) fs.files.keys.removeAll { k -> k.endsWith("b.jpg") } }
+        assertEquals(listOf("Backup/.smbcommander-cestino/2026/10/b.jpg"), CleanupTrash.empty(fs, "foto", "Backup"))
+        assertEquals(setOf("foto/Backup/2026/10/d.jpg"), fs.files.keys)
+    }
+
+    @Test
+    fun unlessGoneSkipsOnlyMissingFiles() {
+        val fs = FakeNasFileSystem()
+        fs.put("foto", "a.jpg", "a")
+        fs.put("foto", "b.jpg", "b")
+        assertNull(fs.unlessGone("foto", "x.jpg") { fs.delete("foto", "x.jpg") })
+        assertEquals(Unit, fs.unlessGone("foto", "a.jpg") { fs.delete("foto", "a.jpg") })
+        // the file is there and the failure is something else: that is not skipped
+        assertThrows(NasException::class.java) { fs.unlessGone("foto", "b.jpg") { fs.rename("foto", "b.jpg", "b.jpg") } }
     }
 
     @Test

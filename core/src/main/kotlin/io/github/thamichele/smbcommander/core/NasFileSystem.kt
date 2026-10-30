@@ -94,3 +94,19 @@ interface NasFileSystem : Closeable {
 }
 
 class NasException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/**
+ * Runs [block] on a file that may have left the NAS in the meantime (deleted or moved from another device). When it
+ * fails because the file is no longer there it returns null, so a batch skips that file and goes on; any other error
+ * is thrown as it is.
+ */
+fun <T : Any> NasFileSystem.unlessGone(share: String, path: String, block: () -> T): T? = try {
+    block()
+} catch (e: Exception) {
+    val gone = try {
+        stat(share, path) == null
+    } catch (_: Exception) {
+        false
+    }
+    if (gone) null else throw e
+}

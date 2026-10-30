@@ -63,9 +63,13 @@ class FakeNasFileSystem : NasFileSystem {
 
     override fun createDirectory(share: String, path: String) {}
 
+    /** Runs before each delete: lets a test take a file away "from another device" in the middle of a batch. */
+    var beforeDelete: (path: String) -> Unit = {}
+
     override fun delete(share: String, path: String) {
+        beforeDelete(path)
         val k = key(share, path)
-        files.keys.removeAll { it == k || it.startsWith("$k/") }
+        if (!files.keys.removeAll { it == k || it.startsWith("$k/") }) throw NasException("not found")
     }
 
     override fun rename(share: String, from: String, to: String, replace: Boolean) {
