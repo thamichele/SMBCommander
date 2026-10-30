@@ -125,7 +125,7 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
                     trackColor = c.border,
                 )
                 Text(
-                    if (deletion.preparing != null) "Calcolo le impronte per l'elenco delle eliminate"
+                    if (deletion.preparing != null) deletion.preparingNote
                     else "${deletion.steps.size} di ${deletion.total}" + if (deletion.left > 0) " · ne mancano ${deletion.left}" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,

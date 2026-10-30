@@ -60,6 +60,7 @@ import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
+import io.github.thamichele.smbcommander.ui.DeletionDialog
 import io.github.thamichele.smbcommander.ui.ErrorCard
 import io.github.thamichele.smbcommander.ui.InfoDialog
 import io.github.thamichele.smbcommander.ui.PageHeader
@@ -79,6 +80,7 @@ import kotlin.math.abs
 fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), vm: CleanupViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val galleryState by gallery.state.collectAsStateWithLifecycle()
+    val deletion by vm.deletion.collectAsStateWithLifecycle()
     val c = Arancio.colors
     val context = LocalContext.current
     var trashDialog by remember { mutableStateOf(false) }
@@ -165,6 +167,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
 
     info?.let { InfoDialog(it, onDismiss = { info = null }) }
 
+    deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
     if (trashDialog) {
         val size = Formatter.formatShortFileSize(context, state.trashBytes)
         if (state.trashCount == 0) {

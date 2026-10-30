@@ -230,10 +230,21 @@ object CleanupTrash {
      * skipped. Returns the paths of the skipped ones.
      */
     fun empty(fs: NasFileSystem, share: String, root: String): List<String> {
-        val dir = RemotePath.child(RemotePath.normalize(root), DIR)
-        val skipped = contents(fs, share, root).filter { fs.unlessGone(share, it.path) { fs.delete(share, it.path) } == null }
-        if (fs.stat(share, dir) != null) fs.unlessGone(share, dir) { fs.delete(share, dir) }
+        val skipped = contents(fs, share, root).filterNot { delete(fs, share, it.path) }
+        removeFolders(fs, share, root)
         return skipped.map { it.path }
+    }
+
+    /** Deletes one file of the bin; false when it was no longer there. */
+    fun delete(fs: NasFileSystem, share: String, path: String): Boolean = fs.unlessGone(share, path) { fs.delete(share, path) } != null
+
+    /**
+     * Takes away the bin's folders once no file is left in them. Best effort: an empty hidden folder that the NAS does
+     * not let go yet (a file still closing) does no harm and goes the next time.
+     */
+    fun removeFolders(fs: NasFileSystem, share: String, root: String) {
+        val dir = RemotePath.child(RemotePath.normalize(root), DIR)
+        runCatching { if (fs.stat(share, dir) != null && contents(fs, share, root).isEmpty()) fs.delete(share, dir) }
     }
 
     private fun ensureDirs(fs: NasFileSystem, share: String, dir: String) {
