@@ -50,14 +50,6 @@ object CleanupRules {
     fun classify(media: List<RemoteEntry>, root: String): Map<RemoteEntry, CleanupReason> {
         val result = LinkedHashMap<RemoteEntry, CleanupReason>()
         for (e in media) single(e, root)?.let { result[e] = it }
-        // copies: same name and size in two places, the old QuMagie folders next to the backup's own
-        for (group in media.groupBy { it.name.lowercase() to it.size }.values) {
-            if (group.size < 2) continue
-            val original = group.minWith(compareBy<RemoteEntry> { it.path.count { c -> c == '/' } }.thenBy { it.path })
-            for (copy in group) if (copy !== original && copy !in result) {
-                result[copy] = CleanupReason(CleanupReason.Kind.Duplicate, "c'è anche ${relative(original.path, root)}")
-            }
-        }
         // bursts: camera photos of the same folder taken within a couple of seconds of each other
         val photos = media.filter { it.extension in PHOTO && it !in result && CAMERA_NAME.containsMatchIn(it.name) }
         for (folder in photos.groupBy { RemotePath.parent(it.path) }.values) {
@@ -72,6 +64,39 @@ object CleanupRules {
         }
         return result
     }
+
+    /**
+     * Copies of the same photo or video: the same name, or the same name with a different ending ("IMG_1234 (1)",
+     * "IMG_1234_2", "IMG_1234 - Copia", "IMG_1234.HEIC" next to "IMG_1234.JPG"), in one folder or in two. Each group
+     * comes with the likeliest original first: the shortest path, then the biggest file. Names too short or too common
+     * to tell anything ("foto_1", forty "Screenshot (n)") are left out.
+     */
+    fun duplicates(media: List<RemoteEntry>): List<List<RemoteEntry>> =
+        media.groupBy { (if (it.extension in VIDEO) "v:" else "p:") + stem(it.name) }
+            .filter { (key, group) -> group.size in 2..MAX_GROUP && key.length - 2 >= MIN_STEM }
+            .values
+            .map { group -> group.sortedWith(compareBy<RemoteEntry> { it.path.count { c -> c == '/' } }.thenByDescending { it.size }.thenBy { it.path }) }
+
+    /** The name without extension and without the endings copies get, lowercase: "IMG_1234 (2).jpg" -> "img_1234". */
+    fun stem(name: String): String {
+        var s = name.substringBeforeLast('.', name).lowercase().trim()
+        s = COPY_PREFIX.replace(s, "")
+        while (true) {
+            val next = COPY_SUFFIX.replace(s, "").trim()
+            if (next == s || next.isEmpty()) break
+            s = next
+        }
+        // one short number at the end ("_1", "-2"), but not the day of a date or the seconds of a time ("2026-10-29")
+        val numbered = NUMBER_SUFFIX.replace(s, "")
+        return if (numbered.isNotEmpty() && numbered != s && !DATE_END.containsMatchIn(numbered)) numbered else s
+    }
+
+    private val COPY_PREFIX = Regex("""^(copia di|copy of|kopie von)\s+""")
+    private val COPY_SUFFIX = Regex("""(\s*\(\d{1,3}\)|\s*-?\s*(copia|copy|kopie|copie)(\s*\d{1,2})?)$""")
+    private val NUMBER_SUFFIX = Regex("""[ _~-]\d{1,2}$""")
+    private val DATE_END = Regex("""\d{2}[-_. ]\d{2}$""")
+    private const val MIN_STEM = 5
+    private const val MAX_GROUP = 6
 
     private fun single(e: RemoteEntry, root: String): CleanupReason? {
         val name = e.name
@@ -138,6 +163,10 @@ class KeptPhotos(lines: Collection<String> = emptyList()) {
     @Synchronized
     fun contains(entry: RemoteEntry, root: String): Boolean =
         line(entry, root) in byPath || "${entry.size}\t${entry.name.lowercase()}" in byName
+
+    /** Kept at this very path: a copy with the same name elsewhere does not count. */
+    @Synchronized
+    fun containsPath(entry: RemoteEntry, root: String): Boolean = line(entry, root) in byPath
 
     @Synchronized
     fun add(entry: RemoteEntry, root: String) = addLine(line(entry, root))

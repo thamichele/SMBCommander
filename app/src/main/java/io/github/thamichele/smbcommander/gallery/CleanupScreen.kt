@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import io.github.thamichele.smbcommander.core.CleanupRules
+import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ImageSize
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
@@ -81,6 +83,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     val state by vm.state.collectAsStateWithLifecycle()
     val galleryState by gallery.state.collectAsStateWithLifecycle()
     val deletion by vm.deletion.collectAsStateWithLifecycle()
+    val sameContent by vm.sameContent.collectAsStateWithLifecycle()
     val c = Arancio.colors
     val context = LocalContext.current
     var trashDialog by remember { mutableStateOf(false) }
@@ -95,6 +98,15 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     val queue = state.queue
     val top = queue.firstOrNull()
     val next = queue.getOrNull(1)
+
+    // the next pairs of copies are fetched while the user compares this one
+    val nextPairs = state.pairs.drop(1).take(2)
+    LaunchedEffect(nextPairs) {
+        val loader = SingletonImageLoader.get(context)
+        nextPairs.forEach { pair ->
+            listOf(pair.first, pair.second).forEach { loader.enqueue(ImageRequest.Builder(context).data(Thumb(it, ImageSize.Preview)).build()) }
+        }
+    }
 
     // the next previews are fetched while the user looks at this one
     LaunchedEffect(top?.entry) {
@@ -119,8 +131,9 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            item { Pill("Da verificare (${state.suspectsLeft})", !state.showingOthers) { vm.showOthers(false) } }
-            item { Pill("Tutte le altre (${state.othersLeft})", state.showingOthers) { vm.showOthers(true) } }
+            item { Pill("Da verificare (${state.suspectsLeft})", state.tab == CleanupTab.Suspects) { vm.showTab(CleanupTab.Suspects) } }
+            item { Pill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
+            item { Pill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
         }
         state.error?.let { error ->
             Text(
@@ -137,9 +150,32 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
                     ErrorCard("Scegli prima la cartella del backup", "Vai al backup foto", appVm::openBackup)
                 state.loading || (galleryState.loading && galleryState.months.isEmpty()) ->
                     CircularProgressIndicator(color = c.accent)
+                state.tab == CleanupTab.Duplicates -> {
+                    val pair = state.pairs.firstOrNull()
+                    if (pair == null) {
+                        Done(
+                            title = "Nessun duplicato",
+                            text = "Non ci sono foto o video con lo stesso nome da confrontare.",
+                            othersLeft = false,
+                            onOthers = {},
+                            onReload = { vm.reload(galleryState.photos) },
+                        )
+                    } else {
+                        key(pair.key) {
+                            DuplicatesPane(
+                                pair = pair,
+                                root = state.folder?.path.orEmpty(),
+                                same = sameContent[pair.key],
+                                onCompare = { vm.compare(pair) },
+                                onKeep = { vm.keepOnly(pair, it) },
+                                onOpen = { appVm.openViewer(listOf(pair.first, pair.second), if (it == pair.first) 0 else 1) },
+                            )
+                        }
+                    }
+                }
                 top == null -> Done(
-                    othersLeft = !state.showingOthers && state.othersLeft > 0,
-                    onOthers = { vm.showOthers(true) },
+                    othersLeft = state.tab == CleanupTab.Suspects && state.othersLeft > 0,
+                    onOthers = { vm.showTab(CleanupTab.Others) },
                     onReload = { vm.reload(galleryState.photos) },
                 )
                 else -> {
@@ -159,9 +195,15 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundButton(AppIcons.Close, "Elimina", c.danger, enabled = top != null, big = true) { top?.let(vm::discard) }
-            RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
-            RoundButton(AppIcons.Check, "Tieni", c.accent, enabled = top != null, big = true) { top?.let(vm::keep) }
+            if (state.tab == CleanupTab.Duplicates) {
+                val pair = state.pairs.firstOrNull()
+                RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
+                RoundButton(AppIcons.Check, "Tienili entrambi", c.accent, enabled = pair != null, big = false) { pair?.let(vm::keepBoth) }
+            } else {
+                RoundButton(AppIcons.Close, "Elimina", c.danger, enabled = top != null, big = true) { top?.let(vm::discard) }
+                RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
+                RoundButton(AppIcons.Check, "Tieni", c.accent, enabled = top != null, big = true) { top?.let(vm::keep) }
+            }
         }
     }
 
@@ -305,13 +347,19 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
 }
 
 @Composable
-private fun Done(othersLeft: Boolean, onOthers: () -> Unit, onReload: () -> Unit) {
+private fun Done(
+    othersLeft: Boolean,
+    onOthers: () -> Unit,
+    onReload: () -> Unit,
+    title: String = "Niente da verificare",
+    text: String? = null,
+) {
     val c = Arancio.colors
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(AppIcons.Broom, contentDescription = null, tint = c.accent, modifier = Modifier.size(48.dp))
-        Text("Niente da verificare", style = MaterialTheme.typography.titleLarge)
+        Text(title, style = MaterialTheme.typography.titleLarge)
         Text(
-            if (othersLeft) "Le foto che sembravano da controllare le hai viste tutte. Puoi passare anche alle altre."
+            text ?: if (othersLeft) "Le foto che sembravano da controllare le hai viste tutte. Puoi passare anche alle altre."
             else "Hai visto tutto. Le foto nuove del backup compariranno qui quando serve.",
             style = MaterialTheme.typography.bodyLarge,
             color = c.textSecondary,
@@ -386,4 +434,72 @@ private fun TrashDialog(count: Int, size: String, onDismiss: () -> Unit, onEmpty
             }
         },
     )
+}
+
+/**
+ * Two copies of the same photo side by side, each with its full path under it: the one chosen stays, the other goes
+ * to the bin. Over them, whether the two files are the very same bytes.
+ */
+@Composable
+private fun DuplicatesPane(
+    pair: DuplicatePair,
+    root: String,
+    same: Boolean?,
+    onCompare: () -> Unit,
+    onKeep: (RemoteEntry) -> Unit,
+    onOpen: (RemoteEntry) -> Unit,
+) {
+    val c = Arancio.colors
+    LaunchedEffect(pair.key) { onCompare() }
+    val sameSize = pair.first.size == pair.second.size
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val (verdict, tint) = when {
+            same == true -> "Contenuto identico: puoi tenerne uno solo" to c.success
+            same == false -> "Stesso nome, contenuto diverso" to c.textSecondary
+            sameSize -> "Stessa dimensione, confronto il contenuto…" to c.textSecondary
+            else -> "Stesso nome, dimensioni diverse" to c.textSecondary
+        }
+        Text("Scegli quale tenere", style = MaterialTheme.typography.titleMedium)
+        Text(verdict, style = MaterialTheme.typography.bodySmall, color = tint)
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (entry in listOf(pair.first, pair.second)) {
+                DuplicateSide(entry, root, Modifier.weight(1f), onKeep = { onKeep(entry) }, onOpen = { onOpen(entry) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DuplicateSide(entry: RemoteEntry, root: String, modifier: Modifier, onKeep: () -> Unit, onOpen: () -> Unit) {
+    val c = Arancio.colors
+    val folder = CleanupRules.relative(entry.path, root).substringBeforeLast('/', "").ifEmpty { "cartella del backup" }
+    Column(
+        modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(12.dp))
+            .background(c.surface)
+            .border(1.dp, c.border, RoundedCornerShape(12.dp)),
+    ) {
+        Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(onClick = onOpen)) {
+            SubcomposeAsyncImage(
+                model = Thumb(entry, ImageSize.Preview),
+                contentDescription = entry.name,
+                contentScale = ContentScale.Fit,
+                loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
+                error = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (entry.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 40.dp)
+        }
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(folder, style = MaterialTheme.typography.bodySmall, color = c.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Text(entryDetails(entry), style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Button(
+            onClick = onKeep,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
+        ) { Text("Tieni questo", maxLines = 1) }
+    }
 }

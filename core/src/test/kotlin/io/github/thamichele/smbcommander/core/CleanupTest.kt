@@ -46,8 +46,35 @@ class CleanupTest {
         assertEquals(CleanupReason.Kind.Burst, found[a]?.kind)
         assertEquals(CleanupReason.Kind.Burst, found[b]?.kind)
         assertNull(found[c])
-        assertEquals(CleanupReason.Kind.Duplicate, found[copy]?.kind)
-        assertTrue(found[copy]!!.detail.contains("2026/10/IMG_20261029_101800.jpg"))
+        // copies have a tab of their own, side by side
+        assertNull(found[copy])
+    }
+
+    @Test
+    fun copiesAreFoundByNameWhateverTheEnding() {
+        assertEquals("img_1234", CleanupRules.stem("IMG_1234 (2).jpg"))
+        assertEquals("img_1234", CleanupRules.stem("IMG_1234_1.JPG"))
+        assertEquals("img_1234", CleanupRules.stem("IMG_1234 - Copia (2).jpg"))
+        assertEquals("img_1234", CleanupRules.stem("Copia di IMG_1234.jpg"))
+        assertEquals("pxl_20261029_101500123", CleanupRules.stem("PXL_20261029_101500123.jpg"))
+        assertEquals("img_20261029_101500", CleanupRules.stem("IMG_20261029_101500_1.jpg"))
+        // a date is not a copy number
+        assertEquals("mare 2026-10-29", CleanupRules.stem("Mare 2026-10-29.jpg"))
+        val original = media("Backup/2026/10/IMG_1234.jpg")
+        val heic = media("Backup/2026/10/IMG_1234.HEIC")
+        val numbered = media("Backup/QuMagie/Camera/IMG_1234 (1).jpg")
+        val other = media("Backup/2026/10/IMG_1235.jpg")
+        val video = media("Backup/2026/10/IMG_1234.mp4")
+        val short1 = media("Backup/foto_1.jpg")
+        val short2 = media("Backup/foto_2.jpg")
+        val groups = CleanupRules.duplicates(listOf(numbered, other, heic, original, video, short1, short2))
+        assertEquals(1, groups.size)
+        assertEquals(setOf(original, heic, numbered), groups[0].toSet())
+        // shortest path first
+        assertEquals(numbered, groups[0].last())
+        // forty screenshots with a number are not forty copies
+        val many = (1..10).map { media("Backup/Screenshot ($it).png") }
+        assertTrue(CleanupRules.duplicates(many).isEmpty())
     }
 
     @Test
