@@ -43,6 +43,9 @@ sealed interface Screen {
 
     data object Gallery : Screen
 
+    /** The quick cleanup of the gallery: one photo at a time, swipe to keep or discard. */
+    data object Cleanup : Screen
+
     /** Full-screen photos, swiping through [images] starting at [index]; back returns to [returnTo]. */
     data class Viewer(val returnTo: Screen, val images: List<RemoteEntry>, val index: Int) : Screen
 }
@@ -203,6 +206,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = Screen.Gallery
     }
 
+    fun openCleanup() {
+        _screen.value = Screen.Cleanup
+    }
+
     fun openFiles() {
         _screen.value = Screen.Shares
     }
@@ -305,6 +312,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             Screen.Setup -> if (repo.isConfigured) {
                 _screen.value = Screen.Shares
+                return true
+            }
+            Screen.Cleanup -> {
+                _screen.value = Screen.Gallery
                 return true
             }
             Screen.Backup, Screen.Gallery -> {
