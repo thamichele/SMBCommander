@@ -113,7 +113,9 @@ L'APK di prova di ogni build si trova negli artifact (`smbcommander-debug-apk`) 
 una chiave di debug pubblica e si installa come app separata (`io.github.thamichele.smbcommander.debug`), accanto a
 quella vera e senza accesso ai suoi dati. Per l'uso quotidiano installa la versione F-Droid o la release firmata.
 
-Le versioni sono numerate `1.0.N`, dove N è il numero della build: ogni build di `main` è un aggiornamento.
+Le versioni sono `MAGGIORE.MINORE.CORREZIONE`: la correzione sale per i piccoli fix, la minore per ogni funzione nuova
+o modifica, la maggiore quando l'app raggiunge una nuova maturità. Ogni build di `main` è un aggiornamento (fino alla
+1.0.46 l'ultimo numero era quello della build).
 
 ## Sviluppo
 
