@@ -37,6 +37,13 @@ import kotlinx.coroutines.withContext
 /** One photo or video to decide on, and why it was picked (null in "all the others"). */
 data class CleanupCard(val entry: RemoteEntry, val reason: CleanupReason?)
 
+enum class CleanupTab { Suspects, Others, Duplicates }
+
+/** Two copies of the same photo side by side: [first] is the likeliest original. */
+data class DuplicatePair(val first: RemoteEntry, val second: RemoteEntry) {
+    val key: String get() = first.path + "\n" + second.path
+}
+
 data class CleanupState(
     val folder: SavedFolder? = null,
     val loading: Boolean = false,
@@ -44,7 +51,9 @@ data class CleanupState(
     val suspects: List<CleanupCard> = emptyList(),
     /** Everything else not yet looked at, newest first. */
     val others: List<CleanupCard> = emptyList(),
-    val showingOthers: Boolean = false,
+    /** Copies of the same photo, likeliest original first; one comparison at a time, two by two. */
+    val duplicateGroups: List<List<RemoteEntry>> = emptyList(),
+    val tab: CleanupTab = CleanupTab.Suspects,
     /** Cards decided in this session, so the queue moves on. */
     val decided: Set<String> = emptySet(),
     val canUndo: Boolean = false,
@@ -55,7 +64,21 @@ data class CleanupState(
     val error: String? = null,
 ) {
     /** Worked out once per state: with thousands of photos it must not run at every frame. */
-    val queue: List<CleanupCard> by lazy { (if (showingOthers) others else suspects).filterNot { it.entry.path in decided } }
+    val queue: List<CleanupCard> by lazy {
+        when (tab) {
+            CleanupTab.Suspects -> suspects
+            CleanupTab.Others -> others
+            CleanupTab.Duplicates -> emptyList()
+        }.filterNot { it.entry.path in decided }
+    }
+
+    /** The comparisons still to make: in each group, the first two copies not decided yet. */
+    val pairs: List<DuplicatePair> by lazy {
+        duplicateGroups.mapNotNull { group ->
+            val left = group.filter { it.path !in decided }
+            if (left.size >= 2) DuplicatePair(left[0], left[1]) else null
+        }
+    }
     val suspectsLeft: Int by lazy { suspects.count { it.entry.path !in decided } }
     val othersLeft: Int by lazy { others.count { it.entry.path !in decided } }
 }
@@ -94,6 +117,11 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
 
     private val history = ArrayDeque<Action>()
 
+    private companion object {
+        /** Bigger files (long videos) are not read twice over the network just to compare them. */
+        const val MAX_COMPARE = 150L * 1024 * 1024
+    }
+
     /** NAS work runs one step at a time, in the order of the swipes. */
     private val nas = Mutex()
     private var flushJob: Job? = null
@@ -115,7 +143,17 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     .sortedWith(compareBy<Map.Entry<RemoteEntry, CleanupReason>> { it.value.kind.ordinal }.thenComparator { a, b -> newestFirst.compare(a.key, b.key) })
                     .map { CleanupCard(it.key, it.value) }
                 val others = todo.filterNot { it in reasons }.sortedWith(newestFirst).map { CleanupCard(it, null) }
-                _state.update { it.copy(loading = false, suspects = suspects, others = others, keptCount = kept.lines.size) }
+                // copies among all the photos, kept ones too: a kept photo can still have a copy. Of those already
+                // kept, only the first stays, as the one the others are compared with
+                val duplicates = CleanupRules.duplicates(media).mapNotNull { group ->
+                    val open = group.filterNot { kept.containsPath(it, folder.path) }
+                    if (open.isEmpty()) return@mapNotNull null
+                    val anchor = group.firstOrNull { kept.containsPath(it, folder.path) }
+                    (listOfNotNull(anchor) + open).takeIf { it.size >= 2 }
+                }
+                _state.update {
+                    it.copy(loading = false, suspects = suspects, others = others, duplicateGroups = duplicates, keptCount = kept.lines.size)
+                }
                 refreshTrash()
             } catch (e: CancellationException) {
                 throw e
@@ -131,7 +169,34 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         start(media)
     }
 
-    fun showOthers(on: Boolean) = _state.update { it.copy(showingOthers = on) }
+    fun showTab(tab: CleanupTab) = _state.update { it.copy(tab = tab) }
+
+    /** In a pair of copies, [keep] stays where it is and the other one goes to the bin, as a left swipe would. */
+    fun keepOnly(pair: DuplicatePair, keep: RemoteEntry) {
+        val root = _state.value.folder?.path ?: return
+        val other = if (keep == pair.first) pair.second else pair.first
+        discard(CleanupCard(other, CleanupReason(CleanupReason.Kind.Duplicate, "tenuta ${CleanupRules.relative(keep.path, root)}")))
+    }
+
+    /** Not copies after all, or both wanted: the second one is kept, and the first is compared with the next copy. */
+    fun keepBoth(pair: DuplicatePair) = keep(CleanupCard(pair.second, null))
+
+    private val _sameContent = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** For pairs of the same size, whether the two files are the same bytes (SHA-256), once worked out. */
+    val sameContent: StateFlow<Map<String, Boolean>> = _sameContent.asStateFlow()
+
+    /** Compares the two files of [pair] byte for byte, when they have the same size and are not too big to read. */
+    fun compare(pair: DuplicatePair) {
+        if (pair.first.size != pair.second.size || pair.first.size > MAX_COMPARE || pair.key in _sameContent.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val same = runCatching {
+                app.repository.io { fs ->
+                    Integrity.remoteSha256(fs, pair.first.share, pair.first.path) == Integrity.remoteSha256(fs, pair.second.share, pair.second.path)
+                }
+            }.getOrNull() ?: return@launch
+            _sameContent.update { it + (pair.key to same) }
+        }
+    }
 
     fun keep(card: CleanupCard) {
         val folder = _state.value.folder ?: return

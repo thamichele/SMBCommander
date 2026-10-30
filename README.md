@@ -129,14 +129,19 @@ Il font IBM Plex Sans è distribuito con licenza SIL Open Font License 1.1 (`fon
 
 ### Pulizia rapida
 
-Dal tasto ✦ della Galleria: una foto alla volta, come su Tinder. Scorri a sinistra (o ✕) per scartarla, a destra
+Dal tasto con la scopetta della Galleria: una foto alla volta, come su Tinder. Scorri a sinistra (o ✕) per scartarla, a destra
 (o ✓) per tenerla; ↶ annulla l'ultima scelta.
 
 - **Da verificare**: l'app propone per prime le foto che di solito sono da buttare, riconosciute dal nome, dalla
   cartella e dalla dimensione: screenshot e registrazioni dello schermo, immagini di WhatsApp, Telegram e altre app,
-  GIF e sticker, immagini minuscole, file scaricati, copie modificate, doppioni (stesso nome e dimensione in due
-  cartelle, per esempio le vecchie cartelle di QuMagie) e raffiche di foto scattate a pochi secondi l'una dall'altra.
+  GIF e sticker, immagini minuscole, file scaricati, copie modificate e raffiche di foto scattate a pochi secondi
+  l'una dall'altra.
   Le foto normali della fotocamera non finiscono qui. Su ogni carta c'è il motivo per cui è stata proposta.
+- **Duplicati**: foto e video con lo stesso nome, anche con un finale diverso (`IMG_1234 (1)`, `IMG_1234_2`,
+  `IMG_1234 - Copia`, la versione HEIC accanto alla JPG), nella stessa cartella o in due cartelle diverse, per esempio
+  le vecchie cartelle di QuMagie. Le due copie stanno una accanto all'altra con il percorso completo sotto: scegli
+  quale tenere e l'altra va nel cestino, oppure le tieni entrambe. Se hanno la stessa dimensione l'app confronta il
+  contenuto e ti dice se sono identiche. Con tre o più copie, quella tenuta si confronta con la successiva.
 - **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle.
 - Le foto scartate vanno nel **cestino** (`.smbcommander-cestino`, nascosto nella cartella del backup), con lo stesso
   percorso che avevano: lo spostamento è istantaneo, non copia nulla, e si può annullare. Il cestino si svuota o si
