@@ -70,6 +70,7 @@ data class DeletionStep(val entry: RemoteEntry, val outcome: Outcome, val error:
 data class Deletion(
     val total: Int,
     val preparing: Int? = null,
+    val preparingNote: String = "Calcolo le impronte per l'elenco delle eliminate",
     val preparingTotal: Int = 0,
     val current: RemoteEntry? = null,
     val steps: List<DeletionStep> = emptyList(),
@@ -875,20 +876,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         events.trySend(UiEvent.Message(text))
     }
 
-    private fun Throwable.readable(): String = when (this) {
-        is IllegalArgumentException, is IllegalStateException -> message ?: "Errore"
-        is io.github.thamichele.smbcommander.core.NasException -> message ?: "Errore del NAS"
-        is com.hierynomus.mssmb2.SMBApiException -> when (status) {
-            com.hierynomus.mserref.NtStatus.STATUS_ACCESS_DENIED -> "Permesso negato dal NAS"
-            com.hierynomus.mserref.NtStatus.STATUS_OBJECT_NAME_COLLISION -> "Esiste già un elemento con questo nome"
-            com.hierynomus.mserref.NtStatus.STATUS_SHARING_VIOLATION -> "Il file è in uso da un altro programma"
-            com.hierynomus.mserref.NtStatus.STATUS_DISK_FULL -> "Spazio esaurito sul NAS"
-            com.hierynomus.mserref.NtStatus.STATUS_OBJECT_NAME_NOT_FOUND,
-            com.hierynomus.mserref.NtStatus.STATUS_OBJECT_PATH_NOT_FOUND -> "Elemento non trovato sul NAS"
-            else -> "Errore del NAS: $status"
-        }
-        else -> message ?: javaClass.simpleName
-    }
 
     private companion object {
         /** Unchanged copies are forgotten after a week: the editor is long closed by then. */

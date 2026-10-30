@@ -140,7 +140,7 @@ Dal tasto ✦ della Galleria: una foto alla volta, come su Tinder. Scorri a sini
 - **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle.
 - Le foto scartate vanno nel **cestino** (`.smbcommander-cestino`, nascosto nella cartella del backup), con lo stesso
   percorso che avevano: lo spostamento è istantaneo, non copia nulla, e si può annullare. Il cestino si svuota o si
-  ripristina a mano. Le foto scartate entrano anche in `.smbcommander-eliminate.txt`, così il backup non le ricarica.
+  ripristina a mano; lo svuotamento mostra file per file cosa è stato eliminato. Le foto scartate entrano anche in `.smbcommander-eliminate.txt`, così il backup non le ricarica.
 - Le foto tenute vanno in `.smbcommander-tenute.txt` (dimensione e percorso), sempre nella cartella del backup:
   non vengono più proposte, anche dopo una reinstallazione, e sono riconosciute anche se le sposti in un'altra
   cartella.

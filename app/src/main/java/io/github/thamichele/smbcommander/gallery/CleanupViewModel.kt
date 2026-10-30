@@ -15,6 +15,9 @@ import io.github.thamichele.smbcommander.core.KeptPhotos
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.ui.Deletion
+import io.github.thamichele.smbcommander.ui.DeletionStep
+import io.github.thamichele.smbcommander.ui.readable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineScope
@@ -117,7 +120,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: e.javaClass.simpleName) }
+                _state.update { it.copy(loading = false, error = e.readable()) }
             }
         }
     }
@@ -167,7 +170,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                         app.deletedPhotos.emit(listOf(card.entry))
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        _state.update { it.copy(error = "«${card.entry.name}» non spostata nel cestino: ${e.message ?: e.javaClass.simpleName}") }
+                        _state.update { it.copy(error = "«${card.entry.name}» non spostata nel cestino: ${e.readable()}") }
                     }
                 }
             } finally {
@@ -210,7 +213,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                         app.nasChanged.emit(NasChange(folder.share, folder.path))
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        _state.update { it.copy(error = "Non riesco a rimettere «${action.card.entry.name}» al suo posto: ${e.message}") }
+                        _state.update { it.copy(error = "Non riesco a rimettere «${action.card.entry.name}» al suo posto: ${e.readable()}") }
                     }
                 }
                 scheduleFlush()
@@ -221,21 +224,69 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearError() = _state.update { it.copy(error = null) }
 
-    /** Deletes the bin for good. */
+    private val _deletion = MutableStateFlow<Deletion?>(null)
+    /** The bin being emptied, file by file, or just emptied: shown in a window with the outcome of each file. */
+    val deletion: StateFlow<Deletion?> = _deletion.asStateFlow()
+
+    @Volatile
+    private var stopDeletion = false
+
+    fun stopDeletion() {
+        stopDeletion = true
+        _deletion.update { it?.copy(stopping = true) }
+    }
+
+    fun closeDeletion() {
+        if (_deletion.value?.finished == true) _deletion.value = null
+    }
+
+    /**
+     * Deletes the bin for good, one file at a time, each step shown by [deletion]. A file no longer there is skipped,
+     * one that fails stays in the bin and does not stop the others.
+     */
     fun emptyTrash() {
         val folder = _state.value.folder ?: return
+        stopDeletion = false
+        _deletion.value = Deletion(total = 0, preparing = 0, preparingNote = "Leggo il contenuto del cestino")
         viewModelScope.launch(Dispatchers.IO) {
             nas.withLock {
+                var d = _deletion.value!!
+                fun publish(next: Deletion) {
+                    d = next
+                    _deletion.value = next
+                }
                 try {
-                    val skipped = CleanupTrash.empty(app.repository.fs(), folder.share, folder.path)
-                    forgetDeleted(skipped)
-                    // what was in the bin can no longer be put back
-                    val more = synchronized(history) { history.removeAll { it is Action.Discard }; history.isNotEmpty() }
-                    _state.update { it.copy(canUndo = more) }
+                    val fs = app.repository.fs()
+                    val files = CleanupTrash.contents(fs, folder.share, folder.path)
+                    publish(Deletion(total = files.size))
+                    for (file in files) {
+                        if (stopDeletion) break
+                        publish(d.copy(current = file))
+                        val step = try {
+                            val outcome = if (CleanupTrash.delete(fs, folder.share, file.path)) DeletionStep.Outcome.Deleted else DeletionStep.Outcome.Skipped
+                            DeletionStep(file, outcome)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            DeletionStep(file, DeletionStep.Outcome.Failed, e.readable())
+                        }
+                        publish(d.copy(steps = d.steps + step))
+                    }
+                    CleanupTrash.removeFolders(fs, folder.share, folder.path)
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    _state.update { it.copy(error = "Cestino non svuotato: ${e.message ?: e.javaClass.simpleName}") }
+                    publish(d.copy(error = e.readable()))
+                } finally {
+                    publish(d.copy(current = null, finished = true))
                 }
+                val gone = d.steps.filter { it.outcome != DeletionStep.Outcome.Failed }.map { it.entry.path }
+                forgetDeleted(d.skipped.map { it.path })
+                // what left the bin can no longer be put back
+                val goneSet = gone.toSet()
+                val more = synchronized(history) {
+                    history.removeAll { it is Action.Discard && it.inTrash in goneSet }
+                    history.isNotEmpty()
+                }
+                _state.update { it.copy(canUndo = more) }
             }
             scheduleFlush()
             refreshTrash()
@@ -269,7 +320,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     app.nasChanged.emit(NasChange(folder.share, folder.path))
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    _state.update { it.copy(error = "Ripristino non completato: ${e.message ?: e.javaClass.simpleName}") }
+                    _state.update { it.copy(error = "Ripristino non completato: ${e.readable()}") }
                 }
             }
             flush()
@@ -340,7 +391,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     deletedToRemove += remove
                     keptRemoved += removedKept
                 }
-                _state.update { it.copy(error = "Scelte non ancora salvate sul NAS: ${e.message ?: e.javaClass.simpleName}") }
+                _state.update { it.copy(error = "Scelte non ancora salvate sul NAS: ${e.readable()}") }
             }
         }
     }
