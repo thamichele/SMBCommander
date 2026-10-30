@@ -27,6 +27,18 @@ import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+/** How the gallery shows the photos. */
+enum class GalleryView(val label: String) {
+    /** Small square tiles. */
+    Grid("Griglia"),
+
+    /** Bigger photos in rows, each with its own shape, fitting together edge to edge. */
+    Mosaic("Mosaico"),
+
+    /** Names and details, where a swipe deletes. */
+    List("Elenco"),
+}
+
 /** Photos of one month, newest month first. */
 data class MonthGroup(val year: Int, val month: Int, val photos: List<RemoteEntry>)
 
@@ -38,8 +50,7 @@ data class GalleryState(
     /** The user pulled to refresh: only then the spinner shows over the photos. */
     val pulling: Boolean = false,
     val error: String? = null,
-    /** A list with names and details instead of the grid of thumbnails. */
-    val listView: Boolean = false,
+    val view: GalleryView = GalleryView.Grid,
 ) {
     /** All photos in display order, as the viewer swipes through them. */
     val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
@@ -54,7 +65,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val app = application as SmbCommanderApp
     private val store = GalleryStore(File(application.filesDir, "gallery"))
-    private val _state = MutableStateFlow(GalleryState(listView = app.galleryPrefs.listView))
+    private val _state = MutableStateFlow(GalleryState(view = app.galleryPrefs.view))
     val state: StateFlow<GalleryState> = _state.asStateFlow()
     private var job: Job? = null
     private var index = GalleryIndex()
@@ -95,17 +106,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (folder != current.folder) {
             job?.cancel()
             index = GalleryIndex(folder?.let(store::load).orEmpty())
-            _state.value = GalleryState(folder = folder, listView = current.listView)
+            _state.value = GalleryState(folder = folder, view = current.view)
             publish()
             lastWalk = 0
         }
         if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
 
-    fun toggleView() {
-        val list = !_state.value.listView
-        app.galleryPrefs.listView = list
-        _state.update { it.copy(listView = list) }
+    fun setView(view: GalleryView) {
+        app.galleryPrefs.view = view
+        _state.update { it.copy(view = view) }
     }
 
     /** Pull to refresh or the button: like [refresh], with the spinner. */

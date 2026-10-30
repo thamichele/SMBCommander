@@ -55,7 +55,7 @@ data class Thumb(
  * Makes each reduced copy once: the photo is read over SMB, scaled down, turned upright and saved as a small JPEG in
  * the cache. Every later view loads it from the phone without touching the NAS; the original stays on the NAS.
  */
-class ThumbnailCache(private val dir: File, private val repository: NasRepository) {
+class ThumbnailCache(private val dir: File, private val repository: NasRepository, val ratios: AspectRatios) {
 
     // a few at a time, so the NAS serves the visible ones quickly; previews get their own lane and never queue
     // behind a grid full of thumbnails
@@ -66,15 +66,30 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val target = file(thumb, thumb.variant)
         if (target.exists()) {
             target.setLastModified(System.currentTimeMillis())
+            learnRatio(thumb, target)
             return target
         }
         val permits = if (thumb.variant == ImageSize.Preview) previewPermits else thumbPermits
         return permits.withPermit {
             withContext(Dispatchers.IO) {
                 if (!target.exists()) create(thumb)
+                learnRatio(thumb, target)
                 target
             }
         }
+    }
+
+    /** Width / height of the photo as shown, once one of its thumbnails has been loaded; null before. */
+    fun ratio(entry: RemoteEntry): Float? = ratios[key(Thumb(entry))]
+
+    /** The thumbnail is upright already: its own size gives the shape, read from the file on the phone. */
+    private fun learnRatio(thumb: Thumb, file: File) {
+        if (thumb.variant != ImageSize.Thumb) return
+        val key = key(thumb)
+        if (ratios[key] != null) return
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        if (bounds.outWidth > 0 && bounds.outHeight > 0) ratios.put(key, bounds.outWidth.toFloat() / bounds.outHeight)
     }
 
     /** Keeps the previews under [maxBytes], dropping the least recently viewed first. */

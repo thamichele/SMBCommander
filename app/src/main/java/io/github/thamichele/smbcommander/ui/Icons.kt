@@ -34,6 +34,7 @@ object AppIcons {
     val Server = icon("M5 3h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM5 13h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1zM8 7h.01M8 17h.01")
     val Grid = icon("M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z")
     val List = icon("M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01")
+    val Mosaic = icon("M4 4h9v7H4zM15 4h5v7h-5zM4 13h5v7H4zM11 13h9v7h-9z")
     val OpenWith = icon("M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5")
     val Alert = icon("M12 3l9 16H3zM12 10v4M12 17h.01")
     val Check = icon("M5 12l5 5l9-10")
