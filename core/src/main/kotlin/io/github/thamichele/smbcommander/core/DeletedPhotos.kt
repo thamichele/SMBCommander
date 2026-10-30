@@ -26,6 +26,16 @@ object DeletedPhotos {
         EditSync.safeUpload(fs, share, RemotePath.child(folder, FILE_NAME), bytes.size.toLong(), { ByteArrayInputStream(bytes) })
     }
 
+    /** Takes entries out again, when a deletion is undone. */
+    fun remove(fs: NasFileSystem, share: String, folder: String, entries: Collection<String>) {
+        if (entries.isEmpty()) return
+        val before = read(fs, share, folder)
+        val all = before - entries.toSet()
+        if (all.size == before.size) return
+        val bytes = all.joinToString("\n", postfix = if (all.isEmpty()) "" else "\n").toByteArray()
+        EditSync.safeUpload(fs, share, RemotePath.child(folder, FILE_NAME), bytes.size.toLong(), { ByteArrayInputStream(bytes) })
+    }
+
     /** Sizes in the list: only a photo with one of these sizes needs hashing to be checked. */
     fun sizes(entries: Set<String>): Set<Long> = entries.mapNotNullTo(HashSet()) { it.substringBefore(' ').toLongOrNull() }
 }

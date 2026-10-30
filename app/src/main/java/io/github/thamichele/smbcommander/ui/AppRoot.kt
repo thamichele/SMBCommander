@@ -48,6 +48,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.backup.BackupScreen
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.gallery.CleanupScreen
 import io.github.thamichele.smbcommander.gallery.GalleryScreen
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import kotlinx.coroutines.launch
@@ -97,6 +98,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Setup -> SetupScreen(vm)
                 Screen.Shares -> FoldersScreen(vm)
                 Screen.Gallery -> GalleryScreen(vm)
+                Screen.Cleanup -> CleanupScreen(vm)
                 Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)

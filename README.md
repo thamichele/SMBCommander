@@ -123,3 +123,24 @@ Le versioni sono numerate `1.0.N`, dove N è il numero della build: ogni build d
   `RELEASE_KEYSTORE_PASSWORD`.
 
 Il font IBM Plex Sans è distribuito con licenza SIL Open Font License 1.1 (`fonts/OFL.txt`).
+
+### Pulizia rapida
+
+Dal tasto ✦ della Galleria: una foto alla volta, come su Tinder. Scorri a sinistra (o ✕) per scartarla, a destra
+(o ✓) per tenerla; ↶ annulla l'ultima scelta.
+
+- **Da verificare**: l'app propone per prime le foto che di solito sono da buttare, riconosciute dal nome, dalla
+  cartella e dalla dimensione: screenshot e registrazioni dello schermo, immagini di WhatsApp, Telegram e altre app,
+  GIF e sticker, immagini minuscole, file scaricati, copie modificate, doppioni (stesso nome e dimensione in due
+  cartelle, per esempio le vecchie cartelle di QuMagie) e raffiche di foto scattate a pochi secondi l'una dall'altra.
+  Le foto normali della fotocamera non finiscono qui. Su ogni carta c'è il motivo per cui è stata proposta.
+- **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle.
+- Le foto scartate vanno nel **cestino** (`.smbcommander-cestino`, nascosto nella cartella del backup), con lo stesso
+  percorso che avevano: lo spostamento è istantaneo, non copia nulla, e si può annullare. Il cestino si svuota o si
+  ripristina a mano. Le foto scartate entrano anche in `.smbcommander-eliminate.txt`, così il backup non le ricarica.
+- Le foto tenute vanno in `.smbcommander-tenute.txt` (dimensione e percorso), sempre nella cartella del backup:
+  non vengono più proposte, anche dopo una reinstallazione, e sono riconosciute anche se le sposti in un'altra
+  cartella.
+- Anche con migliaia di foto la schermata resta leggera: la lista viene dall'indice della galleria già salvato sul
+  telefono, si disegnano solo due carte e si scaricano in anticipo solo le prossime anteprime.
+
