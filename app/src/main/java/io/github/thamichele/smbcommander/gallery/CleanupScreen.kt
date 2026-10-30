@@ -308,7 +308,7 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
 private fun Done(othersLeft: Boolean, onOthers: () -> Unit, onReload: () -> Unit) {
     val c = Arancio.colors
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(AppIcons.Sparkle, contentDescription = null, tint = c.accent, modifier = Modifier.size(48.dp))
+        Icon(AppIcons.Broom, contentDescription = null, tint = c.accent, modifier = Modifier.size(48.dp))
         Text("Niente da verificare", style = MaterialTheme.typography.titleLarge)
         Text(
             if (othersLeft) "Le foto che sembravano da controllare le hai viste tutte. Puoi passare anche alle altre."

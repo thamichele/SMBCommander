@@ -129,7 +129,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                         if (state.listView) "Mostra a griglia" else "Mostra a elenco",
                         vm::toggleView,
                     )
-                    ToolButton(AppIcons.Sparkle, "Pulizia rapida", appVm::openCleanup)
+                    ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
                     ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
                 }
             }
