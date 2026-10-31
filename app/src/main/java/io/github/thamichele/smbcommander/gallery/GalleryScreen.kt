@@ -277,7 +277,11 @@ private fun PhotoGrid(
             }
         }
         // each month: its header, then its photos
-        DateScroller(rememberScrollPosition(state), months, IntArray(months.size) { m -> m + offsets[m] })
+        val position = rememberScrollPosition(state)
+        val starts = remember(months) { IntArray(months.size) { m -> m + offsets[m] } }
+        val photos = remember(months) { months.flatMap { it.photos } }
+        PrefetchThumbnails(position, photos, ahead = 60, photoAt = photoIndexIn(starts, offsets))
+        DateScroller(position, months, starts)
     }
 }
 
@@ -407,7 +411,15 @@ private fun PhotoMosaic(
             var at = 0
             IntArray(rows.size) { m -> at.also { at += 1 + rows[m].size } }
         }
-        DateScroller(rememberScrollPosition(state), months, starts)
+        val position = rememberScrollPosition(state)
+        // each item's first photo: a header gives the first of its month, a row its own first
+        val firstPhotos = remember(rows) {
+            val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+            rows.flatMapIndexed { m, monthRows -> listOf(offsets[m]) + monthRows.map { it.first } }.toIntArray()
+        }
+        val photos = remember(months) { months.flatMap { it.photos } }
+        PrefetchThumbnails(position, photos, ahead = 40) { firstPhotos.getOrElse(it) { photos.size - 1 } }
+        DateScroller(position, months, starts)
     }
 }
 
@@ -475,7 +487,11 @@ private fun PhotoList(
                 }
             }
         }
-        DateScroller(rememberScrollPosition(state), months, IntArray(months.size) { m -> m + offsets[m] })
+        val position = rememberScrollPosition(state)
+    val starts = remember(months) { IntArray(months.size) { m -> m + offsets[m] } }
+    val photos = remember(months) { months.flatMap { it.photos } }
+    PrefetchThumbnails(position, photos, ahead = 20, photoAt = photoIndexIn(starts, offsets))
+    DateScroller(position, months, starts)
     }
 }
 

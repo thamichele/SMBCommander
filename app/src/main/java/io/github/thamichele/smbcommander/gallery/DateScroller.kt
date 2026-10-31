@@ -50,6 +50,8 @@ interface ScrollPosition {
     /** Index of the first visible item, plus how much of it is already scrolled away (0..1). */
     val first: Float
     val scrolling: Boolean
+    /** Index of the last item at least partly on screen. */
+    val last: Int
     suspend fun jumpTo(index: Int)
 }
 
@@ -64,6 +66,7 @@ fun rememberScrollPosition(state: LazyListState): ScrollPosition = remember(stat
                 return item.index + if (item.size > 0) (state.firstVisibleItemScrollOffset.toFloat() / item.size).coerceIn(0f, 1f) else 0f
             }
         override val scrolling get() = state.isScrollInProgress
+        override val last get() = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         override suspend fun jumpTo(index: Int) = state.scrollToItem(index)
     }
 }
@@ -80,6 +83,7 @@ fun rememberScrollPosition(state: LazyGridState): ScrollPosition = remember(stat
                 return item.index + if (height > 0) (state.firstVisibleItemScrollOffset.toFloat() / height).coerceIn(0f, 1f) else 0f
             }
         override val scrolling get() = state.isScrollInProgress
+        override val last get() = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         override suspend fun jumpTo(index: Int) = state.scrollToItem(index)
     }
 }
@@ -234,7 +238,7 @@ fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: Int
 }
 
 /** The month whose header is at [index] or comes last before it. */
-private fun monthAt(starts: IntArray, index: Int): Int {
+internal fun monthAt(starts: IntArray, index: Int): Int {
     var lo = 0
     var hi = starts.size - 1
     while (lo < hi) {
