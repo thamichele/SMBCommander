@@ -106,6 +106,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         },
         edit = { vm.open(it, edit = true) },
         download = { pendingDownload = it; saveFile.launch(it.name) },
+        share = { vm.share(listOf(it)) },
         rename = { dialog = Dialog.Rename(it) },
         delete = { dialog = Dialog.Delete(it) },
         info = { dialog = Dialog.Info(it) },
@@ -128,6 +129,10 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                         ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
                         DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }, containerColor = c.surfaceRaised) {
                             MenuItem(AppIcons.Check, "Seleziona tutto") { moreMenu = false; vm.selectAll() }
+                            val chosen = state.entries.filter { it.path in selected }
+                            if (chosen.any { !it.isDirectory }) {
+                                MenuItem(AppIcons.Share, "Condividi") { moreMenu = false; vm.clearSelection(); vm.share(chosen) }
+                            }
                             single?.let { entry ->
                                 if (!entry.isDirectory) {
                                     MenuItem(AppIcons.OpenWith, "Modifica con…") { moreMenu = false; vm.clearSelection(); actions.edit(entry) }
@@ -286,6 +291,8 @@ private class EntryActions(
     val open: (RemoteEntry) -> Unit,
     val edit: (RemoteEntry) -> Unit,
     val download: (RemoteEntry) -> Unit,
+    /** A temporary copy to the share sheet, deleted afterwards. */
+    val share: (RemoteEntry) -> Unit,
     val rename: (RemoteEntry) -> Unit,
     val delete: (RemoteEntry) -> Unit,
     /** Path, size, dates and what the file says about itself. */
@@ -398,6 +405,7 @@ private fun EntryMenu(entry: RemoteEntry, actions: EntryActions, expanded: Boole
         } else {
             MenuItem(AppIcons.File, "Apri") { onDismiss(); actions.open(entry) }
             MenuItem(AppIcons.OpenWith, "Modifica con…") { onDismiss(); actions.edit(entry) }
+            MenuItem(AppIcons.Share, "Condividi") { onDismiss(); actions.share(entry) }
             MenuItem(AppIcons.Download, "Salva sul telefono") { onDismiss(); actions.download(entry) }
         }
         MenuItem(AppIcons.Check, "Seleziona") { onDismiss(); actions.select(entry) }

@@ -129,6 +129,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
                     )
                 }
                 ToolButton(AppIcons.Info, "Informazioni", { info = current }, tint = Color.White)
+                ToolButton(AppIcons.Share, "Condividi", { vm.share(listOf(current)) }, tint = Color.White)
                 ToolButton(AppIcons.OpenWith, "Apri l'originale", { vm.open(current, edit = false) }, tint = Color.White)
                 ToolButton(
                     AppIcons.Download,

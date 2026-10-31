@@ -16,6 +16,7 @@ import io.github.thamichele.smbcommander.data.EditSessionStore
 import io.github.thamichele.smbcommander.data.FolderStore
 import io.github.thamichele.smbcommander.data.NasRepository
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.data.TransferQueue
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
@@ -40,6 +41,8 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var transfers: TransferQueue
         private set
+    lateinit var shareCache: ShareCache
+        private set
 
     /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
     val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)
@@ -59,7 +62,12 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
-        Thread { runCatching { thumbnails.trimPreviews() } }.start()
+        shareCache = ShareCache(this)
+        Thread {
+            runCatching { thumbnails.trim() }
+            // copies of an earlier share that nothing deleted (the phone restarted, say)
+            runCatching { shareCache.clean(olderThanMs = 10 * 60_000L) }
+        }.start()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

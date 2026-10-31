@@ -2,6 +2,7 @@ package io.github.thamichele.smbcommander.ui
 
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.webkit.MimeTypeMap
@@ -50,6 +51,7 @@ import io.github.thamichele.smbcommander.backup.BackupScreen
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.gallery.CleanupScreen
 import io.github.thamichele.smbcommander.gallery.GalleryScreen
+import io.github.thamichele.smbcommander.share.ShareActivity
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import kotlinx.coroutines.launch
 import java.io.File
@@ -74,6 +76,11 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 }
                 is UiEvent.OpenFile -> if (!openExternally(context, event.file, event.name, event.edit)) {
                     vm.openFailed(event.file)
+                }
+                is UiEvent.Share -> if (!shareExternally(context, event.files)) {
+                    event.files.firstOrNull()?.parentFile?.deleteRecursively()
+                    snackbar.currentSnackbarData?.dismiss()
+                    scope.launch { snackbar.showSnackbar("Nessuna app installata può ricevere questi file") }
                 }
             }
         }
@@ -234,4 +241,34 @@ private fun openExternally(context: Context, file: File, name: String, edit: Boo
     } catch (e: ActivityNotFoundException) {
         false
     }
+}
+
+/** Opens the share sheet on the temporary copies, read-only, without our own "Salva sul NAS" among the targets. */
+private fun shareExternally(context: Context, files: List<File>): Boolean {
+    if (files.isEmpty()) return false
+    val uris = files.map { FileProvider.getUriForFile(context, context.packageName + ".files", it) }
+    val mimes = files.map { MimeTypeMap.getSingleton().getMimeTypeFromExtension(RemotePath.extension(it.name)) ?: "*/*" }
+    val intent = if (uris.size == 1) {
+        Intent(Intent.ACTION_SEND).setType(mimes[0]).putExtra(Intent.EXTRA_STREAM, uris[0])
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).setType(commonMime(mimes)).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+    }
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    intent.clipData = ClipData.newRawUri(files[0].name, uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
+    val chooser = Intent.createChooser(intent, if (files.size == 1) "Condividi ${files[0].name}" else "Condividi ${files.size} file")
+        .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(context, ShareActivity::class.java)))
+    return try {
+        context.startActivity(chooser)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    }
+}
+
+// the same type for files all of one type, "image/" plus a star for photos of mixed kinds, else any type
+private fun commonMime(mimes: List<String>): String {
+    val first = mimes.first()
+    if (mimes.all { it == first }) return first
+    val kind = first.substringBefore('/')
+    return if (kind != "*" && mimes.all { it.substringBefore('/') == kind }) "$kind/*" else "*/*"
 }
