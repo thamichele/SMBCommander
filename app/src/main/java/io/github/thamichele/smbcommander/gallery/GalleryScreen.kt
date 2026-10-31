@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -147,6 +149,11 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 if (selected.size == 1) {
                     ToolButton(AppIcons.Info, "Informazioni", { info = shown.firstOrNull { it.path in selected } })
                 }
+                ToolButton(AppIcons.Share, "Condividi", {
+                    val photos = shown.filter { it.path in selected }
+                    selected = emptySet()
+                    appVm.share(photos)
+                })
                 ToolButton(
                     AppIcons.Delete,
                     "Elimina dal NAS",
@@ -232,39 +239,45 @@ private fun PhotoGrid(
     val c = Arancio.colors
     // index of each photo in the flat list, so a tap opens the viewer on the right one
     val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(96.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        months.forEachIndexed { m, group ->
-            item(key = "h${group.year}-${group.month}", span = { GridItemSpan(maxLineSpan) }) {
-                MonthHeader(group, first = m == 0)
-            }
-            itemsIndexed(group.photos, key = { _, photo -> photo.path }) { i, photo ->
-                val isSelected = photo.path in selected
-                Box(
-                    Modifier
-                        .aspectRatio(1f)
-                        .background(c.surface, RoundedCornerShape(4.dp))
-                        .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) }),
-                ) {
-                    AsyncImage(
-                        model = Thumb(photo),
-                        contentDescription = photo.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(if (isSelected) 8.dp else 0.dp)
-                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
-                    )
-                    if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
-                    if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+    val state = rememberLazyGridState()
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = state,
+            columns = GridCells.Adaptive(96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            months.forEachIndexed { m, group ->
+                item(key = "h${group.year}-${group.month}", span = { GridItemSpan(maxLineSpan) }) {
+                    MonthHeader(group, first = m == 0)
+                }
+                itemsIndexed(group.photos, key = { _, photo -> photo.path }) { i, photo ->
+                    val isSelected = photo.path in selected
+                    Box(
+                        Modifier
+                            .aspectRatio(1f)
+                            .background(c.surface, RoundedCornerShape(4.dp))
+                            .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) }),
+                    ) {
+                        AsyncImage(
+                            model = Thumb(photo),
+                            contentDescription = photo.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(if (isSelected) 8.dp else 0.dp)
+                                .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
+                        )
+                        if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
+                        if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                    }
                 }
             }
         }
+        // each month: its header, then its photos
+        DateScroller(rememberScrollPosition(state), months, IntArray(months.size) { m -> m + offsets[m] })
     }
 }
 
@@ -353,7 +366,9 @@ private fun PhotoMosaic(
             val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
             months.mapIndexed { m, group -> mosaicRows(group.photos, offsets[m], width, MOSAIC_ROW_HEIGHT, gap, thumbnails::ratio) }
         }
+        val state = rememberLazyListState()
         LazyColumn(
+            state = state,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(gap.dp),
             modifier = Modifier.fillMaxSize(),
@@ -387,6 +402,12 @@ private fun PhotoMosaic(
                 }
             }
         }
+        // each month: its header, then its rows
+        val starts = remember(rows) {
+            var at = 0
+            IntArray(rows.size) { m -> at.also { at += 1 + rows[m].size } }
+        }
+        DateScroller(rememberScrollPosition(state), months, starts)
     }
 }
 
@@ -403,54 +424,58 @@ private fun PhotoList(
 ) {
     val c = Arancio.colors
     val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
-    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
-        months.forEachIndexed { m, group ->
-            item(key = "h${group.year}-${group.month}") {
-                Box(Modifier.padding(horizontal = 16.dp)) { MonthHeader(group, first = m == 0) }
-            }
-            listItemsIndexed(group.photos, key = { _, photo -> photo.path }) { i, photo ->
-                val isSelected = photo.path in selected
-                SwipeToDelete(enabled = selected.isEmpty(), onDelete = { onSwipe(photo) }) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(if (isSelected) c.accentSoft else c.background)
-                            .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) })
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box {
-                            AsyncImage(
-                                model = Thumb(photo),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(c.surface),
-                            )
-                            if (photo.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 20.dp)
-                            if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(2.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                photo.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                entryDetails(photo),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = c.textSecondary,
-                                maxLines = 1,
-                            )
+    val state = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(state = state, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+            months.forEachIndexed { m, group ->
+                item(key = "h${group.year}-${group.month}") {
+                    Box(Modifier.padding(horizontal = 16.dp)) { MonthHeader(group, first = m == 0) }
+                }
+                listItemsIndexed(group.photos, key = { _, photo -> photo.path }) { i, photo ->
+                    val isSelected = photo.path in selected
+                    SwipeToDelete(enabled = selected.isEmpty(), onDelete = { onSwipe(photo) }) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(if (isSelected) c.accentSoft else c.background)
+                                .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) })
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box {
+                                AsyncImage(
+                                    model = Thumb(photo),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(c.surface),
+                                )
+                                if (photo.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 20.dp)
+                                if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(2.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    photo.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    entryDetails(photo),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+        DateScroller(rememberScrollPosition(state), months, IntArray(months.size) { m -> m + offsets[m] })
     }
 }
 
@@ -514,5 +539,5 @@ private fun MonthHeader(group: MonthGroup, first: Boolean) {
 private fun Modifier.pressable(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
     combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
-private fun monthName(month: Int): String =
+internal fun monthName(month: Int): String =
     DateFormatSymbols(Locale.getDefault()).months[month - 1].replaceFirstChar { it.titlecase(Locale.getDefault()) }

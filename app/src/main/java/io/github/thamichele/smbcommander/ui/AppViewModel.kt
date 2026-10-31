@@ -19,6 +19,7 @@ import io.github.thamichele.smbcommander.core.SyncDecision
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.describe
 import io.github.thamichele.smbcommander.data.isMedia
@@ -130,6 +131,8 @@ data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
     data class OpenFile(val file: File, val name: String, val edit: Boolean) : UiEvent
+    /** Temporary copies ready for the system's share sheet. */
+    data class Share(val files: List<File>) : UiEvent
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -232,6 +235,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val cache = getApplication<Application>().cacheDir
         viewModelScope.launch(Dispatchers.IO) {
             File(cache, "edit").deleteRecursively()
+            app.shareCache.cleanAll()
             File(cache, "images").deleteRecursively()
             File(getApplication<Application>().filesDir, "gallery").deleteRecursively()
             app.thumbnails.ratios.clear()
@@ -747,6 +751,61 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             message(e.readable())
         } finally {
             _transfer.value = null
+        }
+    }
+
+    // --- share ------------------------------------------------------------------------------------------------------
+
+    /**
+     * Downloads [entries] into a private, temporary folder (checked against the NAS like every download) and hands
+     * them to the share sheet. Nothing is written to the phone's public folders, so the backup never sees them; the
+     * copies are deleted once the user is back in the app, or a few minutes later anyway.
+     */
+    fun share(entries: List<RemoteEntry>) = viewModelScope.launch {
+        val files = entries.filter { !it.isDirectory }
+        if (files.isEmpty()) return@launch
+        if (files.size < entries.size) message("Le cartelle non si possono condividere: condivido solo i file")
+        val dir = app.shareCache.newFolder()
+        try {
+            val copies = repo.io { fs ->
+                val used = HashSet<String>()
+                files.mapIndexed { i, entry ->
+                    // two files with the same name from different folders: the second becomes "name (2).ext"
+                    val local = File(dir, uniqueName(entry.name, used))
+                    val label = if (files.size == 1) "Preparo ${entry.name}" else "Preparo ${i + 1} di ${files.size}: ${entry.name}"
+                    val sent = local.outputStream().use { out ->
+                        Integrity.download(fs, entry.share, entry.path, out) { done, total ->
+                            _transfer.value = Transfer(label, done, total)
+                        }
+                    }
+                    if (EditSync.sha256(local) != sent) throw Integrity.mismatch(entry.name, "la copia sul telefono è diversa")
+                    local
+                }
+            }
+            app.shareCache.scheduleCleanup()
+            events.send(UiEvent.Share(copies))
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            if (e is CancellationException) throw e
+            message(e.readable())
+        } finally {
+            _transfer.value = null
+        }
+    }
+
+    /** Back in the app after a share: the receiving app has read the copies, they can go. */
+    fun cleanShared() {
+        viewModelScope.launch(Dispatchers.IO) { app.shareCache.clean(ShareCache.GRACE_MS) }
+    }
+
+    private fun uniqueName(name: String, used: MutableSet<String>): String {
+        if (used.add(name.lowercase())) return name
+        val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
+        var n = 2
+        while (true) {
+            val candidate = name.substring(0, dot) + " ($n)" + name.substring(dot)
+            if (used.add(candidate.lowercase())) return candidate
+            n++
         }
     }
 

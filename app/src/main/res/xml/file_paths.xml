@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <!-- copies opened for editing, synced back to the NAS -->
     <cache-path name="edit" path="edit/" />
+    <!-- temporary copies handed out with "Condividi", deleted soon after -->
+    <cache-path name="share" path="share/" />
 </paths>

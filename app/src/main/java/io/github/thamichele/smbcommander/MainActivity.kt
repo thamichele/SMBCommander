@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // back from an editor: put changed files back on the NAS
         viewModel.syncEdits()
+        // back from a share: the temporary copies are not needed any more
+        viewModel.cleanShared()
     }
 
     /** Opened from the backup notification or a widget: go straight to the backup or to a folder. */
