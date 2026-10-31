@@ -19,6 +19,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -85,6 +88,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 index.remove(::isDeleted)
                 publish()
                 _state.value.folder?.let { folder -> launch(Dispatchers.IO) { store.save(folder, index.all()) } }
+            }
+        }
+        viewModelScope.launch {
+            // thumbnails made in the background, whatever part of the gallery is on screen: started again (from the
+            // newest photos) whenever the gallery changes, after a pause that leaves the NAS to the screen first
+            _state.map { it.months }.distinctUntilChanged().collectLatest { months ->
+                if (months.isEmpty()) return@collectLatest
+                delay(3_000)
+                runCatching { app.thumbnails.warmUp(months.flatMap { it.photos }) }
+                    .onFailure { if (it is CancellationException) throw it }
             }
         }
         viewModelScope.launch {

@@ -81,7 +81,11 @@ import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.text.DateFormatSymbols
 import java.util.Locale
@@ -355,22 +359,28 @@ private fun PhotoMosaic(
 ) {
     val c = Arancio.colors
     val thumbnails = (LocalContext.current.applicationContext as SmbCommanderApp).thumbnails
-    // shapes arrive as thumbnails load: the rows are arranged again at most a few times a second
-    var shapes by remember { mutableIntStateOf(thumbnails.ratios.version.value) }
-    LaunchedEffect(thumbnails) {
-        thumbnails.ratios.version.collect {
-            shapes = it
-            delay(500)
-        }
-    }
     val gap = 3f
+    val state = rememberLazyListState()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth.value - 32f
-        val rows = remember(months, width, shapes) {
+        fun arrange(): List<List<MosaicRow>> {
             val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
-            months.mapIndexed { m, group -> mosaicRows(group.photos, offsets[m], width, MOSAIC_ROW_HEIGHT, gap, thumbnails::ratio) }
+            return months.mapIndexed { m, group -> mosaicRows(group.photos, offsets[m], width, MOSAIC_ROW_HEIGHT, gap, thumbnails::ratio) }
         }
-        val state = rememberLazyListState()
+        var rows by remember(months, width) { mutableStateOf(arrange()) }
+        // shapes arrive as thumbnails load: the rows are arranged again away from the main thread, and only once the
+        // scrolling stops, so the photos never move under the finger and scrolling never waits for it
+        LaunchedEffect(months, width) {
+            thumbnails.ratios.version.drop(1).collectLatest {
+                // settled: no finger, no fling, and no jump with the date bar for a moment
+                while (true) {
+                    val before = state.firstVisibleItemIndex
+                    delay(700)
+                    if (!state.isScrollInProgress && state.firstVisibleItemIndex == before) break
+                }
+                rows = withContext(Dispatchers.Default) { arrange() }
+            }
+        }
         LazyColumn(
             state = state,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),

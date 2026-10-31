@@ -31,9 +31,14 @@ class AspectRatios(private val file: File) {
 
     operator fun get(key: String): Float? = ratios[key]
 
-    fun put(key: String, ratio: Float) {
+    /** Learns a shape; with [publish] false the mosaic hears of it only at the next [publish]. */
+    fun put(key: String, ratio: Float, publish: Boolean = true) {
         if (ratio <= 0f || ratio.isNaN() || ratios.put(key, ratio) != null) return
         synchronized(this) { runCatching { file.appendText("$key\t$ratio\n") } }
+        if (publish) _version.value++
+    }
+
+    fun publish() {
         _version.value++
     }
 

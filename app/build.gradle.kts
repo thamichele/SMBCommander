@@ -21,7 +21,7 @@ android {
         // Each merge to main publishes vMAJOR.MINOR.PATCH: a version already released makes the release job fail
         // instead of overwriting it. Up to 1.0.46 the last number was the CI build number.
         val appVersionMajor = 1
-        val appVersionMinor = 3
+        val appVersionMinor = 4
         val appVersionPatch = 0
         versionCode = appVersionMajor * 1_000_000 + appVersionMinor * 1_000 + appVersionPatch
         versionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
