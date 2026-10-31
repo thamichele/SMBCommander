@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<fdroid>
+	<repo icon="icon.png" name="SMBCommander" pubkey="308204ee308202d6a003020102020900cf24b7e1566153ca300d06092a864886f70d01010c050030243122302006035504031319534d42436f6d6d616e64657220462d44726f6964207265706f3020170d3236313032393130303333375a180f32313236313030353130303333375a30243122302006035504031319534d42436f6d6d616e64657220462d44726f6964207265706f30820222300d06092a864886f70d01010105000382020f003082020a0282020100a09c44fd629ca9d128c58f2cf99b1b2c21beb5fa70f908bfdd638f0c80e7a0cfbcc46c50a9efabf1fd77b6bc1a620a73e1de87480674391a78578495a74f3c523eb50902a09cdc097cadb9822cab44c736506c0f5b92922cde7dc229b21be1a38e99d22934c5c74b269a8a3bf6ae6e34c6b83c8fa98eed0b639479b1707d101684c739ffc04ead3a813d3990f7c6bd94a249ce9be199d3b53e29bdefe70e1e740ab891eb936096ab841acce5e4d0b6697f03966b63af1a31930b04319a442f6f2db0d844ef948170195a87c5706ef00204fc866f3ecd365f355380c5479acb6954b0a9fbed42cc76d5261339a16e43d1811813b175d670b4fa1031ad0c4d2b9c1d3d76ae8d125e3159eb46a1d478816f2e80807ad7f4b686138bc1ecda53ee442b884eee5683a5f22128eff02bd10787567229c050fd4083c715ffe786fd208443098d5b63ec9f5b0b7cccf900333ad9007c205e92ccab6b9f5337c2998e51fa384cdc45ff65e2f640f04f87b1d8f0d1f92a9f1b8efd43c8353cc0ae0637f4e6fa5f9f87f982435d4d061e21db315e181f87644a1562a433a21fb5bd40445ecbca583f7f0daa54121123388ed2a3bab80ea0cd596bde7a43ee05bf4867f8844deced2e270c0856ce011aec337a8dc080b124f210ebd7a3ef78bc58cb59add99d2306cf62b165696d572fc5a98e6eb983a2f81182ffb0fdb04c19a611b95d5c3d0203010001a321301f301d0603551d0e04160414a378a97253abe3a3a726ae9d94306e337ed6815b300d06092a864886f70d01010c050003820201004424854e7542123e4181d4b2f149705450dbea1085851d3c41adeb54d6ae5f38b167ccd7d1ed5122df726e54457083b8505da39bdae1dde4eb363d643ce4131f502e65801688df4a081019be10e85af3507cc5a3f073994bca5d4d908acb2ea1292ce27060904acb882b3f6de86e80bee93480d8c45186beaaa440d11e80cccfbdf5a27807be5b1d93a847162c3615f597ed926870d22cc70dc1f9a43dca515ffe26579e2a62aa7118442c042b26cc5c622f21a38688c10df0ace039c005256d0c3933ab821b7497ee924a582d97b9d16f99bd3da4db457b6f77e45e3d69f8fca57b3e60b774730e3910dc098f0fbeb4623b7293cf64be5f15130288a93479049826f42fed175da44b44235756f30f26d902d7c66e4100db9c571ff196d59e62e92196ed5a69f0f219606e983849522a1416b1133582148435bc85adbfe8e113d854c7bf2182bb2c12c6bce05a8e448a7918f0c0c7755177967ee854b85b011c75eec82a97867ba4c854f1e2a925fe3c8d1fe18fa3acea79ee727e3001b99384c1a43f1a138c4245999cc094fff94e6e99637a7900bb08d8b98ab612926123a46233b1d69cfa79202224f3b4ec5d38806ab08bfeca4f08a4bd8a057de09e3eca3af4c94b06d11a37f121461bd8035811092d25935abc7e92026105db9a298370f8ed21611fb8ee8536a4a1de62041e4ffe1f7dc810c512dc05f951e053f4fdf7" timestamp="1793451824" url="https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo" version="20002">
+		<description>Repository F-Droid personale di SMBCommander</description>
+	</repo>
+	<application id="io.github.thamichele.smbcommander">
+		<id>io.github.thamichele.smbcommander</id>
+		<added>2026-10-31</added>
+		<lastupdated>2026-10-31</lastupdated>
+		<name>SMBCommander</name>
+		<summary>File manager SMB per il NAS di casa, con backup delle foto e galleria</summary>
+		<desc>File manager veloce e pulito per il NAS di casa: parla direttamente SMB 2/3, solo in rete locale.
+Niente cloud, niente relay, niente porte aperte su Internet. Funziona con qualunque NAS o computer
+che condivida cartelle via SMB.
+
+File
+* Solo le cartelle che scegli tu, comprese quelle condivise nascoste.
+* Miniature generate una volta e tenute in cache, visualizzatore di foto a piena risoluzione e video in streaming.
+* Modifica sicura: il file si apre con l'app che preferisci e torna sul NAS solo se è cambiato, con controllo dei conflitti.
+* Copia e sposta tra cartelle del NAS, Salva sul NAS dalle altre app, widget per la schermata Home.
+* Ogni trasferimento è verificato con l'impronta SHA-256.
+
+Backup delle foto
+* Automatico, solo sul Wi-Fi di casa, diviso per anno e mese; non cancella mai nulla dal telefono da solo.
+* Libera spazio: elimina dal telefono solo le foto la cui copia sul NAS risulta identica.
+
+Galleria
+* Mostra solo la cartella del backup, con qualunque struttura di sottocartelle, a griglia, a mosaico o a elenco.
+* Pulizia rapida per scegliere cosa tenere, cestino e ricerca dei duplicati.
+
+Password cifrata con l'Android Keystore, traffico SMB sempre firmato e, con SMB 3, cifrato.</desc>
+		<license>Proprietary</license>
+		<categories>System,Multimedia</categories>
+		<category>System</category>
+		<web></web>
+		<source>https://github.com/thamichele/SMBCommander</source>
+		<tracker>https://github.com/thamichele/SMBCommander/issues</tracker>
+		<changelog>https://github.com/thamichele/SMBCommander/releases</changelog>
+		<author>Michele</author>
+		<marketversion>1.2.0</marketversion>
+		<marketvercode>1002000</marketvercode>
+		<package>
+			<version>1.2.0</version>
+			<versioncode>1002000</versioncode>
+			<apkname>app-release.apk</apkname>
+			<hash type="sha256">0143419146d8cfa77ccc05b7bd832c7f9435a9d5791f8f36735e5b29f62b4f76</hash>
+			<size>16632062</size>
+			<sdkver>26</sdkver>
+			<targetSdkVersion>37</targetSdkVersion>
+			<added>2026-10-31</added>
+			<sig>85ea845c54d1f71da43bdec9d4cafdab</sig>
+			<permissions>ACCESS_MEDIA_LOCATION,ACCESS_NETWORK_STATE,FOREGROUND_SERVICE,FOREGROUND_SERVICE_DATA_SYNC,INTERNET,POST_NOTIFICATIONS,READ_EXTERNAL_STORAGE,READ_MEDIA_IMAGES,READ_MEDIA_VIDEO,RECEIVE_BOOT_COMPLETED,WAKE_LOCK,io.github.thamichele.smbcommander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION</permissions>
+			<uses-permission maxSdkVersion="32" name="android.permission.READ_EXTERNAL_STORAGE"/>
+			<nativecode>arm64-v8a,armeabi-v7a,x86,x86_64</nativecode>
+		</package>
+	</application>
+</fdroid>
