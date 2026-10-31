@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.MediaMetadataRetriever
 import android.media.ExifInterface
+import android.os.Process
 import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.decode.ImageSource
@@ -14,6 +15,12 @@ import coil3.request.Options
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -71,6 +78,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     // behind a grid full of thumbnails
     private val thumbPermits = Semaphore(4)
     private val previewPermits = Semaphore(2)
+    /** The background fill of [warmUp]: two downloads at most, besides those of the screen. */
+    private val warmPermits = Semaphore(2)
 
     /** One lock per copy being made: a photo asked twice at once (ahead of the screen, then on it) is read once. */
     private val making = ConcurrentHashMap<String, Mutex>()
@@ -82,19 +91,28 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             learnRatio(thumb, target)
             return target
         }
-        val permits = if (thumb.variant == ImageSize.Thumb) thumbPermits else previewPermits
+        make(thumb, target, if (thumb.variant == ImageSize.Thumb) thumbPermits else previewPermits)
+        learnRatio(thumb, target)
+        return target
+    }
+
+    /** Makes the copy at [target] if it is still missing, one maker per copy, within [permits] when given. */
+    private suspend fun make(thumb: Thumb, target: File, permits: Semaphore?) {
         val lock = making.getOrPut(target.path) { Mutex() }
         try {
-            return lock.withLock {
-                permits.withPermit {
+            lock.withLock {
+                (permits ?: NO_LIMIT).withPermit {
                     withContext(Dispatchers.IO) {
                         if (!target.exists()) {
-                            create(thumb)
+                            val job = currentCoroutineContext()[Job]
+                            // a photo scrolled past (or dragged past with the date bar) stops downloading at once
+                            val wanted = { job?.isActive != false }
+                            // thumbnails are made at low priority: the CPU goes first to the screen, which keeps
+                            // scrolling smoothly while dozens of them are being made
+                            if (thumb.variant == ImageSize.Thumb) inBackground { create(thumb, wanted) } else create(thumb, wanted)
                             // the cache keeps itself small while photos are browsed, not only at the next start
                             if (created.incrementAndGet() % TRIM_EVERY == 0) runCatching { trim() }
                         }
-                        learnRatio(thumb, target)
-                        target
                     }
                 }
             }
@@ -104,17 +122,59 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         }
     }
 
+    /**
+     * Fills the thumbnail cache in the background, newest photos first, independently of what is on screen: when
+     * the gallery scrolls or jumps somewhere, its thumbnails are already on the phone. It stops before the thumbnail
+     * limit of the cache, so it never pushes out what it has just made, and it works in its own lane with fewer
+     * downloads at once, so what is on screen always comes first.
+     */
+    suspend fun warmUp(photos: List<RemoteEntry>) = withContext(Dispatchers.IO) {
+        val budget = ImageSize.Thumb.maxBytes * 8 / 10
+        val used = AtomicLong()
+        val learnt = AtomicInteger()
+        try {
+            coroutineScope {
+                for (photo in photos) {
+                    if (used.get() > budget) break
+                    val thumb = Thumb(photo)
+                    val target = file(thumb, ImageSize.Thumb)
+                    if (target.exists()) {
+                        used.addAndGet(target.length())
+                        continue
+                    }
+                    warmPermits.acquire()
+                    launch {
+                        try {
+                            runCatching { make(thumb, target, permits = null) }
+                            if (target.exists()) {
+                                used.addAndGet(target.length())
+                                // the shapes reach the mosaic in batches, not one rearrangement per photo
+                                if (learnRatio(thumb, target, publish = false) && learnt.incrementAndGet() % 100 == 0) ratios.publish()
+                            }
+                        } finally {
+                            warmPermits.release()
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (learnt.get() % 100 != 0) ratios.publish()
+        }
+    }
+
     /** Width / height of the photo as shown, once one of its thumbnails has been loaded; null before. */
     fun ratio(entry: RemoteEntry): Float? = ratios[key(Thumb(entry))]
 
     /** The thumbnail is upright already: its own size gives the shape, read from the file on the phone. */
-    private fun learnRatio(thumb: Thumb, file: File) {
-        if (thumb.variant != ImageSize.Thumb) return
+    private fun learnRatio(thumb: Thumb, file: File, publish: Boolean = true): Boolean {
+        if (thumb.variant != ImageSize.Thumb) return false
         val key = key(thumb)
-        if (ratios[key] != null) return
+        if (ratios[key] != null) return false
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
-        if (bounds.outWidth > 0 && bounds.outHeight > 0) ratios.put(key, bounds.outWidth.toFloat() / bounds.outHeight)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
+        ratios.put(key, bounds.outWidth.toFloat() / bounds.outHeight, publish)
+        return true
     }
 
     private val created = AtomicInteger()
@@ -140,7 +200,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     private fun file(thumb: Thumb, variant: ImageSize): File = File(File(dir, variant.folder), key(thumb) + ".jpg")
 
     /** Downloads the original once and writes the requested copy; a preview also leaves its thumbnail behind. */
-    private fun create(thumb: Thumb) {
+    private fun create(thumb: Thumb, wanted: () -> Boolean) {
         val variants = if (thumb.variant == ImageSize.Thumb) listOf(ImageSize.Thumb) else listOf(thumb.variant, ImageSize.Thumb)
         val missing = variants.filter { !file(thumb, it).exists() }
         if (missing.isEmpty()) return
@@ -149,7 +209,15 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val source = File.createTempFile("src", null, dir)
         try {
             repository.fs().openRead(thumb.share, thumb.path).use { input ->
-                source.outputStream().use { input.copyTo(it, 1 shl 16) }
+                source.outputStream().use { out ->
+                    val buffer = ByteArray(1 shl 16)
+                    while (true) {
+                        if (!wanted()) throw CancellationException("Non serve più")
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        out.write(buffer, 0, n)
+                    }
+                }
             }
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(source.path, bounds)
@@ -228,12 +296,28 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val scale = scaleFor(variant, width, height) / reduce
         var sample = 1
         while (width / (sample * 2) >= width * scale && height / (sample * 2) >= height * scale) sample *= 2
-        val decoded = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample })
+        val decoded = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            // half the memory for the small copies (JPEGs have no transparency anyway): less garbage to collect while
+            // the gallery scrolls
+            if (variant != ImageSize.Preview) inPreferredConfig = Bitmap.Config.RGB_565
+        })
             ?: throw IllegalStateException("Immagine non leggibile")
         val w = (width * scale).roundToInt().coerceAtLeast(1)
         val h = (height * scale).roundToInt().coerceAtLeast(1)
         if (decoded.width <= w || decoded.height <= h) return decoded
         return Bitmap.createScaledBitmap(decoded, w, h, true).also { if (it !== decoded) decoded.recycle() }
+    }
+
+    private inline fun inBackground(block: () -> Unit) {
+        val tid = Process.myTid()
+        val before = Process.getThreadPriority(tid)
+        Process.setThreadPriority(tid, Process.THREAD_PRIORITY_BACKGROUND)
+        try {
+            block()
+        } finally {
+            Process.setThreadPriority(tid, before)
+        }
     }
 
     private fun scaleFor(variant: ImageSize, width: Int, height: Int): Float = when (variant) {
@@ -279,6 +363,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     companion object {
         const val THUMB_PX = 384
         const val CARD_PX = 1600
+        /** For work already limited elsewhere. */
+        private val NO_LIMIT = Semaphore(Int.MAX_VALUE)
         /** New copies made between two trims of the cache. */
         private const val TRIM_EVERY = 25
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")

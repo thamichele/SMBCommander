@@ -31,7 +31,8 @@ fun PrefetchThumbnails(position: ScrollPosition, photos: List<RemoteEntry>, ahea
     LaunchedEffect(position, photos, ahead) {
         if (photos.isEmpty()) return@LaunchedEffect
         val loader = SingletonImageLoader.get(context)
-        var pending = emptyList<Disposable>()
+        // what is being loaded ahead, by photo index: kept across small moves, so each photo is asked for once
+        val pending = HashMap<Int, Disposable>()
         var lastFirst = 0
         try {
             snapshotFlow { position.first.toInt() to position.last }
@@ -50,11 +51,21 @@ fun PrefetchThumbnails(position: ScrollPosition, photos: List<RemoteEntry>, ahea
                         (max(0, from - ahead) until from).reversed() + ((to + 1)..min(photos.size - 1, to + ahead / 3))
                     }
                     // what a fast scroll left behind is no longer needed soon: it stops waiting for the NAS
-                    pending.forEach { it.dispose() }
-                    pending = next.map { loader.enqueue(ImageRequest.Builder(context).data(Thumb(photos[it])).build()) }
+                    val wanted = next.toHashSet()
+                    val iterator = pending.entries.iterator()
+                    while (iterator.hasNext()) {
+                        val entry = iterator.next()
+                        if (entry.key !in wanted) {
+                            entry.value.dispose()
+                            iterator.remove()
+                        }
+                    }
+                    for (i in next) {
+                        if (i !in pending) pending[i] = loader.enqueue(ImageRequest.Builder(context).data(Thumb(photos[i])).build())
+                    }
                 }
         } finally {
-            pending.forEach { it.dispose() }
+            pending.values.forEach { it.dispose() }
         }
     }
 }
