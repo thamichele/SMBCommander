@@ -112,16 +112,37 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet fdroidserver==2.4.5
-          mkdir -p fdroid-repo/repo/icons fdroid-repo/metadata
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          APP_ID=io.github.thamichele.smbcommander
+          VERSION_CODE=$("$AAPT2" dump badging app/build/outputs/apk/release/*.apk | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
+          mkdir -p fdroid-repo/repo fdroid-repo/metadata/$APP_ID/en-US/changelogs
           cp "$RUNNER_TEMP/release.p12" fdroid-repo/keystore.p12
-          cp fdroid/icon.png fdroid-repo/repo/icons/icon.png
+          # fdroid looks for repo_icon in the working folder and copies it to repo/icons/
+          cp fdroid/icon.png fdroid-repo/icon.png
+          # store page: name, summary, description, categories and links, plus the app icon
+          # (the launcher icon is adaptive, so fdroid cannot take a PNG from the APK)
+          cp fdroid/metadata/$APP_ID.yml fdroid-repo/metadata/
+          # fdroid shows "what's new" only for a version listed under Builds (never built here: update only indexes the APK)
+          cat >> fdroid-repo/metadata/$APP_ID.yml <<METADATA
+
+          Builds:
+            - versionName: $VERSION
+              versionCode: $VERSION_CODE
+              commit: $GITHUB_SHA
+
+          CurrentVersion: $VERSION
+          CurrentVersionCode: $VERSION_CODE
+          METADATA
+          cp fdroid/icon.png fdroid-repo/metadata/$APP_ID/en-US/icon.png
+          # "what's new" of this version: the title of the merged pull request
+          git log -1 --format=%s | sed 's/ (#[0-9]*)$//' > fdroid-repo/metadata/$APP_ID/en-US/changelogs/$VERSION_CODE.txt
           cp app/build/outputs/apk/release/*.apk fdroid-repo/repo/
           cd fdroid-repo
           cat > config.yml <<CONFIG
           sdk_path: $ANDROID_HOME
           repo_url: https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo
           repo_name: SMBCommander
-          repo_description: Personal F-Droid repository of SMBCommander
+          repo_description: Repository F-Droid personale di SMBCommander
           repo_icon: icon.png
           archive_older: 0
           keystore: keystore.p12
@@ -131,7 +152,7 @@ jobs:
           keydname: CN=SMBCommander F-Droid repo, O=thamichele
           CONFIG
           chmod 600 config.yml
-          "$RUNNER_TEMP/venv/bin/fdroid" update --create-metadata --pretty
+          "$RUNNER_TEMP/venv/bin/fdroid" update --pretty
           echo "== repo fingerprint"
           keytool -list -v -storetype pkcs12 -keystore keystore.p12 -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias repo | grep "SHA256:"
 
