@@ -265,7 +265,7 @@ private fun shareExternally(context: Context, files: List<File>): Boolean {
     }
 }
 
-/** "image/jpeg" for all JPEGs, "image/*" for photos of mixed kinds, else any type. */
+// the same type for files all of one type, "image/" plus a star for photos of mixed kinds, else any type
 private fun commonMime(mimes: List<String>): String {
     val first = mimes.first()
     if (mimes.all { it == first }) return first
