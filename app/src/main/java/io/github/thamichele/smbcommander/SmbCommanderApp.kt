@@ -64,7 +64,7 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
         shareCache = ShareCache(this)
         Thread {
-            runCatching { thumbnails.trimPreviews() }
+            runCatching { thumbnails.trim() }
             // copies of an earlier share that nothing deleted (the phone restarted, say)
             runCatching { shareCache.clean(olderThanMs = 10 * 60_000L) }
         }.start()

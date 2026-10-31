@@ -21,6 +21,8 @@ import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -30,14 +32,19 @@ val RemoteEntry.isVideo: Boolean get() = !isDirectory && extension in ThumbnailC
 /** Photos and videos: what the gallery and the viewer show. */
 val RemoteEntry.isMedia: Boolean get() = isImage || isVideo
 
-/** How big a cached copy of a NAS image is. */
-enum class ImageSize(val folder: String) {
-    /** Small square-ish tile for lists and grids: the shorter side is at least 384 px. */
-    Thumb("thumbs"),
+/** How big a cached copy is, its JPEG quality, and how much of the cache its kind may take. */
+enum class ImageSize(val folder: String, val quality: Int, val maxBytes: Long) {
+    /** Small square-ish tile for lists and grids: the shorter side is at least 384 px, JPEG quality 75. */
+    Thumb("thumbs", 75, 300L * MB),
 
-    /** What the viewer opens: the same pixels as the original, only recompressed as JPEG quality 90. */
-    Preview("full"),
+    /** The big cards of "Pulizia rapida": sharp on a phone screen (longer side 1600 px) without the full original. */
+    Card("cards", 80, 100L * MB),
+
+    /** Only when a photo is opened full screen: the same pixels as the original, recompressed as JPEG quality 90. */
+    Preview("full", 90, 200L * MB),
 }
+
+private const val MB = 1024L * 1024
 
 /** Coil model for a cached copy of an image on the NAS. Size and date are part of it, so an edited photo refreshes. */
 data class Thumb(
@@ -69,10 +76,14 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             learnRatio(thumb, target)
             return target
         }
-        val permits = if (thumb.variant == ImageSize.Preview) previewPermits else thumbPermits
+        val permits = if (thumb.variant == ImageSize.Thumb) thumbPermits else previewPermits
         return permits.withPermit {
             withContext(Dispatchers.IO) {
-                if (!target.exists()) create(thumb)
+                if (!target.exists()) {
+                    create(thumb)
+                    // the cache keeps itself small while photos are browsed, not only at the next start
+                    if (created.incrementAndGet() % TRIM_EVERY == 0) runCatching { trim() }
+                }
                 learnRatio(thumb, target)
                 target
             }
@@ -92,15 +103,23 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         if (bounds.outWidth > 0 && bounds.outHeight > 0) ratios.put(key, bounds.outWidth.toFloat() / bounds.outHeight)
     }
 
-    /** Keeps the previews under [maxBytes], dropping the least recently viewed first. */
-    fun trimPreviews(maxBytes: Long = 800L * 1024 * 1024) {
+    private val created = AtomicInteger()
+
+    /**
+     * Keeps each kind of copy under its own limit, dropping the least recently viewed first: thumbnails come back
+     * quickly from the NAS, full-resolution copies are kept only for the photos opened last.
+     */
+    @Synchronized
+    fun trim() {
         // the reduced 1600 px previews of older versions are no longer used
         File(dir, "previews").deleteRecursively()
-        val files = File(dir, ImageSize.Preview.folder).listFiles()?.sortedByDescending { it.lastModified() } ?: return
-        var total = 0L
-        for (f in files) {
-            total += f.length()
-            if (total > maxBytes) f.delete()
+        for (variant in ImageSize.entries) {
+            val files = File(dir, variant.folder).listFiles()?.sortedByDescending { it.lastModified() } ?: continue
+            var total = 0L
+            for (f in files) {
+                total += f.length()
+                if (total > variant.maxBytes) f.delete()
+            }
         }
     }
 
@@ -108,7 +127,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     /** Downloads the original once and writes the requested copy; a preview also leaves its thumbnail behind. */
     private fun create(thumb: Thumb) {
-        val variants = if (thumb.variant == ImageSize.Preview) listOf(ImageSize.Preview, ImageSize.Thumb) else listOf(ImageSize.Thumb)
+        val variants = if (thumb.variant == ImageSize.Thumb) listOf(ImageSize.Thumb) else listOf(thumb.variant, ImageSize.Thumb)
         val missing = variants.filter { !file(thumb, it).exists() }
         if (missing.isEmpty()) return
         dir.mkdirs()
@@ -151,14 +170,14 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         } ?: throw IllegalStateException("Video non leggibile")
         try {
             for (variant in missing) {
-                val scale = if (variant == ImageSize.Thumb) min(1f, THUMB_PX.toFloat() / min(frame.width, frame.height)) else 1f
+                val scale = scaleFor(variant, frame.width, frame.height)
                 val w = (frame.width * scale).roundToInt().coerceAtLeast(1)
                 val h = (frame.height * scale).roundToInt().coerceAtLeast(1)
                 val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(frame, w, h, true) else frame
                 val target = file(thumb, variant)
                 target.parentFile?.mkdirs()
                 val temp = File(target.parentFile, target.name + ".part")
-                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, variant.quality, it) }
                 temp.renameTo(target)
                 if (bitmap !== frame) bitmap.recycle()
             }
@@ -175,7 +194,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 val bitmap = decode(source, width, height, variant, reduce)
                 val upright = rotate(bitmap, exif)
                 try {
-                    target.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, if (variant == ImageSize.Preview) 90 else 85, it) }
+                    target.outputStream().use { upright.compress(Bitmap.CompressFormat.JPEG, variant.quality, it) }
                 } finally {
                     if (upright !== bitmap) upright.recycle()
                     bitmap.recycle()
@@ -190,10 +209,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     private fun decode(source: File, width: Int, height: Int, variant: ImageSize, reduce: Int = 1): Bitmap {
         // sample down by powers of two while the result stays at least as big as needed, then scale exactly
-        val scale = when (variant) {
-            ImageSize.Thumb -> min(1f, THUMB_PX.toFloat() / min(width, height))
-            ImageSize.Preview -> 1f / reduce
-        }
+        val scale = scaleFor(variant, width, height) / reduce
         var sample = 1
         while (width / (sample * 2) >= width * scale && height / (sample * 2) >= height * scale) sample *= 2
         val decoded = BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inSampleSize = sample })
@@ -202,6 +218,12 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val h = (height * scale).roundToInt().coerceAtLeast(1)
         if (decoded.width <= w || decoded.height <= h) return decoded
         return Bitmap.createScaledBitmap(decoded, w, h, true).also { if (it !== decoded) decoded.recycle() }
+    }
+
+    private fun scaleFor(variant: ImageSize, width: Int, height: Int): Float = when (variant) {
+        ImageSize.Thumb -> min(1f, THUMB_PX.toFloat() / min(width, height))
+        ImageSize.Card -> min(1f, CARD_PX.toFloat() / max(width, height))
+        ImageSize.Preview -> 1f
     }
 
     private fun rotate(bitmap: Bitmap, exif: ExifInterface?): Bitmap {
@@ -240,6 +262,9 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     companion object {
         const val THUMB_PX = 384
+        const val CARD_PX = 1600
+        /** New copies made between two trims of the cache. */
+        private const val TRIM_EVERY = 25
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
         val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "mov", "3gp", "mkv", "webm")
     }

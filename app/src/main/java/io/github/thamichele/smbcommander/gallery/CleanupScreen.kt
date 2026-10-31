@@ -108,7 +108,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     LaunchedEffect(nextPairs) {
         val loader = SingletonImageLoader.get(context)
         nextPairs.forEach { pair ->
-            listOf(pair.first, pair.second).forEach { loader.enqueue(ImageRequest.Builder(context).data(Thumb(it, ImageSize.Preview)).build()) }
+            listOf(pair.first, pair.second).forEach { loader.enqueue(ImageRequest.Builder(context).data(Thumb(it, ImageSize.Card)).build()) }
         }
     }
 
@@ -117,7 +117,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
         val loader = SingletonImageLoader.get(context)
         queue.drop(1).take(6).forEachIndexed { i, card ->
             loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry)).build())
-            if (i < 2) loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry, ImageSize.Preview)).build())
+            if (i < 2) loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry, ImageSize.Card)).build())
         }
     }
 
@@ -311,7 +311,7 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(enabled = !behind, onClick = onOpen)) {
             if (!behind) {
                 SubcomposeAsyncImage(
-                    model = Thumb(entry, ImageSize.Preview),
+                    model = Thumb(entry, ImageSize.Card),
                     contentDescription = entry.name,
                     contentScale = ContentScale.Fit,
                     loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
@@ -486,7 +486,7 @@ private fun DuplicateSide(entry: RemoteEntry, root: String, modifier: Modifier, 
     ) {
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(onClick = onOpen)) {
             SubcomposeAsyncImage(
-                model = Thumb(entry, ImageSize.Preview),
+                model = Thumb(entry, ImageSize.Card),
                 contentDescription = entry.name,
                 contentScale = ContentScale.Fit,
                 loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
