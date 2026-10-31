@@ -1,0 +1,136 @@
+{
+  "repo": {
+    "name": {
+      "en-US": "SMBCommander"
+    },
+    "description": {
+      "en-US": "Repository F-Droid personale di SMBCommander"
+    },
+    "icon": {
+      "en-US": {
+        "name": "/icons/icon.png",
+        "sha256": "cdb6807cd25ae6b719fc82465f0684b661951b8d20841f7858b297b65a7142db",
+        "size": 10289
+      }
+    },
+    "address": "https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo",
+    "timestamp": 1793475306000,
+    "categories": {
+      "Multimedia": {
+        "name": {
+          "en-US": "Multimedia"
+        }
+      },
+      "System": {
+        "name": {
+          "en-US": "System"
+        }
+      }
+    }
+  },
+  "packages": {
+    "io.github.thamichele.smbcommander": {
+      "metadata": {
+        "added": 1793475305000,
+        "categories": [
+          "System",
+          "Multimedia"
+        ],
+        "changelog": "https://github.com/thamichele/SMBCommander/releases",
+        "issueTracker": "https://github.com/thamichele/SMBCommander/issues",
+        "lastUpdated": 1793475305000,
+        "license": "Proprietary",
+        "sourceCode": "https://github.com/thamichele/SMBCommander",
+        "authorName": "Michele",
+        "name": {
+          "en-US": "SMBCommander"
+        },
+        "summary": {
+          "en-US": "File manager SMB per il NAS di casa, con backup delle foto e galleria"
+        },
+        "description": {
+          "en-US": "File manager veloce e pulito per il NAS di casa: parla direttamente SMB 2/3, solo in rete locale.\nNiente cloud, niente relay, niente porte aperte su Internet. Funziona con qualunque NAS o computer\nche condivida cartelle via SMB.\n\nFile\n* Solo le cartelle che scegli tu, comprese quelle condivise nascoste.\n* Miniature generate una volta e tenute in cache, visualizzatore di foto a piena risoluzione e video in streaming.\n* Modifica sicura: il file si apre con l'app che preferisci e torna sul NAS solo se è cambiato, con controllo dei conflitti.\n* Copia e sposta tra cartelle del NAS, Salva sul NAS dalle altre app, widget per la schermata Home.\n* Ogni trasferimento è verificato con l'impronta SHA-256.\n\nBackup delle foto\n* Automatico, solo sul Wi-Fi di casa, diviso per anno e mese; non cancella mai nulla dal telefono da solo.\n* Libera spazio: elimina dal telefono solo le foto la cui copia sul NAS risulta identica.\n\nGalleria\n* Mostra solo la cartella del backup, con qualunque struttura di sottocartelle, a griglia, a mosaico o a elenco.\n* Pulizia rapida per scegliere cosa tenere, cestino e ricerca dei duplicati.\n\nPassword cifrata con l'Android Keystore, traffico SMB sempre firmato e, con SMB 3, cifrato."
+        },
+        "icon": {
+          "en-US": {
+            "name": "/io.github.thamichele.smbcommander/en-US/icon_Yq9ZFFVywrvwsfPioz1lM_dN2h__2iZ_YlHdcB_ha6c=.png",
+            "sha256": "62af59145572c2bbf0b1f3e2a33d6533f74dda1fffda267f6251dd701fe16ba7",
+            "size": 9974
+          }
+        },
+        "preferredSigner": "3b92a1bacd13aa6c05b651eb0a2489c8032f62b4f7c6834835cae72e23d9028c"
+      },
+      "versions": {
+        "7cd31ddc318a350c1e1fd05138a7a9d1a4381ceeff29fcbc88f39588337c09d2": {
+          "added": 1793475305000,
+          "file": {
+            "name": "/app-release.apk",
+            "sha256": "7cd31ddc318a350c1e1fd05138a7a9d1a4381ceeff29fcbc88f39588337c09d2",
+            "size": 16632062
+          },
+          "manifest": {
+            "nativecode": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86",
+              "x86_64"
+            ],
+            "versionName": "1.4.0",
+            "versionCode": 1004000,
+            "usesSdk": {
+              "minSdkVersion": 26,
+              "targetSdkVersion": 37
+            },
+            "signer": {
+              "sha256": [
+                "3b92a1bacd13aa6c05b651eb0a2489c8032f62b4f7c6834835cae72e23d9028c"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.READ_MEDIA_IMAGES"
+              },
+              {
+                "name": "android.permission.READ_MEDIA_VIDEO"
+              },
+              {
+                "name": "android.permission.READ_EXTERNAL_STORAGE",
+                "maxSdkVersion": 32
+              },
+              {
+                "name": "android.permission.ACCESS_MEDIA_LOCATION"
+              },
+              {
+                "name": "android.permission.POST_NOTIFICATIONS"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+              },
+              {
+                "name": "android.permission.WAKE_LOCK"
+              },
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "io.github.thamichele.smbcommander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+              }
+            ]
+          },
+          "whatsNew": {
+            "en-US": "Galleria: miniature preparate in sottofondo e mosaico senza scatti, versione 1.4.0\n"
+          }
+        }
+      }
+    }
+  }
+}

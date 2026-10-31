@@ -1,0 +1,115 @@
+{
+  "repo": {
+    "timestamp": 1793475306000,
+    "version": 20002,
+    "name": "SMBCommander",
+    "icon": "icon.png",
+    "address": "https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo",
+    "description": "Repository F-Droid personale di SMBCommander"
+  },
+  "requests": {
+    "install": [],
+    "uninstall": []
+  },
+  "apps": [
+    {
+      "authorName": "Michele",
+      "categories": [
+        "System",
+        "Multimedia"
+      ],
+      "changelog": "https://github.com/thamichele/SMBCommander/releases",
+      "suggestedVersionName": "1.4.0",
+      "suggestedVersionCode": "1004000",
+      "description": "File manager veloce e pulito per il NAS di casa: parla direttamente SMB 2/3, solo in rete locale.\nNiente cloud, niente relay, niente porte aperte su Internet. Funziona con qualunque NAS o computer\nche condivida cartelle via SMB.\n\nFile\n* Solo le cartelle che scegli tu, comprese quelle condivise nascoste.\n* Miniature generate una volta e tenute in cache, visualizzatore di foto a piena risoluzione e video in streaming.\n* Modifica sicura: il file si apre con l'app che preferisci e torna sul NAS solo se \u00e8 cambiato, con controllo dei conflitti.\n* Copia e sposta tra cartelle del NAS, Salva sul NAS dalle altre app, widget per la schermata Home.\n* Ogni trasferimento \u00e8 verificato con l'impronta SHA-256.\n\nBackup delle foto\n* Automatico, solo sul Wi-Fi di casa, diviso per anno e mese; non cancella mai nulla dal telefono da solo.\n* Libera spazio: elimina dal telefono solo le foto la cui copia sul NAS risulta identica.\n\nGalleria\n* Mostra solo la cartella del backup, con qualunque struttura di sottocartelle, a griglia, a mosaico o a elenco.\n* Pulizia rapida per scegliere cosa tenere, cestino e ricerca dei duplicati.\n\nPassword cifrata con l'Android Keystore, traffico SMB sempre firmato e, con SMB 3, cifrato.",
+      "issueTracker": "https://github.com/thamichele/SMBCommander/issues",
+      "license": "Proprietary",
+      "name": "SMBCommander",
+      "sourceCode": "https://github.com/thamichele/SMBCommander",
+      "summary": "File manager SMB per il NAS di casa, con backup delle foto e galleria",
+      "added": 1793475305000,
+      "packageName": "io.github.thamichele.smbcommander",
+      "lastUpdated": 1793475305000,
+      "localized": {
+        "en-US": {
+          "icon": "icon_Yq9ZFFVywrvwsfPioz1lM_dN2h__2iZ_YlHdcB_ha6c=.png",
+          "whatsNew": "Galleria: miniature preparate in sottofondo e mosaico senza scatti, versione 1.4.0\n"
+        }
+      }
+    }
+  ],
+  "packages": {
+    "io.github.thamichele.smbcommander": [
+      {
+        "added": 1793475305000,
+        "apkName": "app-release.apk",
+        "hash": "7cd31ddc318a350c1e1fd05138a7a9d1a4381ceeff29fcbc88f39588337c09d2",
+        "hashType": "sha256",
+        "minSdkVersion": 26,
+        "nativecode": [
+          "arm64-v8a",
+          "armeabi-v7a",
+          "x86",
+          "x86_64"
+        ],
+        "packageName": "io.github.thamichele.smbcommander",
+        "sig": "85ea845c54d1f71da43bdec9d4cafdab",
+        "signer": "3b92a1bacd13aa6c05b651eb0a2489c8032f62b4f7c6834835cae72e23d9028c",
+        "size": 16632062,
+        "targetSdkVersion": 37,
+        "uses-permission": [
+          [
+            "android.permission.INTERNET",
+            null
+          ],
+          [
+            "android.permission.READ_MEDIA_IMAGES",
+            null
+          ],
+          [
+            "android.permission.READ_MEDIA_VIDEO",
+            null
+          ],
+          [
+            "android.permission.READ_EXTERNAL_STORAGE",
+            32
+          ],
+          [
+            "android.permission.ACCESS_MEDIA_LOCATION",
+            null
+          ],
+          [
+            "android.permission.POST_NOTIFICATIONS",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+            null
+          ],
+          [
+            "android.permission.WAKE_LOCK",
+            null
+          ],
+          [
+            "android.permission.ACCESS_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            null
+          ],
+          [
+            "io.github.thamichele.smbcommander.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+            null
+          ]
+        ],
+        "versionCode": 1004000,
+        "versionName": "1.4.0"
+      }
+    ]
+  }
+}
