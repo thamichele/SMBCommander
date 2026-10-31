@@ -14,13 +14,16 @@ import coil3.request.Options
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
@@ -66,8 +69,11 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     // a few at a time, so the NAS serves the visible ones quickly; previews get their own lane and never queue
     // behind a grid full of thumbnails
-    private val thumbPermits = Semaphore(3)
+    private val thumbPermits = Semaphore(4)
     private val previewPermits = Semaphore(2)
+
+    /** One lock per copy being made: a photo asked twice at once (ahead of the screen, then on it) is read once. */
+    private val making = ConcurrentHashMap<String, Mutex>()
 
     suspend fun get(thumb: Thumb): File {
         val target = file(thumb, thumb.variant)
@@ -77,16 +83,24 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             return target
         }
         val permits = if (thumb.variant == ImageSize.Thumb) thumbPermits else previewPermits
-        return permits.withPermit {
-            withContext(Dispatchers.IO) {
-                if (!target.exists()) {
-                    create(thumb)
-                    // the cache keeps itself small while photos are browsed, not only at the next start
-                    if (created.incrementAndGet() % TRIM_EVERY == 0) runCatching { trim() }
+        val lock = making.getOrPut(target.path) { Mutex() }
+        try {
+            return lock.withLock {
+                permits.withPermit {
+                    withContext(Dispatchers.IO) {
+                        if (!target.exists()) {
+                            create(thumb)
+                            // the cache keeps itself small while photos are browsed, not only at the next start
+                            if (created.incrementAndGet() % TRIM_EVERY == 0) runCatching { trim() }
+                        }
+                        learnRatio(thumb, target)
+                        target
+                    }
                 }
-                learnRatio(thumb, target)
-                target
             }
+        } finally {
+            // nobody else waiting: the lock is not needed any more
+            if (!lock.isLocked) making.remove(target.path, lock)
         }
     }
 
@@ -144,13 +158,14 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             for (variant in missing) {
                 val target = file(thumb, variant)
                 target.parentFile?.mkdirs()
-                val temp = File(target.parentFile, target.name + ".part")
+                // a name of its own: the same photo may be asked twice at once (on screen and ahead of it)
+                val temp = File.createTempFile(target.name, ".part", target.parentFile)
                 write(source, bounds.outWidth, bounds.outHeight, variant, exif, temp)
                 // a JPEG already lighter than our copy stays as it is: same pixels, fewer bytes, nothing lost
                 if (variant == ImageSize.Preview && bounds.outMimeType == "image/jpeg" && source.length() <= temp.length()) {
                     source.copyTo(temp, overwrite = true)
                 }
-                temp.renameTo(target)
+                if (!temp.renameTo(target)) temp.delete()
             }
         } finally {
             source.delete()
@@ -176,9 +191,10 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(frame, w, h, true) else frame
                 val target = file(thumb, variant)
                 target.parentFile?.mkdirs()
-                val temp = File(target.parentFile, target.name + ".part")
+                // a name of its own: the same photo may be asked twice at once (on screen and ahead of it)
+                val temp = File.createTempFile(target.name, ".part", target.parentFile)
                 temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, variant.quality, it) }
-                temp.renameTo(target)
+                if (!temp.renameTo(target)) temp.delete()
                 if (bitmap !== frame) bitmap.recycle()
             }
         } finally {
