@@ -1,0 +1,32 @@
+Categories:
+  - System
+  - Multimedia
+License: Proprietary
+AuthorName: Michele
+SourceCode: https://github.com/thamichele/SMBCommander
+IssueTracker: https://github.com/thamichele/SMBCommander/issues
+Changelog: https://github.com/thamichele/SMBCommander/releases
+
+Name: SMBCommander
+Summary: File manager SMB per il NAS di casa, con backup delle foto e galleria
+Description: |-
+  File manager veloce e pulito per il NAS di casa: parla direttamente SMB 2/3, solo in rete locale.
+  Niente cloud, niente relay, niente porte aperte su Internet. Funziona con qualunque NAS o computer
+  che condivida cartelle via SMB.
+
+  File
+  * Solo le cartelle che scegli tu, comprese quelle condivise nascoste.
+  * Miniature generate una volta e tenute in cache, visualizzatore di foto a piena risoluzione e video in streaming.
+  * Modifica sicura: il file si apre con l'app che preferisci e torna sul NAS solo se è cambiato, con controllo dei conflitti.
+  * Copia e sposta tra cartelle del NAS, Salva sul NAS dalle altre app, widget per la schermata Home.
+  * Ogni trasferimento è verificato con l'impronta SHA-256.
+
+  Backup delle foto
+  * Automatico, solo sul Wi-Fi di casa, diviso per anno e mese; non cancella mai nulla dal telefono da solo.
+  * Libera spazio: elimina dal telefono solo le foto la cui copia sul NAS risulta identica.
+
+  Galleria
+  * Mostra solo la cartella del backup, con qualunque struttura di sottocartelle, a griglia, a mosaico o a elenco.
+  * Pulizia rapida per scegliere cosa tenere, cestino e ricerca dei duplicati.
+
+  Password cifrata con l'Android Keystore, traffico SMB sempre firmato e, con SMB 3, cifrato.
