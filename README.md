@@ -24,7 +24,9 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
 - Genera le **miniature delle foto una volta sola** e le tiene in cache sul telefono.
 - **Visualizzatore di foto e video** a schermo intero con zoom e scorrimento: per le foto mostra una copia con gli
   stessi pixel dell'originale (solo compressa in JPEG) salvata in cache, così la seconda volta si apre all'istante.
-  I video si riproducono in streaming dal NAS, senza scaricarli prima. L'originale si apre o si salva solo se serve.
+  I video si riproducono in streaming dal NAS, senza scaricarli prima, anche a schermo intero (si esce con Indietro o
+  con la X); doppio tocco a sinistra o a destra per tornare indietro o andare avanti di 10 secondi, al centro per
+  mettere in pausa. L'originale si apre o si salva solo se serve.
 - **Modifica sicura dei file**: il file viene scaricato in una cache temporanea e aperto con l'app che preferisci.
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
