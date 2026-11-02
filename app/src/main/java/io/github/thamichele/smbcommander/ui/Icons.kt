@@ -23,6 +23,7 @@ object AppIcons {
     val Archive = icon("M4 4h16v4H4zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4")
     val Search = icon("M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM20 20l-4-4")
     val Close = icon("M6 6l12 12M18 6L6 18")
+    val AspectRatio = icon("M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM7 11V8h3M17 13v3h-3")
     val Back = icon("M19 12H5M12 19l-7-7l7-7")
     val More = icon("M12 5h.01M12 12h.01M12 19h.01", stroke = 3f)
     val Plus = icon("M12 5v14M5 12h14", stroke = 2.25f)

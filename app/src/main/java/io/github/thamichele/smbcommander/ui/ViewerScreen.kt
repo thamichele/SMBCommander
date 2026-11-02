@@ -22,9 +22,11 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -64,6 +66,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -100,7 +103,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
     val current = screen.images[pager.currentPage.coerceIn(0, screen.images.lastIndex)]
     // the video playing now; only the current page plays, and turning the page stops it
     var playing by remember { mutableStateOf<RemoteEntry?>(null) }
-    // full screen exists only while a video plays: system bars hidden, top bar hidden, landscape videos turn sideways
+    // full screen exists only while a video plays and Play opens it straight away: system bars hidden, top bar hidden, landscape videos turn sideways
     var fullscreen by remember { mutableStateOf(false) }
     LaunchedEffect(pager.currentPage) { playing = null }
     LaunchedEffect(playing) { if (playing == null) fullscreen = false }
@@ -125,7 +128,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
                     onFullscreenChange = { fullscreen = it },
                     onEnded = { playing = null },
                 )
-                else -> VideoPoster(entry, onPlay = { playing = entry }, onTap = { chrome = !chrome })
+                else -> VideoPoster(entry, onPlay = { playing = entry; fullscreen = true }, onTap = { chrome = !chrome })
             }
         }
 
@@ -278,6 +281,32 @@ private fun VideoPoster(entry: RemoteEntry, onPlay: () -> Unit, onTap: () -> Uni
 /** How far a double tap jumps, back on the left side of the video and forward on the right side. */
 private const val SEEK_STEP_MS = 10_000L
 
+private const val VIEWER_PREFS = "viewer"
+private const val KEY_VIDEO_FIT = "video_fit"
+
+/** Ways a video can fill the screen in full screen, in the order the button goes through them. */
+@androidx.annotation.OptIn(UnstableApi::class)
+private enum class VideoFit(val label: String, val resizeMode: Int, val ratio: Float? = null) {
+    /** whole video visible, black bars where the shapes differ */
+    Fit("Adatta", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+
+    /** whole screen covered, the edges of the video cut off */
+    Crop("Ritaglia", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+
+    /** whole screen covered, the video stretched out of shape */
+    Stretch("Allunga", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+
+    Wide("16:9", AspectRatioFrameLayout.RESIZE_MODE_FILL, 16f / 9f),
+    Classic("4:3", AspectRatioFrameLayout.RESIZE_MODE_FILL, 4f / 3f),
+    ;
+
+    fun next(): VideoFit = entries[(ordinal + 1) % entries.size]
+
+    companion object {
+        fun from(name: String?): VideoFit = entries.firstOrNull { it.name == name } ?: Fit
+    }
+}
+
 /** A double tap jumped: which way, how far in total (taps in a row add up), and a counter that restarts the label. */
 private class SeekFeedback(val forward: Boolean, val seconds: Int, val id: Long)
 
@@ -310,6 +339,10 @@ private fun VideoPlayer(
     var landscape by remember(entry) { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var feedback by remember { mutableStateOf<SeekFeedback?>(null) }
+    // how the video fills the screen in full screen, kept for the next videos; outside full screen it always fits
+    val prefs = remember(context) { context.getSharedPreferences(VIEWER_PREFS, Context.MODE_PRIVATE) }
+    var fit by remember { mutableStateOf(VideoFit.from(prefs.getString(KEY_VIDEO_FIT, null))) }
+    val shownFit = if (fullscreen) fit else VideoFit.Fit
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -353,7 +386,7 @@ private fun VideoPlayer(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AndroidView(
             factory = { viewContext ->
                 PlayerView(viewContext).apply {
@@ -404,8 +437,12 @@ private fun VideoPlayer(
                     setOnTouchListener { _, event -> gestures.onTouchEvent(event) }
                 }
             },
-            update = { it.setFullscreenButtonState(fullscreen) },
-            modifier = Modifier.fillMaxSize(),
+            update = {
+                it.setFullscreenButtonState(fullscreen)
+                it.resizeMode = shownFit.resizeMode
+            },
+            // a fixed shape (16:9, 4:3) is the player's own size, with the video stretched into it
+            modifier = shownFit.ratio?.let { Modifier.aspectRatio(it) } ?: Modifier.fillMaxSize(),
         )
 
         feedback?.let { shown ->
@@ -444,6 +481,35 @@ private fun VideoPlayer(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(AppIcons.Close, contentDescription = "Esci dallo schermo intero", tint = Color.White)
+            }
+        }
+
+        // like VLC: each tap moves to the next way of filling the screen, and the button says which one is on
+        AnimatedVisibility(
+            visible = fullscreen && controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+        ) {
+            Row(
+                Modifier
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable {
+                        fit = fit.next()
+                        prefs.edit().putString(KEY_VIDEO_FIT, fit.name).apply()
+                    }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(AppIcons.AspectRatio, contentDescription = "Adattamento allo schermo", tint = Color.White)
+                Text(
+                    fit.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
         }
     }
