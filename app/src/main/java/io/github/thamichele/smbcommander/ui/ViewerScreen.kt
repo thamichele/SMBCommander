@@ -1,5 +1,13 @@
 package io.github.thamichele.smbcommander.ui
 
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +22,7 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,8 +55,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -63,6 +77,7 @@ import io.github.thamichele.smbcommander.data.SmbDataSource
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import kotlinx.coroutines.delay
 
 /**
  * Photos and videos of a folder, one per page. A photo shows the full-size copy cached on the phone (same pixels as the
@@ -85,8 +100,13 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
     val current = screen.images[pager.currentPage.coerceIn(0, screen.images.lastIndex)]
     // the video playing now; only the current page plays, and turning the page stops it
     var playing by remember { mutableStateOf<RemoteEntry?>(null) }
+    // full screen exists only while a video plays: system bars hidden, top bar hidden, landscape videos turn sideways
+    var fullscreen by remember { mutableStateOf(false) }
     LaunchedEffect(pager.currentPage) { playing = null }
+    LaunchedEffect(playing) { if (playing == null) fullscreen = false }
     BackHandler(enabled = playing != null) { playing = null }
+    // declared after the one above, so it wins: back first leaves full screen, then stops the video
+    BackHandler(enabled = fullscreen) { fullscreen = false }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         // while a video plays its own controls take the touches: back (or the arrow) stops it and frees the swipe
@@ -99,12 +119,17 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
             val entry = screen.images[page]
             when {
                 !entry.isVideo -> ZoomableImage(entry, onTap = { chrome = !chrome })
-                playing == entry -> VideoPlayer(entry, onEnded = { playing = null })
+                playing == entry -> VideoPlayer(
+                    entry,
+                    fullscreen = fullscreen,
+                    onFullscreenChange = { fullscreen = it },
+                    onEnded = { playing = null },
+                )
                 else -> VideoPoster(entry, onPlay = { playing = entry }, onTap = { chrome = !chrome })
             }
         }
 
-        AnimatedVisibility(visible = chrome, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = chrome && !fullscreen, enter = fadeIn(), exit = fadeOut()) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -250,15 +275,30 @@ private fun VideoPoster(entry: RemoteEntry, onPlay: () -> Unit, onTap: () -> Uni
     }
 }
 
+/** How far a double tap jumps, back on the left side of the video and forward on the right side. */
+private const val SEEK_STEP_MS = 10_000L
+
+/** A double tap jumped: which way, how far in total (taps in a row add up), and a counter that restarts the label. */
+private class SeekFeedback(val forward: Boolean, val seconds: Int, val id: Long)
+
 @androidx.annotation.OptIn(UnstableApi::class)
+@SuppressLint("ClickableViewAccessibility")
 @Composable
-private fun VideoPlayer(entry: RemoteEntry, onEnded: () -> Unit) {
+private fun VideoPlayer(
+    entry: RemoteEntry,
+    fullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit,
+    onEnded: () -> Unit,
+) {
     val context = LocalContext.current
     val app = context.applicationContext as SmbCommanderApp
     val ended by rememberUpdatedState(onEnded)
+    val fullscreenChange by rememberUpdatedState(onFullscreenChange)
     val player = remember(entry) {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(SmbDataSource.Factory(app.repository)))
+            .setSeekBackIncrementMs(SEEK_STEP_MS)
+            .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build()
             .apply {
                 setMediaItem(MediaItem.fromUri(SmbDataSource.uri(entry.share, entry.path)))
@@ -266,10 +306,20 @@ private fun VideoPlayer(entry: RemoteEntry, onEnded: () -> Unit) {
                 playWhenReady = true
             }
     }
+    // wider than tall: full screen turns the phone sideways
+    var landscape by remember(entry) { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var feedback by remember { mutableStateOf<SeekFeedback?>(null) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) ended()
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    landscape = videoSize.width * videoSize.pixelWidthHeightRatio > videoSize.height
+                }
             }
         }
         player.addListener(listener)
@@ -278,8 +328,129 @@ private fun VideoPlayer(entry: RemoteEntry, onEnded: () -> Unit) {
             player.release()
         }
     }
-    AndroidView(
-        factory = { PlayerView(it).apply { this.player = player } },
-        modifier = Modifier.fillMaxSize(),
-    )
+
+    val activity = remember(context) { context.findActivity() }
+    if (fullscreen && activity != null) {
+        DisposableEffect(activity, landscape) {
+            val window = activity.window
+            val bars = WindowCompat.getInsetsController(window, window.decorView)
+            val orientation = activity.requestedOrientation
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+            if (landscape) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            onDispose {
+                bars.show(WindowInsetsCompat.Type.systemBars())
+                activity.requestedOrientation = orientation
+            }
+        }
+    }
+
+    // a label in the middle of the side that was tapped, gone a moment after the last tap
+    feedback?.let { shown ->
+        LaunchedEffect(shown.id) {
+            delay(700)
+            feedback = null
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    this.player = player
+                    keepScreenOn = true
+                    setShowPreviousButton(false)
+                    setShowNextButton(false)
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility -> controlsVisible = visibility == View.VISIBLE },
+                    )
+                    setFullscreenButtonClickListener { wanted -> fullscreenChange(wanted) }
+                    // single tap shows or hides the controls, double tap on a side jumps back or forward;
+                    // the buttons of the controls are children and still get their own touches first
+                    val view = this
+                    val gestures = GestureDetector(
+                        viewContext,
+                        object : GestureDetector.SimpleOnGestureListener() {
+                            override fun onDown(e: MotionEvent) = true
+
+                            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                                if (view.isControllerFullyVisible) view.hideController() else view.showController()
+                                return true
+                            }
+
+                            override fun onDoubleTap(e: MotionEvent): Boolean {
+                                val third = view.width / 3f
+                                val forward = when {
+                                    e.x < third -> false
+                                    e.x > view.width - third -> true
+                                    else -> {
+                                        // the middle pauses or plays again
+                                        if (player.isPlaying) player.pause() else player.play()
+                                        return true
+                                    }
+                                }
+                                if (forward) player.seekForward() else player.seekBack()
+                                val previous = feedback
+                                val seconds = (SEEK_STEP_MS / 1000).toInt()
+                                feedback = SeekFeedback(
+                                    forward = forward,
+                                    seconds = if (previous != null && previous.forward == forward) previous.seconds + seconds else seconds,
+                                    id = System.nanoTime(),
+                                )
+                                return true
+                            }
+                        },
+                    )
+                    setOnTouchListener { _, event -> gestures.onTouchEvent(event) }
+                }
+            },
+            update = { it.setFullscreenButtonState(fullscreen) },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        feedback?.let { shown ->
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.4f)
+                    .align(if (shown.forward) Alignment.CenterEnd else Alignment.CenterStart),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (shown.forward) "+${shown.seconds} s" else "−${shown.seconds} s",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
+
+        // in full screen the top bar is hidden: the X leaves full screen, shown together with the controls
+        AnimatedVisibility(
+            visible = fullscreen && controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable { fullscreenChange(false) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.Close, contentDescription = "Esci dallo schermo intero", tint = Color.White)
+            }
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
