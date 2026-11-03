@@ -7,6 +7,7 @@ import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.GalleryDates
 import io.github.thamichele.smbcommander.core.GalleryIndex
 import io.github.thamichele.smbcommander.core.NasFileSystem
+import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.SavedFolder
@@ -14,12 +15,15 @@ import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -54,9 +58,20 @@ data class GalleryState(
     val pulling: Boolean = false,
     val error: String? = null,
     val view: GalleryView = GalleryView.Grid,
+    /** The category shown; null for all the photos. */
+    val kind: PhotoKind? = null,
+    /** The months of [kind] only; the same as [months] when all the photos are shown. */
+    val shown: List<MonthGroup> = emptyList(),
+    /** How many photos of each category are known so far. */
+    val kindCounts: Map<PhotoKind, Int> = emptyMap(),
+    /** Photos still to be sorted into categories, while it goes on. */
+    val sorting: Int = 0,
 ) {
-    /** All photos in display order, as the viewer swipes through them. */
+    /** All photos in display order, newest first. */
     val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
+
+    /** The photos on screen in display order, as the viewer swipes through them. */
+    val shownPhotos: List<RemoteEntry> get() = shown.flatMap { it.photos }
 }
 
 /**
@@ -68,7 +83,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private val app = application as SmbCommanderApp
     private val store = GalleryStore(File(application.filesDir, "gallery"))
-    private val _state = MutableStateFlow(GalleryState(view = app.galleryPrefs.view))
+    private val _state = MutableStateFlow(GalleryState(view = app.galleryPrefs.view, kind = app.galleryPrefs.kind))
     val state: StateFlow<GalleryState> = _state.asStateFlow()
     private var job: Job? = null
     private var index = GalleryIndex()
@@ -79,6 +94,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     /** Dates worked out once per file, not at every regrouping. */
     private val dates = ConcurrentHashMap<RemoteEntry, GalleryDates.Taken>()
+
+    /** Categories already known, so the filter does not ask the sorter again at every regrouping. */
+    private val kinds = ConcurrentHashMap<RemoteEntry, PhotoKind>()
+
+    /** Sorting into categories starts the first time a category is chosen, and then follows the gallery. */
+    private val sortWanted = MutableStateFlow(app.galleryPrefs.kind != null)
 
     init {
         viewModelScope.launch {
@@ -100,6 +121,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                     .onFailure { if (it is CancellationException) throw it }
             }
         }
+        viewModelScope.launch(Dispatchers.IO) {
+            // the photos not sorted yet are looked at on the phone, newest first, in the background lane of the
+            // thumbnails; started again when the gallery changes
+            combine(_state.map { it.months }.distinctUntilChanged(), sortWanted) { months, wanted -> months to wanted }
+                .collectLatest { (months, wanted) ->
+                    if (!wanted || months.isEmpty()) return@collectLatest
+                    sortPhotos(months.flatMap { it.photos })
+                }
+        }
         viewModelScope.launch {
             // a backup run, an upload or a copy into the backup folder: look again, quietly
             app.nasChanged.collect { change ->
@@ -119,12 +149,46 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (folder != current.folder) {
             job?.cancel()
             index = GalleryIndex(folder?.let(store::load).orEmpty())
-            _state.value = GalleryState(folder = folder, view = current.view)
+            kinds.clear()
+            _state.value = GalleryState(folder = folder, view = current.view, kind = current.kind)
             publish()
             lastWalk = 0
         }
         if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
+
+    /** Shows only the photos of [kind], or all of them with null. */
+    fun setKind(kind: PhotoKind?) {
+        app.galleryPrefs.kind = kind
+        if (kind != null) sortWanted.value = true
+        _state.update { it.copy(kind = kind) }
+        publish()
+    }
+
+    private suspend fun sortPhotos(photos: List<RemoteEntry>) {
+        val todo = photos.filter { kindOf(it) == null }
+        _state.update { it.copy(sorting = todo.size) }
+        if (todo.isEmpty()) return publish()
+        var left = todo.size
+        var shown = System.currentTimeMillis()
+        coroutineScope {
+            for (batch in todo.chunked(SORT_BATCH)) {
+                batch.map { photo ->
+                    async { runCatching { kinds[photo] = app.photoSorter.sort(photo) }.onFailure { if (it is CancellationException) throw it } }
+                }.awaitAll()
+                left -= batch.size
+                // the gallery follows about once a second, not at every photo
+                if (left == 0 || System.currentTimeMillis() - shown > 1_000) {
+                    shown = System.currentTimeMillis()
+                    _state.update { it.copy(sorting = left) }
+                    publish()
+                }
+            }
+        }
+    }
+
+    private fun kindOf(e: RemoteEntry): PhotoKind? =
+        kinds[e] ?: app.photoSorter.known(e)?.also { kinds[e] = it }
 
     fun setView(view: GalleryView) {
         app.galleryPrefs.view = view
@@ -224,7 +288,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 MonthGroup(ym.first, ym.second, list.sortedWith(compareByDescending<RemoteEntry> { taken(it).sortKey }.thenByDescending { it.name }))
             }
             .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
-        _state.update { it.copy(months = months) }
+        val counts = HashMap<PhotoKind, Int>()
+        for (m in months) for (p in m.photos) kindOf(p)?.let { counts[it] = (counts[it] ?: 0) + 1 }
+        _state.update { st ->
+            val kind = st.kind
+            val shown = if (kind == null) months
+            else months.mapNotNull { m -> m.photos.filter { kindOf(it) == kind }.takeIf { it.isNotEmpty() }?.let { m.copy(photos = it) } }
+            st.copy(months = months, shown = shown, kindCounts = counts)
+        }
     }
 
     private fun taken(e: RemoteEntry) = dates.getOrPut(e) { GalleryDates.of(e) }
@@ -243,6 +314,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         const val MAX_DEPTH = 12
         const val PARALLEL_LISTINGS = 4
         const val AUTO_REFRESH_MS = 60_000L
+        /** Photos sorted together: the thumbnails missing are fetched side by side. */
+        const val SORT_BATCH = 4
 
         /** Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots. */
         fun hidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#") ||
