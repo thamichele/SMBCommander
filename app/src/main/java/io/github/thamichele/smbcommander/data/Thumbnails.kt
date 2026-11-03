@@ -162,6 +162,20 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         }
     }
 
+    /**
+     * The thumbnail of [photo] for work done in the background (sorting the quick cleanup): from the phone when it is
+     * there, else made in the lane of [warmUp], so it never slows down what is on screen.
+     */
+    suspend fun background(photo: RemoteEntry): File {
+        val thumb = Thumb(photo)
+        val target = file(thumb, ImageSize.Thumb)
+        if (!target.exists()) make(thumb, target, warmPermits)
+        if (!target.exists()) throw IllegalStateException("Miniatura non disponibile")
+        // the mosaic hears of new shapes with the next batch of [warmUp], not one rearrangement per photo
+        learnRatio(thumb, target, publish = false)
+        return target
+    }
+
     /** Width / height of the photo as shown, once one of its thumbnails has been loaded; null before. */
     fun ratio(entry: RemoteEntry): Float? = ratios[key(Thumb(entry))]
 
@@ -339,7 +353,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    private fun key(thumb: Thumb): String =
+    /** The name of the copies of [thumb] in the cache: a hash of where the photo is and of its size and date. */
+    fun key(thumb: Thumb): String =
         MessageDigest.getInstance("SHA-1")
             .digest("${thumb.share}/${thumb.path}:${thumb.size}:${thumb.modified}".toByteArray())
             .joinToString("") { "%02x".format(it) }

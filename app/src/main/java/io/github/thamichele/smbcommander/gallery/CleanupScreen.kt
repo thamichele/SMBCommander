@@ -59,6 +59,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import io.github.thamichele.smbcommander.core.CleanupRules
+import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ImageSize
 import io.github.thamichele.smbcommander.data.Thumb
@@ -139,6 +140,29 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             item { TabPill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
             item { TabPill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
         }
+        if (state.tab == CleanupTab.Others && !state.loading) {
+            // the groups of "all the others", filled while the photos are looked at on the phone
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = if (state.sorting > 0) 4.dp else 12.dp),
+            ) {
+                item { TabPill("Tutte", state.othersKind == null, small = true) { vm.showKind(null) } }
+                for (kind in PhotoKind.entries) {
+                    item(kind.name) {
+                        TabPill("${kind.label} (${state.othersByKind[kind] ?: 0})", state.othersKind == kind, small = true) { vm.showKind(kind) }
+                    }
+                }
+            }
+            if (state.sorting > 0) {
+                Text(
+                    "Divido le foto per tipo sul telefono: ne mancano ${state.sorting}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
+        }
         state.error?.let { error ->
             Text(
                 error,
@@ -177,6 +201,15 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
                         }
                     }
                 }
+                top == null && state.tab == CleanupTab.Others && state.othersKind != null -> Done(
+                    title = "Niente in «${state.othersKind?.label}»",
+                    text = if (state.sorting > 0) "Sto ancora dividendo le foto per tipo: quelle trovate compariranno qui man mano."
+                    else "In questo gruppo hai visto tutto. Il riconoscimento è approssimativo: qualche foto può essere finita in un altro gruppo.",
+                    othersLeft = state.othersLeft > 0,
+                    othersLabel = "Mostra tutte le altre",
+                    onOthers = { vm.showKind(null) },
+                    onReload = { vm.reload(galleryState.photos) },
+                )
                 top == null -> Done(
                     othersLeft = state.tab == CleanupTab.Suspects && state.othersLeft > 0,
                     onOthers = { vm.showTab(CleanupTab.Others) },
@@ -357,6 +390,7 @@ private fun Done(
     onReload: () -> Unit,
     title: String = "Niente da verificare",
     text: String? = null,
+    othersLabel: String = "Rivedi anche le altre",
 ) {
     val c = Arancio.colors
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -368,7 +402,7 @@ private fun Done(
             style = MaterialTheme.typography.bodyLarge,
             color = c.textSecondary,
         )
-        if (othersLeft) Button(onClick = onOthers, shape = RoundedCornerShape(8.dp)) { Text("Rivedi anche le altre") }
+        if (othersLeft) Button(onClick = onOthers, shape = RoundedCornerShape(8.dp)) { Text(othersLabel) }
         else Button(onClick = onReload, shape = RoundedCornerShape(8.dp)) { Text("Ricarica") }
     }
 }
@@ -395,18 +429,18 @@ private fun RoundButton(icon: ImageVector, label: String, tint: Color, enabled: 
 }
 
 @Composable
-private fun TabPill(text: String, active: Boolean, onClick: () -> Unit) {
+private fun TabPill(text: String, active: Boolean, small: Boolean = false, onClick: () -> Unit) {
     val c = Arancio.colors
     Text(
         text,
-        style = MaterialTheme.typography.labelLarge,
+        style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
         color = if (active) c.text else c.textSecondary,
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(if (active) c.accentSoft else c.surface)
             .border(1.dp, if (active) c.accent else c.border, RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = if (small) 12.dp else 14.dp, vertical = if (small) 6.dp else 8.dp),
     )
 }
 

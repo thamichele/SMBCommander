@@ -17,6 +17,7 @@ import io.github.thamichele.smbcommander.data.FolderStore
 import io.github.thamichele.smbcommander.data.NasRepository
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.ShareCache
+import io.github.thamichele.smbcommander.data.PhotoSorter
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.data.TransferQueue
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
@@ -30,6 +31,8 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
     lateinit var editSessions: EditSessionStore
         private set
     lateinit var thumbnails: ThumbnailCache
+        private set
+    lateinit var photoSorter: PhotoSorter
         private set
     lateinit var folders: FolderStore
         private set
@@ -62,6 +65,7 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
+        photoSorter = PhotoSorter(File(filesDir, PhotoSorter.FILE_NAME), thumbnails)
         shareCache = ShareCache(this)
         Thread {
             runCatching { thumbnails.trim() }
