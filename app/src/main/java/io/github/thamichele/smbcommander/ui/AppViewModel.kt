@@ -239,6 +239,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             File(cache, "images").deleteRecursively()
             File(getApplication<Application>().filesDir, "gallery").deleteRecursively()
             app.thumbnails.ratios.clear()
+            app.photoSorter.clear()
         }
         listingCache.clear()
         _folders.value = emptyList()

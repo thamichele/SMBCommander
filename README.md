@@ -149,7 +149,12 @@ Dal tasto con la scopetta della Galleria: una foto alla volta, come su Tinder. S
   contenuto e ti dice se sono identiche. Con tre o più copie, quella tenuta si confronta con la successiva.
   Finché una foto ha ancora una copia da confrontare compare solo qui, non in **Da verificare** né in **Tutte le
   altre**: ci arriva quando è rimasta singola.
-- **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle.
+- **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle. Sono divise in gruppi:
+  **Persone**, **Schermate**, **Scritte** (documenti, scontrini, appunti, lavagne), **Altre foto** e **Video**.
+  L'app guarda le miniature direttamente sul telefono, in sottofondo, mentre scorri: i volti con il riconoscimento
+  facciale integrato in Android, schermate e scritte da forma, colori e righe dell'immagine. Niente va su internet e
+  non si scarica nessun modello; ogni foto viene guardata una volta sola. È un riconoscimento approssimativo: qualche
+  foto può finire nel gruppo sbagliato, ma in **Tutte** ci sono sempre tutte.
 - Le foto scartate vanno nel **cestino** (`.smbcommander-cestino`, nascosto nella cartella del backup), con lo stesso
   percorso che avevano: lo spostamento è istantaneo, non copia nulla, e si può annullare. Il cestino si svuota o si
   ripristina a mano; lo svuotamento mostra file per file cosa è stato eliminato. Le foto scartate entrano anche in `.smbcommander-eliminate.txt`, così il backup non le ricarica.

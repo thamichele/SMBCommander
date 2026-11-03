@@ -12,6 +12,7 @@ import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.GalleryDates
 import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.KeptPhotos
+import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
@@ -24,6 +25,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +57,12 @@ data class CleanupState(
     /** Copies of the same photo, likeliest original first; one comparison at a time, two by two. */
     val duplicateGroups: List<List<RemoteEntry>> = emptyList(),
     val tab: CleanupTab = CleanupTab.Suspects,
+    /** The group of "all the others" being looked at; null for all of them. */
+    val othersKind: PhotoKind? = null,
+    /** What each photo of "all the others" shows (by path), as soon as it has been looked at. */
+    val kinds: Map<String, PhotoKind> = emptyMap(),
+    /** Photos of "all the others" still to be looked at, while it goes on. */
+    val sorting: Int = 0,
     /** Cards decided in this session, so the queue moves on. */
     val decided: Set<String> = emptySet(),
     val canUndo: Boolean = false,
@@ -82,9 +91,14 @@ data class CleanupState(
     val queue: List<CleanupCard> by lazy {
         when (tab) {
             CleanupTab.Suspects -> suspects
-            CleanupTab.Others -> others
+            CleanupTab.Others -> if (othersKind == null) others else others.filter { kinds[it.entry.path] == othersKind }
             CleanupTab.Duplicates -> emptyList()
         }.filter(::open)
+    }
+
+    /** How many photos still open in each group of "all the others". */
+    val othersByKind: Map<PhotoKind, Int> by lazy {
+        others.filter(::open).mapNotNull { kinds[it.entry.path] }.groupingBy { it }.eachCount()
     }
 
     /** The comparisons still to make: in each group, the first two copies not decided yet. */
@@ -137,18 +151,22 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
     private companion object {
         /** Bigger files (long videos) are not read twice over the network just to compare them. */
         const val MAX_COMPARE = 150L * 1024 * 1024
+        /** Photos sorted together: the thumbnails missing are fetched side by side. */
+        const val SORT_BATCH = 4
     }
 
     /** NAS work runs one step at a time, in the order of the swipes. */
     private val nas = Mutex()
     private var flushJob: Job? = null
     private var loadJob: Job? = null
+    private var sortJob: Job? = null
 
     /** Builds the queues from what the gallery shows; the lists of kept photos come from the NAS. */
     fun start(media: List<RemoteEntry>) {
         val folder = app.backupSettings.load().destination ?: return
         if (_state.value.folder == folder && (_state.value.loading || _state.value.suspects.isNotEmpty() || _state.value.others.isNotEmpty())) return
         loadJob?.cancel()
+        sortJob?.cancel()
         _state.value = CleanupState(folder = folder, loading = true)
         loadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -160,6 +178,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     .sortedWith(compareBy<Map.Entry<RemoteEntry, CleanupReason>> { it.value.kind.ordinal }.thenComparator { a, b -> newestFirst.compare(a.key, b.key) })
                     .map { CleanupCard(it.key, it.value) }
                 val others = todo.filterNot { it in reasons }.sortedWith(newestFirst).map { CleanupCard(it, null) }
+                val known = others.mapNotNull { card -> app.photoSorter.known(card.entry)?.let { card.entry.path to it } }.toMap()
                 // copies among all the photos, kept ones too: a kept photo can still have a copy. Of those already
                 // kept, only the first stays, as the one the others are compared with
                 val duplicates = CleanupRules.duplicates(media).mapNotNull { group ->
@@ -169,8 +188,12 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
                     (listOfNotNull(anchor) + open).takeIf { it.size >= 2 }
                 }
                 _state.update {
-                    it.copy(loading = false, suspects = suspects, others = others, duplicateGroups = duplicates, keptCount = kept.lines.size)
+                    it.copy(
+                        loading = false, suspects = suspects, others = others, duplicateGroups = duplicates,
+                        keptCount = kept.lines.size, kinds = known, sorting = others.size - known.size,
+                    )
                 }
+                sortJob = sortOthers(others.map { it.entry }.filter { it.path !in known })
                 refreshTrash()
             } catch (e: CancellationException) {
                 throw e
@@ -187,6 +210,32 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun showTab(tab: CleanupTab) = _state.update { it.copy(tab = tab) }
+
+    fun showKind(kind: PhotoKind?) = _state.update { it.copy(tab = CleanupTab.Others, othersKind = kind) }
+
+    /**
+     * Looks at the photos of "all the others" not sorted yet, newest first, a few at a time, in the background lane of
+     * the thumbnails: the groups fill up while the user swipes. A photo that cannot be read stays only in "all".
+     */
+    private fun sortOthers(photos: List<RemoteEntry>): Job = viewModelScope.launch(Dispatchers.IO) {
+        var left = photos.size
+        val found = HashMap<String, PhotoKind>()
+        var shown = System.currentTimeMillis()
+        for (batch in photos.chunked(SORT_BATCH)) {
+            batch.map { photo ->
+                async { runCatching { photo.path to app.photoSorter.sort(photo) }.getOrNull() }
+            }.awaitAll().filterNotNull().toMap(found)
+            left -= batch.size
+            // the counts move about once a second, not at every photo: thousands of them would mean thousands of
+            // recompositions
+            if (left == 0 || System.currentTimeMillis() - shown > 1_000) {
+                val add = found.toMap()
+                found.clear()
+                shown = System.currentTimeMillis()
+                _state.update { it.copy(kinds = it.kinds + add, sorting = left) }
+            }
+        }
+    }
 
     /** In a pair of copies, [keep] stays where it is and the other one goes to the bin, as a left swipe would. */
     fun keepOnly(pair: DuplicatePair, keep: RemoteEntry) {
