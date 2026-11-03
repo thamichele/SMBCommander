@@ -147,6 +147,8 @@ Dal tasto con la scopetta della Galleria: una foto alla volta, come su Tinder. S
   le vecchie cartelle di QuMagie. Le due copie stanno una accanto all'altra con il percorso completo sotto: scegli
   quale tenere e l'altra va nel cestino, oppure le tieni entrambe. Se hanno la stessa dimensione l'app confronta il
   contenuto e ti dice se sono identiche. Con tre o più copie, quella tenuta si confronta con la successiva.
+  Finché una foto ha ancora una copia da confrontare compare solo qui, non in **Da verificare** né in **Tutte le
+  altre**: ci arriva quando è rimasta singola.
 - **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle.
 - Le foto scartate vanno nel **cestino** (`.smbcommander-cestino`, nascosto nella cartella del backup), con lo stesso
   percorso che avevano: lo spostamento è istantaneo, non copia nulla, e si può annullare. Il cestino si svuota o si

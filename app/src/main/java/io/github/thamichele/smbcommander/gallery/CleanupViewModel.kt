@@ -63,13 +63,28 @@ data class CleanupState(
     val discardedCount: Int = 0,
     val error: String? = null,
 ) {
+    /**
+     * Photos still waiting in the Duplicates tab: those of a group with at least two copies not decided yet. They stay
+     * out of the swipe queues until they are on their own, so the same photo is not asked about in two places.
+     */
+    val inDuplicates: Set<String> by lazy {
+        buildSet {
+            for (group in duplicateGroups) {
+                val left = group.filter { it.path !in decided }
+                if (left.size >= 2) left.forEach { add(it.path) }
+            }
+        }
+    }
+
+    private fun open(card: CleanupCard) = card.entry.path !in decided && card.entry.path !in inDuplicates
+
     /** Worked out once per state: with thousands of photos it must not run at every frame. */
     val queue: List<CleanupCard> by lazy {
         when (tab) {
             CleanupTab.Suspects -> suspects
             CleanupTab.Others -> others
             CleanupTab.Duplicates -> emptyList()
-        }.filterNot { it.entry.path in decided }
+        }.filter(::open)
     }
 
     /** The comparisons still to make: in each group, the first two copies not decided yet. */
@@ -79,8 +94,8 @@ data class CleanupState(
             if (left.size >= 2) DuplicatePair(left[0], left[1]) else null
         }
     }
-    val suspectsLeft: Int by lazy { suspects.count { it.entry.path !in decided } }
-    val othersLeft: Int by lazy { others.count { it.entry.path !in decided } }
+    val suspectsLeft: Int by lazy { suspects.count(::open) }
+    val othersLeft: Int by lazy { others.count(::open) }
 }
 
 /**
