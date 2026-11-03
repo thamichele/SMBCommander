@@ -47,6 +47,10 @@ object AppIcons {
     val UpDown = icon("M8 9l4-4l4 4M8 15l4 4l4-4")
     val ChevronRight = icon("M9 6l6 6l-6 6")
     val Eye = icon("M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6a3 3 0 1 0 0 6z")
+    val Categories = icon("M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14a3 3 0 1 0 0 6a3 3 0 1 0 0-6z")
+    val People = icon("M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6zM3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 0 1 0 5.6M18 14.4c1.8 0.8 3 2.6 3 4.6")
+    val Phone = icon("M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2")
+    val TextLines = icon("M4 6h16M4 10h16M4 14h10M4 18h12")
     val EyeOff = icon("M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2")
 
     private fun icon(pathData: String, stroke: Float = 1.75f): ImageVector =

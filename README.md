@@ -74,7 +74,11 @@ della cartella (`2026/10`, `2026-10`, `2019-03-14`...), altrimenti dalla data ne
 del file. Il contenuto della galleria resta salvato sul telefono, così si apre subito; ogni aggiornamento guarda solo
 cosa è cambiato sul NAS, e dopo un backup o un caricamento la galleria si aggiorna da sola.
 Si può vedere a griglia, a mosaico (foto più grandi, ognuna con la sua forma, che si incastrano in righe piene;
-le proporzioni si ricordano sul telefono, senza rileggere il NAS) o a elenco. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
+le proporzioni si ricordano sul telefono, senza rileggere il NAS) o a elenco. Con il pulsante delle categorie si passa da tutte
+le foto a una sola categoria: Persone, Schermate, Scritte, Altre foto o Video, con il numero di foto di ognuna. Le
+foto vengono divise sul telefono, dalle miniature, come nella Pulizia rapida (niente internet, nessun modello
+scaricato); la divisione parte la prima volta che scegli una categoria e poi continua in sottofondo. La scelta resta
+anche alla riapertura dell'app. Per eliminare una foto dal NAS: nell'elenco la fai scorrere verso sinistra, come
 nelle app di posta (nelle impostazioni puoi scegliere se chiedere conferma), oppure tieni premuto per selezionarne più
 di una, oppure usi il cestino nel visualizzatore. Le foto eliminate finiscono in un elenco nascosto nella cartella del
 backup (`.smbcommander-eliminate.txt`, dimensione e impronta SHA-256): se sono ancora sul telefono il backup non le

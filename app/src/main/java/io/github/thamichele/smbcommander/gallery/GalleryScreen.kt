@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
@@ -110,7 +111,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     var toDelete by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
     var info by remember { mutableStateOf<RemoteEntry?>(null) }
     // photos deleted or reloaded meanwhile leave the selection
-    val shown = state.photos
+    val shown = state.shownPhotos
     LaunchedEffect(shown) {
         if (selected.isNotEmpty()) selected = selected intersect shown.mapTo(HashSet()) { it.path }
     }
@@ -137,8 +138,9 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
 
     Column(Modifier.fillMaxSize()) {
         if (selected.isEmpty()) {
-            PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = "Galleria") {
+            PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria") {
                 if (state.folder != null) {
+                    KindMenu(state.kind, state.kindCounts, vm::setKind)
                     ViewMenu(state.view, vm::setView)
                     ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
                     ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
@@ -171,6 +173,14 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
         if (state.loading && !state.pulling && state.months.isNotEmpty()) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background)
         }
+        if (state.kind != null && state.sorting > 0 && state.months.isNotEmpty()) {
+            Text(
+                "Divido le foto per categoria sul telefono: ne mancano ${state.sorting}",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         if (state.error != null && state.months.isNotEmpty()) {
             Text(
                 state.error.orEmpty(),
@@ -199,15 +209,29 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                     Text("Nessuna foto ancora nella cartella del backup", style = MaterialTheme.typography.bodyLarge, color = c.textSecondary)
                 }
+            state.shown.isEmpty() ->
+                Column(
+                    Modifier.fillMaxSize().padding(32.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        if (state.sorting > 0) "Nessuna foto in «${state.kind?.label}» per ora: le altre arrivano man mano che le divido."
+                        else "Nessuna foto in «${state.kind?.label}».",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = c.textSecondary,
+                    )
+                    Button(onClick = { vm.setKind(null) }, shape = RoundedCornerShape(8.dp)) { Text("Mostra tutte le foto") }
+                }
             else -> PullToRefreshBox(
                 isRefreshing = state.pulling,
                 onRefresh = vm::pull,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when (state.view) {
-                    GalleryView.List -> PhotoList(state.months, selected, onTap, onLongPress, onSwipe)
-                    GalleryView.Mosaic -> PhotoMosaic(state.months, selected, onTap, onLongPress)
-                    GalleryView.Grid -> PhotoGrid(state.months, selected, onTap, onLongPress)
+                    GalleryView.List -> PhotoList(state.shown, selected, onTap, onLongPress, onSwipe)
+                    GalleryView.Mosaic -> PhotoMosaic(state.shown, selected, onTap, onLongPress)
+                    GalleryView.Grid -> PhotoGrid(state.shown, selected, onTap, onLongPress)
                 }
             }
         }
@@ -288,6 +312,49 @@ private fun PhotoGrid(
         DateScroller(position, months, starts)
     }
 }
+
+/**
+ * All the photos or one category of them, sorted on the phone from the thumbnails. The counts grow while the photos
+ * are being sorted.
+ */
+@Composable
+private fun KindMenu(current: PhotoKind?, counts: Map<PhotoKind, Int>, onPick: (PhotoKind?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ToolButton(
+            current?.icon ?: AppIcons.Categories,
+            "Categorie: ${current?.label ?: "tutte le foto"}",
+            { open = true },
+            tint = if (current != null) Arancio.colors.accent else Arancio.colors.text,
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Arancio.colors.surfaceRaised) {
+            val choices: List<PhotoKind?> = listOf(null) + PhotoKind.entries
+            for (kind in choices) {
+                val color = if (kind == current) Arancio.colors.accent else Arancio.colors.text
+                val label = if (kind == null) "Tutte le foto" else "${kind.label} (${counts[kind] ?: 0})"
+                DropdownMenuItem(
+                    text = { Text(label, style = MaterialTheme.typography.bodyLarge, color = color) },
+                    leadingIcon = { Icon(kind?.icon ?: AppIcons.Categories, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) },
+                    trailingIcon = { if (kind == current) Icon(AppIcons.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp)) },
+                    onClick = {
+                        open = false
+                        onPick(kind)
+                    },
+                    modifier = Modifier.height(48.dp),
+                )
+            }
+        }
+    }
+}
+
+private val PhotoKind.icon: ImageVector
+    get() = when (this) {
+        PhotoKind.People -> AppIcons.People
+        PhotoKind.Screen -> AppIcons.Phone
+        PhotoKind.Text -> AppIcons.TextLines
+        PhotoKind.Photo -> AppIcons.Image
+        PhotoKind.Video -> AppIcons.Video
+    }
 
 /** The three ways of showing the gallery, from the button with the current one's icon. */
 @Composable
