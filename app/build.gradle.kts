@@ -22,7 +22,7 @@ android {
         // instead of overwriting it. Up to 1.0.46 the last number was the CI build number.
         val appVersionMajor = 1
         val appVersionMinor = 10
-        val appVersionPatch = 1
+        val appVersionPatch = 2
         versionCode = appVersionMajor * 1_000_000 + appVersionMinor * 1_000 + appVersionPatch
         versionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
     }
