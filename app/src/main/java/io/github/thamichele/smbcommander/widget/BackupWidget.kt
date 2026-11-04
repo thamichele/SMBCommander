@@ -9,11 +9,13 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import android.widget.Toast
+import androidx.compose.ui.graphics.toArgb
 import io.github.thamichele.smbcommander.MainActivity
 import io.github.thamichele.smbcommander.R
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.ui.theme.AccentStore
 
 /** Home screen widget: one of the user's folders on the left, "Backup ora" with the backup status on the right. */
 class BackupWidget : AppWidgetProvider() {
@@ -39,6 +41,10 @@ class BackupWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_backup)
 
             views.setTextViewText(R.id.widget_folder_name, folder?.name ?: "SMBCommander")
+            // the icons take the main colour chosen in the settings (the widget is always on the dark ground)
+            val accent = AccentStore.get(context).main.toArgb()
+            views.setInt(R.id.widget_folder_icon, "setColorFilter", accent)
+            views.setInt(R.id.widget_backup_icon, "setColorFilter", accent)
             val open = if (folder != null) MainActivity.openFolder(context, folder.share, folder.path)
             else context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent(context, MainActivity::class.java)
             views.setOnClickPendingIntent(

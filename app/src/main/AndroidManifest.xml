@@ -29,12 +29,82 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:launchMode="singleTop"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- launcher entries, one per main colour (Impostazioni > Aspetto): only the chosen one is enabled,
+             so the home screen shows the icon of that colour (ui/theme/AccentTheme.kt, LauncherIcon) -->
+        <activity-alias
+            android:name=".LauncherArancio"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherViola"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_viola"
+            android:roundIcon="@mipmap/ic_launcher_viola"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherRosso"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_rosso"
+            android:roundIcon="@mipmap/ic_launcher_rosso"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherGiallo"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_giallo"
+            android:roundIcon="@mipmap/ic_launcher_giallo"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherBlu"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_blu"
+            android:roundIcon="@mipmap/ic_launcher_blu"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherVerde"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_verde"
+            android:roundIcon="@mipmap/ic_launcher_verde"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- "Condividi" from other apps: saves what is shared into one of the user's NAS folders -->
         <activity

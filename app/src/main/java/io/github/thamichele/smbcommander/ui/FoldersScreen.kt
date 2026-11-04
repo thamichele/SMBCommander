@@ -58,7 +58,7 @@ fun FoldersScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(context = host, title = "Le mie cartelle") {
-                ToolButton(AppIcons.Server, "Impostazioni del NAS", vm::openSettings)
+                ToolButton(AppIcons.Server, "Impostazioni", vm::openSettings)
             }
             if (folders.isEmpty()) {
                 Column(

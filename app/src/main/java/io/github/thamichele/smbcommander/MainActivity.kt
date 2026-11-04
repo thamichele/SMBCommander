@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import io.github.thamichele.smbcommander.ui.AppRoot
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.theme.ArancioTheme
+import io.github.thamichele.smbcommander.ui.theme.LauncherIcon
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +39,13 @@ class MainActivity : ComponentActivity() {
         viewModel.syncEdits()
         // back from a share: the temporary copies are not needed any more
         viewModel.cleanShared()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // the launcher icon follows the colour chosen in the settings; changed only now that the app is in the
+        // background, because some launchers close an app whose launcher entry changes while it is open
+        LauncherIcon.sync(this)
     }
 
     /** Opened from the backup notification or a widget: go straight to the backup or to a folder. */

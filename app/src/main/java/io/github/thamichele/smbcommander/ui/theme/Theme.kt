@@ -9,9 +9,13 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -20,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.thamichele.smbcommander.R
 
-/** "Arancio UI" tokens: warm dark ground, orange accent (#D96D00, #A85400 on light grounds), IBM Plex Sans. */
+/** "Arancio UI" tokens: warm dark ground, a main colour chosen in the settings (orange by default), IBM Plex Sans. */
 @Immutable
 data class ArancioColors(
     val background: Color,
@@ -41,43 +45,48 @@ data class ArancioColors(
     val document: Color,
 )
 
-val DarkArancio = ArancioColors(
-    background = Color(0xFF1C1B1A),
-    surface = Color(0xFF252422),
-    surfaceRaised = Color(0xFF2E2C2A),
-    border = Color(0xFF3A3734),
-    text = Color(0xFFEDEAE3),
-    textSecondary = Color(0xFFA39E95),
-    accent = Color(0xFFD96D00),
-    onAccent = Color(0xFF1C1B1A),
-    accentSoft = Color(0x33D96D00),
-    accentText = Color(0xFFF5A04F),
-    danger = Color(0xFFF0948A),
-    success = Color(0xFF8DBA7C),
-    folder = Color(0xFFD96D00),
-    image = Color(0xFF5DB3A6),
-    media = Color(0xFFB8A3E0),
-    document = Color(0xFF8FB3E3),
-)
+/** The colours of one ground (dark or light) with the chosen main colour. Greys and status colours never change. */
+fun arancioColors(dark: Boolean, accent: AccentTheme): ArancioColors = if (dark) {
+    ArancioColors(
+        background = Color(0xFF1C1B1A),
+        surface = Color(0xFF252422),
+        surfaceRaised = Color(0xFF2E2C2A),
+        border = Color(0xFF3A3734),
+        text = Color(0xFFEDEAE3),
+        textSecondary = Color(0xFFA39E95),
+        accent = accent.main,
+        onAccent = Color(0xFF1C1B1A),
+        accentSoft = accent.main.copy(alpha = 0.20f),
+        accentText = accent.text,
+        danger = Color(0xFFF0948A),
+        success = Color(0xFF8DBA7C),
+        folder = accent.main,
+        image = Color(0xFF5DB3A6),
+        media = Color(0xFFB8A3E0),
+        document = Color(0xFF8FB3E3),
+    )
+} else {
+    ArancioColors(
+        background = Color(0xFFF6F4EF),
+        surface = Color(0xFFFFFFFF),
+        surfaceRaised = Color(0xFFEFECE6),
+        border = Color(0xFFDDD8CF),
+        text = Color(0xFF22201D),
+        textSecondary = Color(0xFF6B665E),
+        accent = accent.light,
+        onAccent = Color(0xFFFFFFFF),
+        accentSoft = accent.light.copy(alpha = 0.12f),
+        accentText = accent.light,
+        danger = Color(0xFFB4382E),
+        success = Color(0xFF4F7A40),
+        folder = accent.light,
+        image = Color(0xFF2F7F73),
+        media = Color(0xFF6F58A8),
+        document = Color(0xFF3D6BA8),
+    )
+}
 
-val LightArancio = ArancioColors(
-    background = Color(0xFFF6F4EF),
-    surface = Color(0xFFFFFFFF),
-    surfaceRaised = Color(0xFFEFECE6),
-    border = Color(0xFFDDD8CF),
-    text = Color(0xFF22201D),
-    textSecondary = Color(0xFF6B665E),
-    accent = Color(0xFFA85400),
-    onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFFF6E3CC),
-    accentText = Color(0xFFA85400),
-    danger = Color(0xFFB4382E),
-    success = Color(0xFF4F7A40),
-    folder = Color(0xFFA85400),
-    image = Color(0xFF2F7F73),
-    media = Color(0xFF6F58A8),
-    document = Color(0xFF3D6BA8),
-)
+val DarkArancio = arancioColors(dark = true, accent = AccentTheme.Arancio)
 
 val LocalArancio = staticCompositionLocalOf { DarkArancio }
 
@@ -120,7 +129,9 @@ private val ArancioShapes = Shapes(
 
 @Composable
 fun ArancioTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val c = if (dark) DarkArancio else LightArancio
+    val context = LocalContext.current
+    val accent by remember(context) { AccentStore.state(context) }.collectAsState()
+    val c = remember(dark, accent) { arancioColors(dark, accent) }
     val scheme = if (dark) {
         darkColorScheme(
             primary = c.accent, onPrimary = c.onAccent, primaryContainer = c.accentSoft, onPrimaryContainer = c.text,

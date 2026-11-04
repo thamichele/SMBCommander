@@ -21,6 +21,7 @@
         android:paddingEnd="12dp">
 
         <ImageView
+            android:id="@+id/widget_folder_icon"
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:contentDescription="@null"
@@ -51,6 +52,7 @@
         android:paddingEnd="12dp">
 
         <ImageView
+            android:id="@+id/widget_backup_icon"
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:contentDescription="@null"
