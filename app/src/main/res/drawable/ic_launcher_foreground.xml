@@ -9,8 +9,8 @@
     <group
         android:pivotX="54"
         android:pivotY="54"
-        android:scaleX="1.1"
-        android:scaleY="1.1">
+        android:scaleX="0.8"
+        android:scaleY="0.8">
         <path
             android:pathData="M30,40a5,5 0,0 1,5 -5h11l5,5h22a5,5 0,0 1,5 5v23a5,5 0,0 1,-5 5H35a5,5 0,0 1,-5 -5z"
             android:strokeWidth="4.5"
