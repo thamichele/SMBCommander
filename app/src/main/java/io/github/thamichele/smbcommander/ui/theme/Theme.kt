@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.thamichele.smbcommander.R
 
-/** "Arancio UI" tokens: warm dark ground, orange accent, IBM Plex Sans. */
+/** "Arancio UI" tokens: warm dark ground, orange accent (#D96D00, #A85400 on light grounds), IBM Plex Sans. */
 @Immutable
 data class ArancioColors(
     val background: Color,
@@ -48,13 +48,13 @@ val DarkArancio = ArancioColors(
     border = Color(0xFF3A3734),
     text = Color(0xFFEDEAE3),
     textSecondary = Color(0xFFA39E95),
-    accent = Color(0xFFE3845A),
+    accent = Color(0xFFD96D00),
     onAccent = Color(0xFF1C1B1A),
-    accentSoft = Color(0x33E3845A),
-    accentText = Color(0xFFEC976F),
+    accentSoft = Color(0x33D96D00),
+    accentText = Color(0xFFF5A04F),
     danger = Color(0xFFF0948A),
     success = Color(0xFF8DBA7C),
-    folder = Color(0xFFE3845A),
+    folder = Color(0xFFD96D00),
     image = Color(0xFF5DB3A6),
     media = Color(0xFFB8A3E0),
     document = Color(0xFF8FB3E3),
@@ -65,15 +65,15 @@ val LightArancio = ArancioColors(
     surface = Color(0xFFFFFFFF),
     surfaceRaised = Color(0xFFEFECE6),
     border = Color(0xFFDDD8CF),
-    text = Color(0xFF1C1B1A),
+    text = Color(0xFF22201D),
     textSecondary = Color(0xFF6B665E),
-    accent = Color(0xFFB4572F),
+    accent = Color(0xFFA85400),
     onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFFF3E2D9),
-    accentText = Color(0xFFB4572F),
+    accentSoft = Color(0xFFF6E3CC),
+    accentText = Color(0xFFA85400),
     danger = Color(0xFFB4382E),
     success = Color(0xFF4F7A40),
-    folder = Color(0xFFC96F48),
+    folder = Color(0xFFA85400),
     image = Color(0xFF2F7F73),
     media = Color(0xFF6F58A8),
     document = Color(0xFF3D6BA8),
