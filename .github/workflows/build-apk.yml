@@ -103,6 +103,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # a re-run of this same commit after a later step failed (e.g. a GitHub error on the push below)
+          # finds its own release: keep it and go on, so the F-Droid repository still gets updated.
+          # A release of the same version from another commit still fails here (version not raised).
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/v$VERSION" --jq .sha)
+            if [ "$TAG_SHA" = "$GITHUB_SHA" ]; then
+              echo "Release v$VERSION already made by this commit, kept as is"
+              exit 0
+            fi
+          fi
           gh release create "v$VERSION" "$RUNNER_TEMP/SMBCommander-$VERSION.apk" \
             --title "SMBCommander $VERSION" \
             --notes "APK firmato. Gli aggiornamenti arrivano anche dal repository F-Droid https://raw.githubusercontent.com/thamichele/SMBCommander/fdroid/repo"
