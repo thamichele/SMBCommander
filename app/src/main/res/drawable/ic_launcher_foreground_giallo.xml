@@ -1,24 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Arancio UI mark: outlined folder in the main colour holding two NAS drives on the dark tile.
-     One colour only, with the drive lights cut out, so the monochrome (themed) icon reads the same. -->
+<!-- Icon per the Arancio UI app-icon spec: stroke only, one colour, UI icon set (24 grid,
+     stroke 1.8, round ends). The 2..22 box fills 76% of the 72dp visible tile, centred. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:pivotX="54"
-        android:pivotY="54"
-        android:scaleX="0.8"
-        android:scaleY="0.8">
+        android:scaleX="2.736"
+        android:scaleY="2.736"
+        android:translateX="21.168"
+        android:translateY="21.168">
         <path
-            android:pathData="M30,40a5,5 0,0 1,5 -5h11l5,5h22a5,5 0,0 1,5 5v23a5,5 0,0 1,-5 5H35a5,5 0,0 1,-5 -5z"
-            android:strokeWidth="4.5"
+            android:pathData="M3,7a2,2 0,0 1,2 -2h4l2,2h8a2,2 0,0 1,2 2v8a2,2 0,0 1,-2 2H5a2,2 0,0 1,-2 -2z M10.5,11h6 M7.5,11h0.01 M10.5,15h6 M7.5,15h0.01"
+            android:strokeWidth="1.8"
             android:strokeColor="@color/launcher_giallo"
+            android:strokeLineCap="round"
             android:strokeLineJoin="round" />
-        <path
-            android:fillColor="@color/launcher_giallo"
-            android:fillType="evenOdd"
-            android:pathData="M42,47h24a2,2 0,0 1,2 2v3a2,2 0,0 1,-2 2H42a2,2 0,0 1,-2 -2v-3a2,2 0,0 1,2 -2zM44,49.5h3v2h-3zM42,58h24a2,2 0,0 1,2 2v3a2,2 0,0 1,-2 2H42a2,2 0,0 1,-2 -2v-3a2,2 0,0 1,2 -2zM44,60.5h3v2h-3z" />
     </group>
 </vector>
