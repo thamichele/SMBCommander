@@ -1,7 +1,10 @@
 package io.github.thamichele.smbcommander.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +39,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -41,7 +49,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.NasServer
+import io.github.thamichele.smbcommander.ui.theme.AccentStore
+import io.github.thamichele.smbcommander.ui.theme.AccentTheme
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.widget.BackupWidget
 
 @Composable
 fun SetupScreen(vm: AppViewModel) {
@@ -165,6 +176,7 @@ fun SetupScreen(vm: AppViewModel) {
                     )
                 }
             }
+            AppearanceSection()
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -182,5 +194,47 @@ fun SetupScreen(vm: AppViewModel) {
                 vm.disconnect()
             },
         )
+    }
+}
+
+/** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
+@Composable
+private fun AppearanceSection() {
+    val context = LocalContext.current
+    val current by remember(context) { AccentStore.state(context) }.collectAsStateWithLifecycle()
+    Text("Aspetto", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
+    Text(
+        "Colore principale dell'app, del widget e dell'icona. L'icona cambia quando esci dall'app; " +
+            "se l'avevi nella schermata Home, potrebbe servire rimetterla.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Arancio.colors.textSecondary,
+    )
+    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AccentTheme.entries.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { theme ->
+                    val selected = theme == current
+                    val shape = RoundedCornerShape(8.dp)
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(shape)
+                            .background(if (selected) theme.main.copy(alpha = 0.14f) else Arancio.colors.surface)
+                            .border(if (selected) 2.dp else 1.dp, if (selected) theme.main else Arancio.colors.border, shape)
+                            .selectable(selected = selected, role = Role.RadioButton) {
+                                AccentStore.set(context, theme)
+                                BackupWidget.updateAll(context)
+                            }
+                            .padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(theme.main))
+                        Text(theme.label, style = MaterialTheme.typography.labelLarge, color = Arancio.colors.text)
+                    }
+                }
+            }
+        }
     }
 }

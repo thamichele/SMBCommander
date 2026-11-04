@@ -2,4 +2,10 @@
 <resources>
     <color name="background">#1C1B1A</color>
     <color name="accent">#D96D00</color>
+    <!-- launcher icon of each main colour (Impostazioni > Aspetto) -->
+    <color name="launcher_viola">#9D6BFF</color>
+    <color name="launcher_rosso">#EC5A5A</color>
+    <color name="launcher_giallo">#E5B000</color>
+    <color name="launcher_blu">#4A90FF</color>
+    <color name="launcher_verde">#2FB36B</color>
 </resources>

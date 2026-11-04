@@ -168,7 +168,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                             if (!pinned) {
                                 MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
                             }
-                            MenuItem(AppIcons.Server, "Impostazioni del NAS") { moreMenu = false; vm.openSettings() }
+                            MenuItem(AppIcons.Server, "Impostazioni") { moreMenu = false; vm.openSettings() }
                         }
                     }
                 }

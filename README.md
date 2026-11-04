@@ -125,7 +125,8 @@ o modifica, la maggiore quando l'app raggiunge una nuova maturità. Ogni build d
 
 ## Sviluppo
 
-- Kotlin, Jetpack Compose, Material 3, stile "Arancio UI" (tema scuro caldo, accento arancio, IBM Plex Sans).
+- Kotlin, Jetpack Compose, Material 3, stile "Arancio UI" (tema scuro caldo, IBM Plex Sans). Il colore principale
+  (Arancio, Viola, Rosso, Giallo, Blu o Verde) si sceglie in **Impostazioni → Aspetto** e cambia app, widget e icona.
 - SMB tramite [smbj](https://github.com/hierynomus/smbj), elenco delle condivisioni tramite
   [smbj-rpc](https://github.com/rapid7/smbj-rpc).
 - Modulo `core`: logica SMB e di sincronizzazione in Kotlin puro, con test (`./gradlew :core:test`).
