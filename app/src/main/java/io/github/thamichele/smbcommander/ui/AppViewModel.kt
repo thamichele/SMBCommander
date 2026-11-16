@@ -26,7 +26,10 @@ import io.github.thamichele.smbcommander.core.TransferLog
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.FoundNas
 import io.github.thamichele.smbcommander.data.MusicState
+import io.github.thamichele.smbcommander.data.NasFinder
+import io.github.thamichele.smbcommander.data.WakeOnLan
 import io.github.thamichele.smbcommander.data.PhoneUploads
 import io.github.thamichele.smbcommander.data.isAudio
 import io.github.thamichele.smbcommander.data.ShareCache
@@ -154,6 +157,9 @@ data class BrowserState(
 
 /** Entries waiting for "Incolla qui" in another folder. */
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
+
+/** The optional functions as the settings show them. */
+data class ExtrasState(val lock: Boolean, val wakeOnLan: Boolean, val wakeMac: String, val followNas: Boolean)
 
 /** The folder of a ZIP archive being shown. */
 data class ArchiveState(
@@ -460,6 +466,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 if (_screen.value == s) _browser.update { it.copy(loading = false, error = e.readable()) }
+                followIfMoved(e)
             }
         }
     }
@@ -899,6 +906,88 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             message(e.readable())
         } finally {
             _transfer.value = null
+        }
+    }
+
+    // --- optional functions ---------------------------------------------------------------------------------------
+
+    private val _extras = MutableStateFlow(readExtras())
+    val extras: StateFlow<ExtrasState> = _extras.asStateFlow()
+
+    private fun readExtras() = app.extras.let { ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas) }
+
+    fun setLock(on: Boolean) {
+        if (on && !AppLock.available(app)) {
+            message("Imposta prima un'impronta, il volto o un blocco schermo nelle impostazioni del telefono")
+            return
+        }
+        app.extras.lock = on
+        if (on) app.extras.lastUnlocked = System.currentTimeMillis()
+        _extras.value = readExtras()
+    }
+
+    fun setWakeOnLan(on: Boolean) {
+        app.extras.wakeOnLan = on
+        _extras.value = readExtras()
+    }
+
+    fun setWakeMac(mac: String) {
+        app.extras.wakeMac = mac
+        _extras.value = readExtras()
+    }
+
+    fun setFollowNas(on: Boolean) {
+        app.extras.followNas = on
+        _extras.value = readExtras()
+    }
+
+    /** Sends the Wake-on-LAN packet to the NAS. */
+    fun wakeNas() = viewModelScope.launch {
+        try {
+            WakeOnLan.wake(app.extras.wakeMac, repo.host())
+            message("Segnale di accensione inviato: il NAS di solito risponde dopo un paio di minuti")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+    }
+
+    private val _found = MutableStateFlow<List<FoundNas>?>(null)
+    /** NAS announced on the Wi-Fi, for the address field of the settings; null until searched. */
+    val found: StateFlow<List<FoundNas>?> = _found.asStateFlow()
+    private val _finding = MutableStateFlow(false)
+    val finding: StateFlow<Boolean> = _finding.asStateFlow()
+
+    fun findNas() = viewModelScope.launch {
+        _finding.value = true
+        try {
+            _found.value = NasFinder.discover(app)
+        } finally {
+            _finding.value = false
+        }
+    }
+
+    private var lastFollow = 0L
+
+    /**
+     * The NAS does not answer at its address: with the option on, looks for it on the network and moves to its new
+     * address when the same NAS (same identity) answers there. At most once a minute.
+     */
+    private fun followIfMoved(error: Throwable) {
+        if (!app.extras.followNas || !error.isConnectionLost() && error !is java.net.UnknownHostException) return
+        val now = System.currentTimeMillis()
+        if (now - lastFollow < 60_000) return
+        lastFollow = now
+        viewModelScope.launch {
+            val candidates = runCatching { NasFinder.discover(app) }.getOrDefault(emptyList())
+            for (nas in candidates) {
+                if (repo.follow(nas.address)) {
+                    message("Il NAS ha cambiato indirizzo: ora è ${nas.address}, aggiornato nelle impostazioni")
+                    listingCache.clear()
+                    refresh()
+                    return@launch
+                }
+            }
         }
     }
 

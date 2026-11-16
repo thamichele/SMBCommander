@@ -1,5 +1,7 @@
 package io.github.thamichele.smbcommander.ui
 
+import io.github.thamichele.smbcommander.data.WakeOnLan
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +68,8 @@ fun SetupScreen(vm: AppViewModel) {
     var domain by rememberSaveable { mutableStateOf(saved?.domain.orEmpty()) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var confirmForget by remember { mutableStateOf(false) }
+    val found by vm.found.collectAsStateWithLifecycle()
+    val finding by vm.finding.collectAsStateWithLifecycle()
     val ready = host.isNotBlank() && user.isNotBlank() && !connecting
     val submit: () -> Unit = { vm.connect(NasServer(host.trim(), user.trim(), password, domain.trim())) }
 
@@ -88,6 +92,40 @@ fun SetupScreen(vm: AppViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
+            // NAS that announce themselves on the Wi-Fi (Bonjour): one tap fills the address
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { vm.findNas() }, enabled = !finding) {
+                    Text(if (finding) "Cerco nella rete…" else "Cerca il NAS nella rete")
+                }
+                if (finding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Arancio.colors.accent)
+            }
+            found?.let { list ->
+                if (list.isEmpty() && !finding) {
+                    Text(
+                        "Nessun NAS si è presentato. Su QNAP serve il servizio Bonjour (Pannello di controllo › Servizi di rete).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Arancio.colors.textSecondary,
+                    )
+                }
+                list.forEach { nas ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (host == nas.address) Arancio.colors.accentSoft else Arancio.colors.surface)
+                            .clickable { host = nas.address }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentText, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(nas.name, style = MaterialTheme.typography.titleSmall)
+                            Text(nas.address, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
+                        }
+                    }
+                }
+            }
             OutlinedTextField(
                 value = user,
                 onValueChange = { user = it },
@@ -176,6 +214,7 @@ fun SetupScreen(vm: AppViewModel) {
                     )
                 }
             }
+            if (saved != null) OptionalSection(vm)
             AppearanceSection()
             Spacer(Modifier.height(24.dp))
         }
@@ -193,6 +232,69 @@ fun SetupScreen(vm: AppViewModel) {
                 host = ""; user = ""; password = ""; domain = ""
                 vm.disconnect()
             },
+        )
+    }
+}
+
+/** Functions that not everyone wants: all off until turned on here. */
+@Composable
+private fun OptionalSection(vm: AppViewModel) {
+    val extras by vm.extras.collectAsStateWithLifecycle()
+    var mac by rememberSaveable { mutableStateOf(extras.wakeMac) }
+    Text("Funzioni facoltative", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
+    Text("Tutte spente finché non le accendi.", style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
+    OptionRow(
+        "Blocca con impronta o blocco schermo",
+        "All'apertura e dopo mezzo minuto fuori dall'app chiede impronta, volto o PIN del telefono. Le altre app " +
+            "vedono il NAS nel selettore file solo nei 10 minuti dopo lo sblocco.",
+        extras.lock,
+        vm::setLock,
+    )
+    OptionRow(
+        "Accendi il NAS dall'app (Wake-on-LAN)",
+        "Aggiunge «Accendi il NAS» in Le mie cartelle e quando il NAS non risponde. Va attivato anche sul NAS " +
+            "(su QNAP: Pannello di controllo › Hardware › Wake on LAN).",
+        extras.wakeOnLan,
+        vm::setWakeOnLan,
+    )
+    if (extras.wakeOnLan) {
+        OutlinedTextField(
+            value = mac,
+            onValueChange = { mac = it; vm.setWakeMac(it) },
+            label = { Text("Indirizzo MAC del NAS (00:11:22:33:44:55)") },
+            isError = mac.isNotBlank() && WakeOnLan.parseMac(mac) == null,
+            singleLine = true,
+            shape = RoundedCornerShape(8.dp),
+            colors = arancioFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    OptionRow(
+        "Ritrova il NAS se cambia indirizzo",
+        "Se il NAS non risponde, lo cerca nella rete e passa al nuovo indirizzo, ma solo se risponde lo stesso NAS " +
+            "abbinato (riconosciuto prima di inviare la password).",
+        extras.followNas,
+        vm::setFollowNas,
+    )
+}
+
+@Composable
+private fun OptionRow(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = Arancio.colors.accent,
+                checkedThumbColor = Arancio.colors.onAccent,
+                uncheckedTrackColor = Arancio.colors.surfaceRaised,
+                uncheckedBorderColor = Arancio.colors.border,
+            ),
         )
     }
 }

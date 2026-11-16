@@ -49,7 +49,7 @@ class NasDocumentsProvider : DocumentsProvider() {
     private fun idOf(share: String, path: String) = "n|$share|${RemotePath.normalize(path)}"
 
     private fun parse(id: String): Pair<String, String> {
-        if (!id.startsWith("n|")) throw FileNotFoundException(id)
+        if (!id.startsWith("n|") || !app.extras.pickerOpen()) throw FileNotFoundException(id)
         val rest = id.removePrefix("n|")
         val share = rest.substringBefore('|')
         val path = RemotePath.normalize(rest.substringAfter('|', ""))
@@ -76,7 +76,8 @@ class NasDocumentsProvider : DocumentsProvider() {
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
         val cursor = MatrixCursor(projection ?: ROOT_COLUMNS)
-        if (!app.repository.isConfigured) return cursor
+        // with the app lock on, the NAS is in the picker only for a while after the app was unlocked
+        if (!app.repository.isConfigured || !app.extras.pickerOpen()) return cursor
         cursor.newRow().apply {
             add(Root.COLUMN_ROOT_ID, ROOT)
             add(Root.COLUMN_DOCUMENT_ID, ROOT)
@@ -108,6 +109,7 @@ class NasDocumentsProvider : DocumentsProvider() {
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor {
         val cursor = MatrixCursor(projection ?: DOCUMENT_COLUMNS)
         if (parentDocumentId == ROOT) {
+            if (!app.extras.pickerOpen()) return cursor
             for (folder in app.folders.all()) {
                 cursor.newRow().apply {
                     add(Document.COLUMN_DOCUMENT_ID, idOf(folder.share, folder.path))

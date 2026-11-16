@@ -84,6 +84,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     val folders by vm.folders.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val clipboard by vm.clipboard.collectAsStateWithLifecycle()
+    val extras by vm.extras.collectAsStateWithLifecycle()
     val pinned = folders.any { it.share == screen.share && it.path == screen.path }
     val c = Arancio.colors
     var dialog by remember { mutableStateOf<Dialog?>(null) }
@@ -224,8 +225,16 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    state.error != null && state.entries.isEmpty() ->
+                    state.error != null && state.entries.isEmpty() -> Column {
                         ErrorCard(state.error.orEmpty(), "Riprova", vm::refresh)
+                        if (extras.wakeOnLan) {
+                            TextButton(onClick = { vm.wakeNas() }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                                Icon(AppIcons.Power, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Accendi il NAS")
+                            }
+                        }
+                    }
                     state.loading && state.entries.isEmpty() ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = c.accent)

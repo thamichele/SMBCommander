@@ -33,6 +33,27 @@ class NasRepository(private val credentials: CredentialStore) {
         current = fs
     }
 
+    /**
+     * The paired NAS answering at a new [address] (the router gave it another one): its identity is checked before
+     * any login, so a different machine there never receives the password. True when it was the same NAS and the
+     * new address is now saved.
+     */
+    suspend fun follow(address: String): Boolean = withContext(Dispatchers.IO) {
+        val saved = credentials.load() ?: return@withContext false
+        if (saved.serverId.isEmpty() || saved.host.equals(address, ignoreCase = true)) return@withContext false
+        val fs = SmbNasFileSystem(saved.copy(host = address))
+        try {
+            fs.connect()
+        } catch (e: Exception) {
+            fs.close()
+            return@withContext false
+        }
+        credentials.save(saved.copy(host = address))
+        current?.close()
+        current = fs
+        true
+    }
+
     fun forget() {
         current?.close()
         current = null

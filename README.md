@@ -118,6 +118,21 @@ un altro dispositivo) viene saltato, gli altri vanno avanti, e non resta nell'el
 più di uno, una finestra mostra il file in corso, la barra con quanti ne mancano e l'esito di ognuno (eliminato,
 saltato o non eliminato); si può interrompere, e si chiude da sola se è andato tutto bene.
 
+## Funzioni facoltative
+
+In **Impostazioni › Funzioni facoltative**, tutte spente finché non le accendi:
+
+- **Blocca con impronta o blocco schermo**: all'apertura, e quando torni dopo più di mezzo minuto, l'app chiede
+  impronta, volto o PIN del telefono. Con il blocco acceso le altre app vedono il NAS nel selettore file solo nei 10
+  minuti dopo lo sblocco.
+- **Accendi il NAS (Wake-on-LAN)**: con l'indirizzo MAC del NAS, «Accendi il NAS» compare in «Le mie cartelle» e
+  quando il NAS non risponde. Il Wake-on-LAN va attivato anche sul NAS.
+- **Ritrova il NAS se cambia indirizzo**: se il NAS non risponde, l'app lo cerca nella rete e passa al nuovo
+  indirizzo, solo se risponde lo stesso NAS abbinato (riconosciuto prima di inviare la password).
+
+Nelle impostazioni c'è anche «Cerca il NAS nella rete», che elenca i NAS che si presentano sul Wi-Fi (Bonjour) e
+riempie l'indirizzo con un tocco.
+
 ## Privacy e sicurezza
 
 - Indirizzo del NAS, utente e password si inseriscono nell'app e restano solo sul telefono, nella memoria privata
