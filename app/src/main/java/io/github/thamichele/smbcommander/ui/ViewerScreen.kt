@@ -80,6 +80,7 @@ import io.github.thamichele.smbcommander.data.SmbDataSource
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlinx.coroutines.delay
 
 /**
@@ -151,7 +152,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
                     )
                     Text(
                         "${pager.currentPage + 1} di ${screen.images.size} · ${entryDetails(current)}",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = ArancioType.data,
                         color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1,
                     )

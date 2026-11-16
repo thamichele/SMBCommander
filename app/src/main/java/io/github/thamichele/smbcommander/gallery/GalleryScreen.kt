@@ -23,14 +23,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,24 +73,32 @@ import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
+import io.github.thamichele.smbcommander.ui.ArancioMenu
+import io.github.thamichele.smbcommander.ui.ArancioMenuItem
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
+import io.github.thamichele.smbcommander.ui.EmptyState
 import io.github.thamichele.smbcommander.ui.ErrorCard
 import io.github.thamichele.smbcommander.ui.InfoDialog
 import io.github.thamichele.smbcommander.ui.PageHeader
+import io.github.thamichele.smbcommander.ui.PrimaryButton
+import io.github.thamichele.smbcommander.ui.SecondaryButton
 import io.github.thamichele.smbcommander.ui.SelectedMark
+import io.github.thamichele.smbcommander.ui.SkeletonGrid
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
+import io.github.thamichele.smbcommander.ui.theme.JetBrainsMono
+import java.text.DateFormatSymbols
+import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import java.text.DateFormatSymbols
-import java.util.Locale
-import kotlin.math.roundToInt
+import kotlinx.coroutines.withContext
 
 /** Only the photos of the backup folder, by month, newest first: as a grid, or as a list where a swipe deletes. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -171,7 +179,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
         val folder = state.folder
         // a quiet refresh: a thin bar, the photos stay where they are
         if (state.loading && !state.pulling && state.months.isNotEmpty()) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background)
+            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background, gapSize = 0.dp)
         }
         if (state.kind != null && state.sorting > 0 && state.months.isNotEmpty()) {
             Text(
@@ -190,39 +198,28 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             )
         }
         when {
-            folder == null -> Column(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+            folder == null -> EmptyState(
+                icon = AppIcons.Image,
+                title = "Nessuna cartella di backup",
+                text = "La galleria mostra la cartella in cui il backup salva le foto. Scegli prima quella cartella nel backup.",
             ) {
-                Text(
-                    "La galleria mostra la cartella in cui il backup salva le foto. Scegli prima quella cartella nel backup.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = c.textSecondary,
-                )
-                Button(onClick = appVm::openBackup, shape = RoundedCornerShape(8.dp)) { Text("Vai al backup foto") }
+                PrimaryButton(onClick = appVm::openBackup) { Text("Vai al backup foto") }
             }
             state.error != null && state.months.isEmpty() ->
                 ErrorCard(state.error.orEmpty(), "Riprova", vm::pull)
-            state.loading && state.months.isEmpty() ->
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
-            state.months.isEmpty() ->
-                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text("Nessuna foto ancora nella cartella del backup", style = MaterialTheme.typography.bodyLarge, color = c.textSecondary)
-                }
-            state.shown.isEmpty() ->
-                Column(
-                    Modifier.fillMaxSize().padding(32.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        if (state.sorting > 0) "Nessuna foto in «${state.kind?.label}» per ora: le altre arrivano man mano che le divido."
-                        else "Nessuna foto in «${state.kind?.label}».",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = c.textSecondary,
-                    )
-                    Button(onClick = { vm.setKind(null) }, shape = RoundedCornerShape(8.dp)) { Text("Mostra tutte le foto") }
-                }
+            state.loading && state.months.isEmpty() -> SkeletonGrid()
+            state.months.isEmpty() -> EmptyState(
+                icon = AppIcons.Image,
+                title = "Ancora nessuna foto",
+                text = "La cartella del backup è vuota: le foto arrivano con il prossimo backup.",
+            )
+            state.shown.isEmpty() -> EmptyState(
+                icon = state.kind?.icon ?: AppIcons.Categories,
+                title = "Nessuna foto in «${state.kind?.label}»",
+                text = if (state.sorting > 0) "Le altre arrivano man mano che le divido." else null,
+            ) {
+                SecondaryButton(onClick = { vm.setKind(null) }) { Text("Mostra tutte le foto") }
+            }
             else -> PullToRefreshBox(
                 isRefreshing = state.pulling,
                 onRefresh = vm::pull,
@@ -325,23 +322,16 @@ private fun KindMenu(current: PhotoKind?, counts: Map<PhotoKind, Int>, onPick: (
             current?.icon ?: AppIcons.Categories,
             "Categorie: ${current?.label ?: "tutte le foto"}",
             { open = true },
-            tint = if (current != null) Arancio.colors.accent else Arancio.colors.text,
+            tint = if (current != null) Arancio.colors.accentText else Arancio.colors.text,
         )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Arancio.colors.surfaceRaised) {
+        ArancioMenu(expanded = open, onDismissRequest = { open = false }) {
             val choices: List<PhotoKind?> = listOf(null) + PhotoKind.entries
             for (kind in choices) {
-                val color = if (kind == current) Arancio.colors.accent else Arancio.colors.text
                 val label = if (kind == null) "Tutte le foto" else "${kind.label} (${counts[kind] ?: 0})"
-                DropdownMenuItem(
-                    text = { Text(label, style = MaterialTheme.typography.bodyLarge, color = color) },
-                    leadingIcon = { Icon(kind?.icon ?: AppIcons.Categories, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) },
-                    trailingIcon = { if (kind == current) Icon(AppIcons.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp)) },
-                    onClick = {
-                        open = false
-                        onPick(kind)
-                    },
-                    modifier = Modifier.height(48.dp),
-                )
+                ArancioMenuItem(kind?.icon ?: AppIcons.Categories, label, active = kind == current) {
+                    open = false
+                    onPick(kind)
+                }
             }
         }
     }
@@ -362,19 +352,12 @@ private fun ViewMenu(current: GalleryView, onPick: (GalleryView) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         ToolButton(current.icon, "Visualizzazione: ${current.label}", { open = true })
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Arancio.colors.surfaceRaised) {
+        ArancioMenu(expanded = open, onDismissRequest = { open = false }) {
             for (view in GalleryView.entries) {
-                val color = if (view == current) Arancio.colors.accent else Arancio.colors.text
-                DropdownMenuItem(
-                    text = { Text(view.label, style = MaterialTheme.typography.bodyLarge, color = color) },
-                    leadingIcon = { Icon(view.icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) },
-                    trailingIcon = { if (view == current) Icon(AppIcons.Check, contentDescription = null, tint = color, modifier = Modifier.size(18.dp)) },
-                    onClick = {
-                        open = false
-                        onPick(view)
-                    },
-                    modifier = Modifier.height(48.dp),
-                )
+                ArancioMenuItem(view.icon, view.label, active = view == current) {
+                    open = false
+                    onPick(view)
+                }
             }
         }
     }
@@ -554,7 +537,7 @@ private fun PhotoList(
                                 )
                                 Text(
                                     entryDetails(photo),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = ArancioType.data,
                                     color = c.textSecondary,
                                     maxLines = 1,
                                 )
@@ -586,10 +569,10 @@ private fun SwipeToDelete(enabled: Boolean, onDelete: () -> Boolean, content: @C
     Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
         if (offset.value < 0f) {
             Box(
-                Modifier.matchParentSize().background(c.danger).padding(end = 24.dp),
+                Modifier.matchParentSize().background(c.dangerSoft).padding(end = 24.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                Icon(AppIcons.Delete, contentDescription = null, tint = c.background, modifier = Modifier.size(22.dp))
+                Icon(AppIcons.Delete, contentDescription = null, tint = c.danger, modifier = Modifier.size(22.dp))
             }
         }
         Box(
@@ -621,11 +604,22 @@ private fun SwipeToDelete(enabled: Boolean, onDelete: () -> Boolean, content: @C
 
 @Composable
 private fun MonthHeader(group: MonthGroup, first: Boolean) {
-    Text(
-        "${monthName(group.month)} ${group.year} · ${group.photos.size}",
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = if (first) 0.dp else 16.dp, bottom = 8.dp),
-    )
+    Row(
+        Modifier.padding(top = if (first) 4.dp else 20.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            "${monthName(group.month)} ${group.year}",
+            style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono),
+        )
+        Text(
+            if (group.photos.size == 1) "1 elemento" else "${group.photos.size} elementi",
+            style = ArancioType.data,
+            color = Arancio.colors.textSecondary,
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

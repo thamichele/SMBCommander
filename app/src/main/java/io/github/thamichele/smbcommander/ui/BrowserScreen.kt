@@ -47,9 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +63,8 @@ import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isMedia
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 private sealed interface Dialog {
     data object NewFolder : Dialog
@@ -127,7 +129,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     ToolButton(AppIcons.Delete, "Elimina", { dialog = Dialog.DeleteSelected }, tint = c.danger)
                     Box {
                         ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
-                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }, containerColor = c.surfaceRaised) {
+                        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                             MenuItem(AppIcons.Check, "Seleziona tutto") { moreMenu = false; vm.selectAll() }
                             val chosen = state.entries.filter { it.path in selected }
                             if (chosen.any { !it.isDirectory }) {
@@ -159,7 +161,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
                     Box {
                         ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
-                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }, containerColor = c.surfaceRaised) {
+                        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                             MenuItem(AppIcons.Refresh, "Aggiorna") { moreMenu = false; vm.refresh() }
                             MenuItem(
                                 if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
@@ -193,18 +195,13 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 when {
                     state.error != null && state.entries.isEmpty() ->
                         ErrorCard(state.error.orEmpty(), "Riprova", vm::refresh)
-                    state.loading && state.entries.isEmpty() ->
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = c.accent)
-                        }
-                    visible.isEmpty() ->
-                        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                if (state.query.isNotBlank()) "Nessun elemento contiene «${state.query.trim()}»" else "Cartella vuota",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = c.textSecondary,
-                            )
-                        }
+                    state.loading && state.entries.isEmpty() -> SkeletonList()
+                    visible.isEmpty() -> EmptyState(
+                        icon = if (state.query.isNotBlank()) AppIcons.Search else AppIcons.Folder,
+                        title = if (state.query.isNotBlank()) "Nessun risultato" else "Cartella vuota",
+                        text = if (state.query.isNotBlank()) "Nessun elemento contiene «${state.query.trim()}»."
+                        else "Aggiungi file dal telefono o crea una cartella con il pulsante +.",
+                    )
                     state.grid -> LazyVerticalGrid(
                         columns = GridCells.Adaptive(112.dp),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
@@ -229,15 +226,8 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         }
 
         if (clipboard == null && selected.isEmpty()) Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-            FloatingActionButton(
-                onClick = { addMenu = true },
-                containerColor = c.accent,
-                contentColor = c.onAccent,
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(AppIcons.Plus, contentDescription = "Aggiungi", modifier = Modifier.size(24.dp))
-            }
-            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, containerColor = c.surfaceRaised) {
+            AccentFab(AppIcons.Plus, "Aggiungi", onClick = { addMenu = true })
+            ArancioMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
                 MenuItem(AppIcons.Upload, "Carica file dal telefono") { addMenu = false; pickFiles.launch(arrayOf("*/*")) }
                 MenuItem(AppIcons.FolderPlus, "Nuova cartella") { addMenu = false; dialog = Dialog.NewFolder }
                 MenuItem(AppIcons.Document, "Nuovo file di testo") { addMenu = false; dialog = Dialog.NewTextFile }
@@ -321,7 +311,7 @@ private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(entryDetails(entry), style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary, maxLines = 1)
+            Text(entryDetails(entry), style = ArancioType.data, color = Arancio.colors.textSecondary, maxLines = 1)
         }
         if (actions.selected.isEmpty()) Box {
             ToolButton(AppIcons.More, "Azioni per ${entry.name}", { menu = true }, tint = Arancio.colors.textSecondary)
@@ -399,7 +389,7 @@ private fun FallbackTile(entry: RemoteEntry, size: Dp?, tileSize: Dp = size ?: 1
 
 @Composable
 private fun EntryMenu(entry: RemoteEntry, actions: EntryActions, expanded: Boolean, onDismiss: () -> Unit) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, containerColor = Arancio.colors.surfaceRaised) {
+    ArancioMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (entry.isDirectory) {
             MenuItem(AppIcons.Folder, "Apri") { onDismiss(); actions.open(entry) }
         } else {
@@ -424,8 +414,7 @@ private fun ClipboardBar(clip: Clipboard, onPaste: () -> Unit, onCancel: () -> U
         modifier
             .padding(16.dp)
             .fillMaxWidth()
-            .background(c.surfaceRaised, RoundedCornerShape(12.dp))
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .floating(c)
             .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -434,21 +423,15 @@ private fun ClipboardBar(clip: Clipboard, onPaste: () -> Unit, onCancel: () -> U
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onCancel) { Text("Annulla") }
-        Button(onClick = onPaste, shape = RoundedCornerShape(8.dp)) { Text("Incolla qui") }
+        GhostButton(onClick = onCancel) { Text("Annulla") }
+        Spacer(Modifier.width(4.dp))
+        PrimaryButton(onClick = onPaste) { Text("Incolla qui") }
     }
 }
 
 @Composable
-private fun MenuItem(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
-    val color = if (danger) Arancio.colors.danger else Arancio.colors.text
-    DropdownMenuItem(
-        text = { Text(label, style = MaterialTheme.typography.bodyLarge, color = color) },
-        leadingIcon = { Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) },
-        onClick = onClick,
-        modifier = Modifier.height(48.dp),
-    )
-}
+private fun MenuItem(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) =
+    ArancioMenuItem(icon, label, danger = danger, onClick = onClick)
 
 @Composable
 private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> Unit) {
@@ -469,7 +452,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
             trailingIcon = if (query.isNotEmpty()) {
                 { ToolButton(AppIcons.Close, "Cancella", { onQuery("") }, tint = Arancio.colors.textSecondary) }
             } else null,
-            shape = RoundedCornerShape(999.dp),
+            shape = ArancioShape.control,
             colors = arancioFieldColors(),
             modifier = Modifier.weight(1f).focusRequester(focus),
         )

@@ -41,6 +41,7 @@ import io.github.thamichele.smbcommander.data.isImage
 import io.github.thamichele.smbcommander.data.isMedia
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 /**
  * Everything known about a file or folder: first its path on the NAS, ready to copy, then size and dates, and for
@@ -68,7 +69,7 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = c.surface,
+        containerColor = c.surfaceRaised,
         title = { Text(entry.name, style = MaterialTheme.typography.titleLarge) },
         text = {
             SelectionContainer {
@@ -76,13 +77,14 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
                     Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    InfoRow("Percorso sul NAS", path, onCopy = { copy("Percorso", path) })
-                    network?.let { InfoRow("Percorso di rete", it, onCopy = { copy("Percorso di rete", it) }) }
+                    InfoRow("Percorso sul NAS", path, mono = true, onCopy = { copy("Percorso", path) })
+                    network?.let { InfoRow("Percorso di rete", it, mono = true, onCopy = { copy("Percorso di rete", it) }) }
                     InfoRow("Tipo", kind(entry))
                     if (!entry.isDirectory) {
                         InfoRow(
                             "Dimensione",
                             "${Formatter.formatFileSize(context, entry.size)} (${"%,d".format(java.util.Locale.ITALY, entry.size)} byte)",
+                            mono = true,
                         )
                     }
                     if (entry.modified > 0) {
@@ -103,31 +105,26 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
                         }
                     } else {
                         loaded.forEach { (label, value) ->
-                            if (label == "Posizione") InfoRow(label, value, onCopy = { copy("Posizione", value) })
+                            if (label == "Posizione") InfoRow(label, value, mono = true, onCopy = { copy("Posizione", value) })
                             else InfoRow(label, value)
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Chiudi") } },
-        shape = RoundedCornerShape(12.dp),
+        confirmButton = { GhostButton(onClick = onDismiss) { Text("Chiudi") } },
     )
 }
 
 @Composable
-private fun InfoRow(label: String, value: String, onCopy: (() -> Unit)? = null) {
+private fun InfoRow(label: String, value: String, mono: Boolean = false, onCopy: (() -> Unit)? = null) {
     val c = Arancio.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
-            Text(value, style = MaterialTheme.typography.bodyMedium)
+            Text(value, style = if (mono) ArancioType.code else MaterialTheme.typography.bodyMedium)
         }
-        if (onCopy != null) {
-            IconButton(onClick = onCopy) {
-                Icon(AppIcons.Copy, contentDescription = "Copia $label", tint = c.accentText, modifier = Modifier.size(20.dp))
-            }
-        }
+        if (onCopy != null) ToolButton(AppIcons.Copy, "Copia $label", onCopy, tint = c.accentText)
     }
 }
 

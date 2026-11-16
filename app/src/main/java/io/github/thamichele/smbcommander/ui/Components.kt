@@ -2,32 +2,55 @@ package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,21 +59,36 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioColors
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
-/** Page header of the kit: small grey context line over a big title, actions on the right. */
+/** Page header of the kit: small grey context line over a big title in JetBrains Mono, actions on the right. */
 @Composable
 fun PageHeader(
     context: String,
@@ -59,11 +97,11 @@ fun PageHeader(
     actions: @Composable () -> Unit = {},
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 12.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         navigation?.invoke()
-        Column(Modifier.weight(1f).padding(start = if (navigation == null) 0.dp else 4.dp)) {
+        Column(Modifier.weight(1f).padding(start = if (navigation == null) 0.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (context.isNotEmpty()) {
                 Text(
                     context,
@@ -84,31 +122,403 @@ fun PageHeader(
     }
 }
 
+/** Icon-only button of the kit: 44dp touch target, square corners of 4. */
 @Composable
-fun ToolButton(icon: ImageVector, label: String, onClick: () -> Unit, tint: Color = Arancio.colors.text) {
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+fun ToolButton(icon: ImageVector, label: String, onClick: () -> Unit, tint: Color = Arancio.colors.text, enabled: Boolean = true) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(ArancioShape.control)
+            .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.5f),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
-/** Pill filter chip: filled light when selected, outlined surface otherwise. */
+/** Filter chip of the kit: filled light when selected, outlined panel otherwise, corners of 4. */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
-    val shape = RoundedCornerShape(999.dp)
-    TextButton(
-        onClick = onClick,
-        shape = shape,
-        colors = ButtonDefaults.textButtonColors(
-            containerColor = if (selected) c.text else c.surface,
-            contentColor = if (selected) c.background else c.text,
-        ),
-        modifier = Modifier
+    val shape = ArancioShape.control
+    Box(
+        Modifier
             .height(36.dp)
-            .then(if (selected) Modifier else Modifier.border(1.dp, c.border, shape)),
-        contentPadding = PaddingValues(horizontal = 14.dp),
+            .clip(shape)
+            .background(if (selected) c.text else c.surface)
+            .then(if (selected) Modifier else Modifier.border(1.dp, c.border, shape))
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelMedium)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium),
+            color = if (selected) c.background else c.text,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Small label as a pill: accent at 16% with the accent label colour, or [tint] at 16%. */
+@Composable
+fun Tag(text: String, tint: Color? = null, modifier: Modifier = Modifier) {
+    val c = Arancio.colors
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = tint ?: c.accentLabel,
+        maxLines = 1,
+        modifier = modifier
+            .background((tint ?: c.accent).copy(alpha = 0.16f), ArancioShape.pill)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+    )
+}
+
+/** Uppercase heading over a group of cards or settings. */
+@Composable
+fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text.uppercase(),
+        style = ArancioType.section,
+        color = Arancio.colors.textSecondary,
+        modifier = modifier.semantics { heading() },
+    )
+}
+
+/** Card or panel at level 0: no shadow, 1dp border, corners of 12. */
+@Composable
+fun Panel(
+    modifier: Modifier = Modifier,
+    raised: Boolean = false,
+    padding: PaddingValues = PaddingValues(16.dp),
+    spacing: Dp = 12.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = Arancio.colors
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(if (raised) c.surfaceRaised else c.surface, ArancioShape.card)
+            .border(1.dp, c.border, ArancioShape.card)
+            .padding(padding),
+        verticalArrangement = Arrangement.spacedBy(spacing),
+        content = content,
+    )
+}
+
+/** Dialog panel at level 2: raised ground, strong border, deeper shadow. */
+fun Modifier.dialogPanel(colors: ArancioColors): Modifier = this
+    .shadow(16.dp, ArancioShape.card, ambientColor = colors.shadow, spotColor = colors.shadow)
+    .background(colors.surfaceRaised, ArancioShape.card)
+    .border(1.dp, colors.borderStrong, ArancioShape.card)
+
+/** Floating card at level 1 (toasts, transfer progress): raised ground, strong border, small shadow. */
+fun Modifier.floating(colors: ArancioColors): Modifier = this
+    .shadow(6.dp, ArancioShape.card, ambientColor = colors.shadow, spotColor = colors.shadow)
+    .background(colors.surfaceRaised, ArancioShape.card)
+    .border(1.dp, colors.borderStrong, ArancioShape.card)
+
+enum class ButtonKind { Primary, Secondary, Ghost, Danger, Tinted }
+
+/**
+ * Button of the kit: corners of 4, 40dp high (48dp touch target), pressed at scale 0.97 for 80ms,
+ * disabled at half opacity. Primary is filled with the main colour, Secondary is the raised grey with a border,
+ * Ghost has no ground, Danger is the soft red with a red border, Tinted the soft main colour ("Ask AI").
+ */
+@Composable
+fun ArancioButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    kind: ButtonKind = ButtonKind.Primary,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues? = null,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val c = Arancio.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, tween(80), label = "press")
+    val (container, content2, border) = when (kind) {
+        ButtonKind.Primary -> Triple(if (pressed) c.accentHover else c.accentButton, c.onAccent, null)
+        ButtonKind.Secondary -> Triple(c.surfaceRaised, c.text, c.borderStrong)
+        ButtonKind.Ghost -> Triple(Color.Transparent, c.text, null)
+        ButtonKind.Danger -> Triple(c.dangerSoft, c.danger, c.dangerBorder)
+        ButtonKind.Tinted -> Triple(c.accentDeep, c.accentText, c.accentBorder)
+    }
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = ArancioShape.control,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = container,
+            contentColor = content2,
+            disabledContainerColor = container,
+            disabledContentColor = content2,
+        ),
+        border = border?.let { BorderStroke(1.dp, it) },
+        contentPadding = contentPadding ?: PaddingValues(horizontal = if (kind == ButtonKind.Ghost) 12.dp else 16.dp),
+        interactionSource = interaction,
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .alpha(if (enabled) 1f else 0.5f),
+    ) {
+        ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = if (kind == ButtonKind.Primary) FontWeight.SemiBold else FontWeight.Medium)) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun PrimaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    ArancioButton(onClick, modifier, ButtonKind.Primary, enabled, content = content)
+
+@Composable
+fun SecondaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    ArancioButton(onClick, modifier, ButtonKind.Secondary, enabled, content = content)
+
+@Composable
+fun GhostButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    ArancioButton(onClick, modifier, ButtonKind.Ghost, enabled, content = content)
+
+@Composable
+fun DangerButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    ArancioButton(onClick, modifier, ButtonKind.Danger, enabled, content = content)
+
+/** Floating button of the kit: 56dp, main colour, corners of 6. */
+@Composable
+fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Arancio.colors
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = c.accentButton,
+        contentColor = c.onAccent,
+        shape = ArancioShape.fab,
+        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp, pressedElevation = 8.dp),
+        modifier = modifier,
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+    }
+}
+
+/** Dropdown menu at level 1: raised ground, strong border, corners of 8, small shadow. */
+@Composable
+fun ArancioMenu(expanded: Boolean, onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val c = Arancio.colors
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        shape = ArancioShape.menu,
+        containerColor = c.surfaceRaised,
+        tonalElevation = 0.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, c.borderStrong),
+        content = content,
+    )
+}
+
+/** Menu entry: the active one on the main colour at 10% with accent text, destructive ones in red. */
+@Composable
+fun ArancioMenuItem(icon: ImageVector?, label: String, danger: Boolean = false, active: Boolean = false, onClick: () -> Unit) {
+    val c = Arancio.colors
+    val color = when {
+        danger -> c.danger
+        active -> c.accentText
+        else -> c.text
+    }
+    DropdownMenuItem(
+        text = { Text(label, style = MaterialTheme.typography.bodyLarge, color = color) },
+        leadingIcon = if (icon != null) {
+            { Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) }
+        } else null,
+        trailingIcon = if (active) {
+            { Icon(AppIcons.Check, contentDescription = "Attivo", tint = color, modifier = Modifier.size(18.dp)) }
+        } else null,
+        onClick = onClick,
+        modifier = Modifier
+            .padding(horizontal = 6.dp)
+            .clip(ArancioShape.control)
+            .background(if (active) c.accentTint else Color.Transparent)
+            .height(44.dp),
+    )
+}
+
+/** Toasts of the kit: raised card from the bottom, strong border, corners of 8. */
+@Composable
+fun ArancioSnackbarHost(state: SnackbarHostState, modifier: Modifier = Modifier) {
+    val c = Arancio.colors
+    SnackbarHost(state, modifier) { data ->
+        Snackbar(
+            data,
+            shape = ArancioShape.menu,
+            containerColor = c.surfaceRaised,
+            contentColor = c.text,
+            actionColor = c.accentText,
+            actionContentColor = c.accentText,
+            dismissActionContentColor = c.textSecondary,
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .border(1.dp, c.borderStrong, ArancioShape.menu),
+        )
+    }
+}
+
+/** Progress bar of the kit: 6dp, round ends, on the border grey. Without [fraction] it runs indeterminate. */
+@Composable
+fun ArancioProgress(fraction: Float?, modifier: Modifier = Modifier, color: Color = Arancio.colors.accent) {
+    val c = Arancio.colors
+    val m = modifier.fillMaxWidth().height(6.dp)
+    if (fraction != null) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = m,
+            color = color,
+            trackColor = c.border,
+            strokeCap = StrokeCap.Round,
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
+    } else {
+        LinearProgressIndicator(modifier = m, color = color, trackColor = c.border, strokeCap = StrokeCap.Round, gapSize = 0.dp)
+    }
+}
+
+@Composable
+fun arancioSwitchColors() = SwitchDefaults.colors(
+    checkedTrackColor = Arancio.colors.accent,
+    checkedThumbColor = Arancio.colors.onAccent,
+    checkedBorderColor = Arancio.colors.accent,
+    uncheckedTrackColor = Arancio.colors.surfaceRaised,
+    uncheckedThumbColor = Arancio.colors.textSecondary,
+    uncheckedBorderColor = Arancio.colors.borderStrong,
+)
+
+/** Loading placeholder: the slow 1.2s sheen of the kit, the only looping animation it allows. */
+@Composable
+fun rememberShimmer(): Brush {
+    val c = Arancio.colors
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val x by transition.animateFloat(
+        initialValue = -400f,
+        targetValue = 400f,
+        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
+        label = "shimmer-x",
+    )
+    return Brush.linearGradient(
+        colors = listOf(c.surfaceRaised, c.border, c.surfaceRaised),
+        start = Offset(x, 0f),
+        end = Offset(x + 800f, 0f),
+    )
+}
+
+/** Rows of a list that is still loading: tile, name and details as grey bars. */
+@Composable
+fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 8) {
+    val brush = rememberShimmer()
+    Column(modifier.fillMaxSize().padding(top = 4.dp)) {
+        repeat(rows) { i ->
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(44.dp).background(brush, RoundedCornerShape(10.dp)))
+                Spacer(Modifier.width(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.fillMaxWidth(if (i % 3 == 0) 0.62f else if (i % 3 == 1) 0.48f else 0.7f).height(14.dp).background(brush, ArancioShape.control))
+                    Box(Modifier.fillMaxWidth(0.32f).height(10.dp).background(brush, ArancioShape.control))
+                }
+            }
+        }
+    }
+}
+
+/** Squares of a photo grid that is still loading. */
+@Composable
+fun SkeletonGrid(modifier: Modifier = Modifier, columns: Int = 4, rows: Int = 6) {
+    val brush = rememberShimmer()
+    Column(modifier.fillMaxSize().padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp).fillMaxWidth(0.3f).height(14.dp).background(brush, ArancioShape.control))
+        repeat(rows) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(columns) { Box(Modifier.weight(1f).aspectRatio(1f).background(brush)) }
+            }
+        }
+    }
+}
+
+/** Empty screen or list: icon on a bordered tile, a title, a line of help and maybe one action. */
+@Composable
+fun EmptyState(
+    icon: ImageVector,
+    title: String,
+    text: String? = null,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val c = Arancio.colors
+    Column(
+        modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.size(64.dp).background(c.surface, ArancioShape.card).border(1.dp, c.border, ArancioShape.card),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = c.text, textAlign = TextAlign.Center)
+        if (text != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center)
+        }
+        if (action != null) {
+            Spacer(Modifier.height(20.dp))
+            action()
+        }
+    }
+}
+
+enum class NoticeKind { Info, Success, Warning, Error }
+
+private class NoticeStyle(val icon: ImageVector, val tint: Color, val ground: Color, val edge: Color)
+
+/** Notice of the kit: icon, bold line and explanation on a tinted ground with a tinted border, corners of 10. */
+@Composable
+fun Notice(
+    kind: NoticeKind,
+    title: String,
+    text: String? = null,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val c = Arancio.colors
+    val style = when (kind) {
+        NoticeKind.Info -> NoticeStyle(AppIcons.Info, c.accentText, c.accentDeep, c.accentBorder)
+        NoticeKind.Success -> NoticeStyle(AppIcons.Check, c.success, c.successSoft, c.successBorder)
+        NoticeKind.Warning -> NoticeStyle(AppIcons.Alert, c.warning, c.surfaceRaised, c.borderStrong)
+        NoticeKind.Error -> NoticeStyle(AppIcons.Alert, c.danger, c.dangerSoft, c.dangerBorder)
+    }
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(style.ground, shape)
+            .border(1.dp, style.edge, shape)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(style.icon, contentDescription = null, tint = style.tint, modifier = Modifier.padding(top = 1.dp).size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                if (text != null) Text(text, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+        }
+        action?.invoke()
     }
 }
 
@@ -165,33 +575,30 @@ fun entryDetails(entry: RemoteEntry): String {
 /** Card for an error with a way out. */
 @Composable
 fun ErrorCard(text: String, action: String, onAction: () -> Unit) {
-    val c = Arancio.colors
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .background(c.surface, RoundedCornerShape(12.dp))
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Alert, contentDescription = null, tint = c.danger, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = MaterialTheme.typography.bodyLarge)
-        }
-        OutlinedButton(onClick = onAction, shape = RoundedCornerShape(8.dp)) { Text(action) }
+    Notice(NoticeKind.Error, text, modifier = Modifier.padding(16.dp)) {
+        SecondaryButton(onClick = onAction) { Text(action) }
     }
 }
 
+/** Fields of the kit: ground colour inside, strong grey border, main colour when focused, corners of 4. */
 @Composable
 fun arancioFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = Arancio.colors.accent,
-    unfocusedBorderColor = Arancio.colors.border,
+    unfocusedBorderColor = Arancio.colors.borderStrong,
+    disabledBorderColor = Arancio.colors.border,
+    errorBorderColor = Arancio.colors.danger,
     focusedLabelColor = Arancio.colors.accentText,
+    unfocusedLabelColor = Arancio.colors.textSecondary,
+    focusedLeadingIconColor = Arancio.colors.textSecondary,
+    unfocusedLeadingIconColor = Arancio.colors.textSecondary,
+    focusedTrailingIconColor = Arancio.colors.textSecondary,
+    unfocusedTrailingIconColor = Arancio.colors.textSecondary,
+    focusedPlaceholderColor = Arancio.colors.textSecondary,
+    unfocusedPlaceholderColor = Arancio.colors.textSecondary,
     cursorColor = Arancio.colors.accent,
-    focusedContainerColor = Arancio.colors.surface,
-    unfocusedContainerColor = Arancio.colors.surface,
+    focusedContainerColor = Arancio.colors.background,
+    unfocusedContainerColor = Arancio.colors.background,
+    selectionColors = TextSelectionColors(handleColor = Arancio.colors.accent, backgroundColor = Arancio.colors.accent.copy(alpha = 0.30f)),
 )
 
 /** Dialog asking for a file or folder name; the part before the extension is preselected. */
@@ -203,26 +610,25 @@ fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () ->
     LaunchedEffect(Unit) { focus.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Arancio.colors.surface,
+        containerColor = Arancio.colors.surfaceRaised,
         title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         text = {
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                shape = ArancioShape.control,
                 colors = arancioFieldColors(),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         },
         confirmButton = {
-            Button(
+            PrimaryButton(
                 onClick = { onConfirm(value.text) },
                 enabled = value.text.isNotBlank(),
-                shape = RoundedCornerShape(8.dp),
             ) { Text(confirm) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
+        dismissButton = { GhostButton(onClick = onDismiss) { Text("Annulla") } },
     )
 }
 
@@ -237,19 +643,13 @@ fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Arancio.colors.surface,
+        containerColor = Arancio.colors.surfaceRaised,
         title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         text = { Text(text, style = MaterialTheme.typography.bodyLarge) },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(8.dp),
-                colors = if (danger) {
-                    ButtonDefaults.buttonColors(containerColor = Arancio.colors.danger, contentColor = Arancio.colors.onAccent)
-                } else ButtonDefaults.buttonColors(),
-            ) { Text(confirm) }
+            ArancioButton(onClick = onConfirm, kind = if (danger) ButtonKind.Danger else ButtonKind.Primary) { Text(confirm) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
+        dismissButton = { GhostButton(onClick = onDismiss) { Text("Annulla") } },
     )
 }
 
@@ -257,8 +657,8 @@ fun ConfirmDialog(
 @Composable
 fun SelectedMark(modifier: Modifier, size: Dp = 22.dp) {
     val c = Arancio.colors
-    Box(modifier.size(size).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(AppIcons.Check, contentDescription = null, tint = c.background, modifier = Modifier.size(size * 0.64f))
+    Box(modifier.size(size).background(c.accent, CircleShape).border(1.5.dp, c.background, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(AppIcons.Check, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(size * 0.64f))
     }
 }
 

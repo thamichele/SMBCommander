@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,16 +43,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.ui.theme.AccentStore
 import io.github.thamichele.smbcommander.ui.theme.AccentTheme
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import io.github.thamichele.smbcommander.widget.BackupWidget
 
 @Composable
@@ -70,12 +75,21 @@ fun SetupScreen(vm: AppViewModel) {
     val submit: () -> Unit = { vm.connect(NasServer(host.trim(), user.trim(), password, domain.trim())) }
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
-        PageHeader(context = "SMBCommander", title = "Collega il NAS")
+        if (saved != null) {
+            PageHeader(
+                context = "SMBCommander",
+                title = "Impostazioni",
+                navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+            )
+        } else {
+            PageHeader(context = "SMBCommander", title = "Collega il NAS")
+        }
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (saved != null) SectionLabel("NAS", Modifier.padding(top = 8.dp))
             Text(
                 "Indirizzo del NAS nella rete di casa e un utente che può accedere alle cartelle condivise. " +
                     "I dati restano cifrati su questo telefono.",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Arancio.colors.textSecondary,
             )
             OutlinedTextField(
@@ -83,7 +97,8 @@ fun SetupScreen(vm: AppViewModel) {
                 onValueChange = { host = it },
                 label = { Text("Indirizzo IP o nome del NAS") },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                textStyle = ArancioType.code.copy(fontSize = 15.sp),
+                shape = ArancioShape.control,
                 colors = arancioFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
@@ -93,7 +108,7 @@ fun SetupScreen(vm: AppViewModel) {
                 onValueChange = { user = it },
                 label = { Text("Utente") },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                shape = ArancioShape.control,
                 colors = arancioFieldColors(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
@@ -103,18 +118,17 @@ fun SetupScreen(vm: AppViewModel) {
                 onValueChange = { password = it },
                 label = { Text(if (saved != null) "Password (vuota = quella salvata)" else "Password") },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                shape = ArancioShape.control,
                 colors = arancioFieldColors(),
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
                 trailingIcon = {
-                    IconButton(onClick = { showPassword = !showPassword }) {
-                        Icon(
-                            if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
-                            contentDescription = if (showPassword) "Nascondi password" else "Mostra password",
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                    ToolButton(
+                        if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
+                        if (showPassword) "Nascondi password" else "Mostra password",
+                        { showPassword = !showPassword },
+                        tint = Arancio.colors.textSecondary,
+                    )
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -123,16 +137,15 @@ fun SetupScreen(vm: AppViewModel) {
                 onValueChange = { domain = it },
                 label = { Text("Dominio o gruppo di lavoro (facoltativo)") },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                shape = ArancioShape.control,
                 colors = arancioFieldColors(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(4.dp))
-            Button(
+            PrimaryButton(
                 onClick = submit,
                 enabled = ready,
-                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
                 if (connecting) {
@@ -142,38 +155,35 @@ fun SetupScreen(vm: AppViewModel) {
                         color = Arancio.colors.onAccent,
                     )
                 } else {
-                    Text("Collega")
+                    Text(if (saved != null) "Salva e ricollega" else "Collega")
                 }
             }
             if (saved != null) {
-                TextButton(onClick = { confirmForget = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Scollega e dimentica questo NAS", color = Arancio.colors.danger)
+                ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
+                    Text("Scollega e dimentica questo NAS")
                 }
-                Text("Galleria", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
-                Row(
-                    Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
-                                "dal NAS. Se è spento, prima chiede conferma.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Arancio.colors.textSecondary,
+                SectionLabel("Galleria", Modifier.padding(top = 20.dp))
+                Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
+                                    "dal NAS. Se è spento, prima chiede conferma.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Arancio.colors.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = withoutConfirm,
+                            onCheckedChange = vm::setDeleteWithoutConfirm,
+                            colors = arancioSwitchColors(),
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Switch(
-                        checked = withoutConfirm,
-                        onCheckedChange = vm::setDeleteWithoutConfirm,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = Arancio.colors.accent,
-                            checkedThumbColor = Arancio.colors.onAccent,
-                            uncheckedTrackColor = Arancio.colors.surfaceRaised,
-                            uncheckedBorderColor = Arancio.colors.border,
-                        ),
-                    )
                 }
             }
             AppearanceSection()
@@ -202,7 +212,7 @@ fun SetupScreen(vm: AppViewModel) {
 private fun AppearanceSection() {
     val context = LocalContext.current
     val current by remember(context) { AccentStore.state(context) }.collectAsStateWithLifecycle()
-    Text("Aspetto", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp))
+    SectionLabel("Aspetto", Modifier.padding(top = 20.dp))
     Text(
         "Colore principale dell'app, del widget e dell'icona. L'icona cambia quando esci dall'app; " +
             "se l'avevi nella schermata Home, potrebbe servire rimetterla.",
@@ -214,14 +224,15 @@ private fun AppearanceSection() {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { theme ->
                     val selected = theme == current
-                    val shape = RoundedCornerShape(8.dp)
+                    // as the radio buttons of the "Modalità colori" board: tinted ground and ring of the colour when chosen
+                    val shape = ArancioShape.control
                     Row(
                         Modifier
                             .weight(1f)
                             .height(48.dp)
                             .clip(shape)
-                            .background(if (selected) theme.main.copy(alpha = 0.14f) else Arancio.colors.surface)
-                            .border(if (selected) 2.dp else 1.dp, if (selected) theme.main else Arancio.colors.border, shape)
+                            .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
+                            .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)
                             .selectable(selected = selected, role = Role.RadioButton) {
                                 AccentStore.set(context, theme)
                                 BackupWidget.updateAll(context)
@@ -231,7 +242,7 @@ private fun AppearanceSection() {
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(theme.main))
-                        Text(theme.label, style = MaterialTheme.typography.labelLarge, color = Arancio.colors.text)
+                        Text(theme.label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium), color = Arancio.colors.text)
                     }
                 }
             }

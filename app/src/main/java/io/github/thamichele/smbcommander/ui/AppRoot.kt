@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,10 +19,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,9 +45,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -53,8 +60,9 @@ import io.github.thamichele.smbcommander.gallery.CleanupScreen
 import io.github.thamichele.smbcommander.gallery.GalleryScreen
 import io.github.thamichele.smbcommander.share.ShareActivity
 import io.github.thamichele.smbcommander.ui.theme.Arancio
-import kotlinx.coroutines.launch
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import java.io.File
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
@@ -90,7 +98,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
 
     Scaffold(
         containerColor = Arancio.colors.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { ArancioSnackbarHost(snackbar) },
         // in the bar, not in the content, so snackbars appear above it
         bottomBar = {
             if (screen == Screen.Shares || screen == Screen.Gallery || screen == Screen.Backup) {
@@ -122,27 +130,12 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                         .align(Alignment.BottomCenter)
                         .padding(16.dp)
                         .fillMaxWidth()
-                        .background(Arancio.colors.surfaceRaised, RoundedCornerShape(12.dp))
-                        .border(1.dp, Arancio.colors.border, RoundedCornerShape(12.dp))
+                        .floating(Arancio.colors)
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(t.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val fraction = t.fraction
-                    if (fraction != null) {
-                        LinearProgressIndicator(
-                            progress = { fraction },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Arancio.colors.accent,
-                            trackColor = Arancio.colors.border,
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Arancio.colors.accent,
-                            trackColor = Arancio.colors.border,
-                        )
-                    }
+                    ArancioProgress(t.fraction)
                 }
             }
         }
@@ -152,7 +145,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
         val name = RemotePath.name(p.session.path)
         AlertDialog(
             onDismissRequest = {},
-            containerColor = Arancio.colors.surface,
+            containerColor = Arancio.colors.surfaceRaised,
             title = {
                 Text(
                     if (p.remoteMissing) "«$name» non c'è più sul NAS" else "«$name» è cambiato anche sul NAS",
@@ -171,13 +164,13 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
             },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(onClick = vm::resolveKeepBoth, shape = RoundedCornerShape(8.dp)) {
+                    PrimaryButton(onClick = vm::resolveKeepBoth) {
                         Text("Salva come copia")
                     }
-                    OutlinedButton(onClick = vm::resolveOverwrite, shape = RoundedCornerShape(8.dp)) {
+                    SecondaryButton(onClick = vm::resolveOverwrite) {
                         Text(if (p.remoteMissing) "Ricrea il file" else "Sovrascrivi il NAS")
                     }
-                    TextButton(onClick = vm::resolveDiscard) {
+                    GhostButton(onClick = vm::resolveDiscard) {
                         Text("Scarta le modifiche", color = Arancio.colors.danger)
                     }
                 }
@@ -190,9 +183,9 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
 @Composable
 private fun BottomNav(screen: Screen, vm: AppViewModel) {
     val c = Arancio.colors
-    Column(Modifier.background(c.surface).navigationBarsPadding()) {
+    Column(Modifier.background(c.nav).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)) {
+        Row(Modifier.fillMaxWidth().selectableGroup().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
             NavItem(AppIcons.Folder, "File", screen == Screen.Shares, vm::openFiles, Modifier.weight(1f))
             NavItem(AppIcons.Image, "Galleria", screen == Screen.Gallery, vm::openGallery, Modifier.weight(1f))
             NavItem(AppIcons.Upload, "Backup foto", screen == Screen.Backup, vm::openBackup, Modifier.weight(1f))
@@ -203,8 +196,13 @@ private fun BottomNav(screen: Screen, vm: AppViewModel) {
 @Composable
 private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Arancio.colors
+    val pill by animateColorAsState(if (active) c.accentSoft else Color.Transparent, tween(180), label = "nav-pill")
     Column(
-        modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
+        modifier
+            .heightIn(min = 48.dp)
+            .clip(ArancioShape.control)
+            .selectable(selected = active, role = Role.Tab, onClick = onClick)
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -212,7 +210,7 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: 
             Modifier
                 .width(56.dp)
                 .height(30.dp)
-                .background(if (active) c.accentSoft else Color.Transparent, RoundedCornerShape(999.dp)),
+                .background(pill, ArancioShape.pill),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = if (active) c.text else c.textSecondary, modifier = Modifier.size(22.dp))

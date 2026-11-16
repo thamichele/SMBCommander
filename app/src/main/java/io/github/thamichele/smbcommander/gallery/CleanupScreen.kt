@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -42,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -50,6 +52,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,16 +70,27 @@ import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
+import io.github.thamichele.smbcommander.ui.DangerButton
 import io.github.thamichele.smbcommander.ui.DeletionDialog
+import io.github.thamichele.smbcommander.ui.EmptyState
 import io.github.thamichele.smbcommander.ui.ErrorCard
+import io.github.thamichele.smbcommander.ui.GhostButton
 import io.github.thamichele.smbcommander.ui.InfoDialog
+import io.github.thamichele.smbcommander.ui.Notice
+import io.github.thamichele.smbcommander.ui.NoticeKind
 import io.github.thamichele.smbcommander.ui.PageHeader
+import io.github.thamichele.smbcommander.ui.Pill
+import io.github.thamichele.smbcommander.ui.PrimaryButton
+import io.github.thamichele.smbcommander.ui.SecondaryButton
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
+import io.github.thamichele.smbcommander.ui.rememberShimmer
 import io.github.thamichele.smbcommander.ui.theme.Arancio
-import kotlinx.coroutines.launch
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /**
  * One card at a time: swipe left (or ✕) to send the photo to the bin, right (or ✓) to keep it. Only the card on top
@@ -164,12 +178,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             }
         }
         state.error?.let { error ->
-            Text(
-                error,
-                style = MaterialTheme.typography.bodySmall,
-                color = c.danger,
-                modifier = Modifier.padding(horizontal = 16.dp).clickable { vm.clearError() },
-            )
+            Notice(NoticeKind.Error, error, modifier = Modifier.padding(horizontal = 16.dp).clickable { vm.clearError() })
         }
 
         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
@@ -177,7 +186,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
                 state.folder == null && galleryState.folder == null ->
                     ErrorCard("Scegli prima la cartella del backup", "Vai al backup foto", appVm::openBackup)
                 state.loading || (galleryState.loading && galleryState.months.isEmpty()) ->
-                    CircularProgressIndicator(color = c.accent)
+                    Box(Modifier.fillMaxSize().background(rememberShimmer(), ArancioShape.card))
                 state.tab == CleanupTab.Duplicates -> {
                     val pair = state.pairs.firstOrNull()
                     if (pair == null) {
@@ -321,7 +330,7 @@ private fun SwipeCard(onKeep: () -> Unit, onDiscard: () -> Unit, content: @Compo
                         .align(if (keep) Alignment.TopStart else Alignment.TopEnd)
                         .padding(24.dp)
                         .graphicsLayer { alpha = progress; rotationZ = if (keep) -12f else 12f }
-                        .border(2.dp, if (keep) c.accent else c.danger, RoundedCornerShape(8.dp))
+                        .border(2.dp, if (keep) c.accent else c.danger, ArancioShape.control)
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
@@ -374,7 +383,7 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
             Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 entryDetails(entry) + " · " + CleanupRules.relative(entry.path, root).substringBeforeLast('/', "").ifEmpty { "cartella del backup" },
-                style = MaterialTheme.typography.bodySmall,
+                style = ArancioType.data,
                 color = c.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -393,17 +402,14 @@ private fun Done(
     othersLabel: String = "Rivedi anche le altre",
 ) {
     val c = Arancio.colors
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(AppIcons.Broom, contentDescription = null, tint = c.accent, modifier = Modifier.size(48.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Text(
-            text ?: if (othersLeft) "Le foto che sembravano da controllare le hai viste tutte. Puoi passare anche alle altre."
-            else "Hai visto tutto. Le foto nuove del backup compariranno qui quando serve.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = c.textSecondary,
-        )
-        if (othersLeft) Button(onClick = onOthers, shape = RoundedCornerShape(8.dp)) { Text(othersLabel) }
-        else Button(onClick = onReload, shape = RoundedCornerShape(8.dp)) { Text("Ricarica") }
+    EmptyState(
+        icon = AppIcons.Broom,
+        title = title,
+        text = text ?: if (othersLeft) "Le foto che sembravano da controllare le hai viste tutte. Puoi passare anche alle altre."
+        else "Hai visto tutto. Le foto nuove del backup compariranno qui quando serve.",
+    ) {
+        if (othersLeft) PrimaryButton(onClick = onOthers) { Text(othersLabel) }
+        else SecondaryButton(onClick = onReload) { Text("Ricarica") }
     }
 }
 
@@ -417,11 +423,12 @@ private fun RoundButton(icon: ImageVector, label: String, tint: Color, enabled: 
                 .size(size)
                 .clip(CircleShape)
                 .background(c.surfaceRaised)
-                .border(1.dp, if (enabled) tint else c.border, CircleShape)
-                .clickable(enabled = enabled, onClick = onClick),
+                .border(1.dp, if (enabled) tint.copy(alpha = 0.6f) else c.borderStrong, CircleShape)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .alpha(if (enabled) 1f else 0.5f),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = label, tint = if (enabled) tint else c.border, modifier = Modifier.size(size / 2.2f))
+            Icon(icon, contentDescription = label, tint = if (enabled) tint else c.textSecondary, modifier = Modifier.size(size / 2.2f))
         }
         Spacer(Modifier.height(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
@@ -431,16 +438,22 @@ private fun RoundButton(icon: ImageVector, label: String, tint: Color, enabled: 
 @Composable
 private fun TabPill(text: String, active: Boolean, small: Boolean = false, onClick: () -> Unit) {
     val c = Arancio.colors
+    if (!small) {
+        // the main tabs: the filter chips of the kit
+        Pill(text, active, onClick)
+        return
+    }
+    // the groups inside a tab: quieter, the active one on the main colour at 10%
     Text(
         text,
-        style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
-        color = if (active) c.text else c.textSecondary,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (active) c.accentText else c.textSecondary,
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (active) c.accentSoft else c.surface)
-            .border(1.dp, if (active) c.accent else c.border, RoundedCornerShape(999.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = if (small) 12.dp else 14.dp, vertical = if (small) 6.dp else 8.dp),
+            .clip(ArancioShape.control)
+            .background(if (active) c.accentTint else Color.Transparent)
+            .border(1.dp, if (active) c.accentBorder else c.border, ArancioShape.control)
+            .selectable(selected = active, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     )
 }
 
@@ -449,7 +462,7 @@ private fun TrashDialog(count: Int, size: String, onDismiss: () -> Unit, onEmpty
     val c = Arancio.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = c.surface,
+        containerColor = c.surfaceRaised,
         title = { Text("Cestino: ${if (count == 1) "1 elemento" else "$count elementi"}, $size", style = MaterialTheme.typography.titleLarge) },
         text = {
             Text(
@@ -459,16 +472,14 @@ private fun TrashDialog(count: Int, size: String, onDismiss: () -> Unit, onEmpty
             )
         },
         confirmButton = {
-            Button(
+            DangerButton(
                 onClick = onEmpty,
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = c.danger, contentColor = c.onAccent),
             ) { Text("Svuota") }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onRestore) { Text("Ripristina tutto") }
-                TextButton(onClick = onDismiss) { Text("Chiudi") }
+                GhostButton(onClick = onRestore) { Text("Ripristina tutto") }
+                GhostButton(onClick = onDismiss) { Text("Chiudi") }
             }
         },
     )
@@ -531,12 +542,11 @@ private fun DuplicateSide(entry: RemoteEntry, root: String, modifier: Modifier, 
         }
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(folder, style = MaterialTheme.typography.bodySmall, color = c.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            Text(entryDetails(entry), style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(folder, style = ArancioType.data, color = c.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Text(entryDetails(entry), style = ArancioType.data, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Button(
+        PrimaryButton(
             onClick = onKeep,
-            shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
         ) { Text("Tieni questo", maxLines = 1) }
     }

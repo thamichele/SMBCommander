@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 /** The copy and move queue: the job running now, how many wait, and the ones that failed. */
 @Composable
@@ -33,8 +34,7 @@ fun TransferCard(jobs: List<TransferJob>, onCancel: () -> Unit, onClose: () -> U
         modifier
             .padding(16.dp)
             .fillMaxWidth()
-            .background(c.surfaceRaised, RoundedCornerShape(12.dp))
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .floating(c)
             .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -43,12 +43,7 @@ fun TransferCard(jobs: List<TransferJob>, onCancel: () -> Unit, onClose: () -> U
             if (running.current.isNotEmpty()) {
                 Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            val fraction = running.fraction
-            if (fraction != null) {
-                LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(end = 8.dp), color = c.accent, trackColor = c.border)
-            } else {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), color = c.accent, trackColor = c.border)
-            }
+            ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
         } else if (!active) {
             Text(
                 if (failed.isEmpty()) "Trasferimenti completati" else "Trasferimenti terminati con errori",
@@ -64,14 +59,14 @@ fun TransferCard(jobs: List<TransferJob>, onCancel: () -> Unit, onClose: () -> U
                     if (waiting > 0) "$waiting in coda" else null,
                     if (done > 0) "$done completati" else null,
                 ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
+                style = ArancioType.data,
                 color = c.textSecondary,
                 modifier = Modifier.weight(1f),
             )
             if (active) {
-                TextButton(onClick = onCancel) { Text("Annulla", color = c.danger) }
+                GhostButton(onClick = onCancel) { Text("Annulla", color = c.danger) }
             } else {
-                TextButton(onClick = onClose) { Text("Chiudi") }
+                GhostButton(onClick = onClose) { Text("Chiudi") }
             }
         }
     }
