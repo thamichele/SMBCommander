@@ -66,6 +66,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val jobs by vm.transfers.collectAsStateWithLifecycle()
     val transfersPaused by vm.transfersPaused.collectAsStateWithLifecycle()
     val conflictAsk by vm.conflictAsk.collectAsStateWithLifecycle()
+    val music by vm.music.collectAsStateWithLifecycle()
     val deletion by vm.deletion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -118,11 +119,24 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Gallery -> GalleryScreen(vm)
                 Screen.Cleanup -> CleanupScreen(vm)
                 is Screen.Trash -> TrashScreen(vm)
+                is Screen.Archive -> ArchiveScreen(vm, s)
                 Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)
             }
             if (viewer != null) ViewerScreen(vm, viewer)
+            // the song playing stays on every screen but the full-screen viewer, above the transfers
+            if (music.active && viewer == null) {
+                MiniPlayer(
+                    music,
+                    onToggle = vm::musicToggle,
+                    onNext = vm::musicNext,
+                    onPrevious = vm::musicPrevious,
+                    onSeek = vm::musicSeek,
+                    onClose = vm::musicStop,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (jobs.isNotEmpty() || transfer != null) 120.dp else 0.dp),
+                )
+            }
             if (jobs.isNotEmpty() && transfer == null) {
                 TransferCard(
                     jobs,

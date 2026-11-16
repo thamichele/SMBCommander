@@ -14,6 +14,7 @@ import io.github.thamichele.smbcommander.data.AspectRatios
 import io.github.thamichele.smbcommander.data.CredentialStore
 import io.github.thamichele.smbcommander.data.EditSessionStore
 import io.github.thamichele.smbcommander.data.FolderStore
+import io.github.thamichele.smbcommander.data.MusicController
 import io.github.thamichele.smbcommander.data.NasRepository
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.ShareCache
@@ -53,6 +54,8 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var shareCache: ShareCache
         private set
+    /** The music player, connected to its service the first time a song is played. */
+    val music: MusicController by lazy { MusicController(this) }
 
     /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
     val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)

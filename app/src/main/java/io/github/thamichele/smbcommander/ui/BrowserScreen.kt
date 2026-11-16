@@ -60,7 +60,10 @@ import coil3.compose.SubcomposeAsyncImage
 import io.github.thamichele.smbcommander.core.FileTrash
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.core.ZipArchive
 import io.github.thamichele.smbcommander.data.Thumb
+import io.github.thamichele.smbcommander.data.hasPicture
+import io.github.thamichele.smbcommander.data.isAudio
 import io.github.thamichele.smbcommander.data.isMedia
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
@@ -103,6 +106,8 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 selected.isNotEmpty() -> vm.toggleSelected(it)
                 it.isDirectory -> vm.openFolder(it)
                 it.isMedia -> vm.openViewer(it)
+                it.isAudio -> vm.playMusic(it)
+                ZipArchive.isZip(it.name) -> vm.openArchive(it)
                 else -> vm.open(it, edit = false)
             }
         },
@@ -411,7 +416,7 @@ private fun GridTile(entry: RemoteEntry, actions: EntryActions) {
 private fun Preview(entry: RemoteEntry, size: Dp?) {
     val box = if (size != null) Modifier.size(size) else Modifier.fillMaxSize()
     val tileSize = size ?: 112.dp
-    if (entry.isMedia) {
+    if (entry.hasPicture) {
         Box(box) {
             SubcomposeAsyncImage(
                 model = Thumb(entry),

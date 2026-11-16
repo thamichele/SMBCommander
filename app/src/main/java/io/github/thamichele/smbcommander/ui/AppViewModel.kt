@@ -13,6 +13,9 @@ import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.FileTrash
+import io.github.thamichele.smbcommander.core.RandomReader
+import io.github.thamichele.smbcommander.core.ZipArchive
+import io.github.thamichele.smbcommander.core.ZipExtract
 import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasServer
@@ -23,7 +26,9 @@ import io.github.thamichele.smbcommander.core.TransferLog
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.MusicState
 import io.github.thamichele.smbcommander.data.PhoneUploads
+import io.github.thamichele.smbcommander.data.isAudio
 import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.data.isMedia
@@ -57,6 +62,9 @@ sealed interface Screen {
 
     /** The quick cleanup of the gallery: one photo at a time, swipe to keep or discard. */
     data object Cleanup : Screen
+
+    /** A ZIP archive on the NAS opened like a folder, at [dir] inside it; back goes up, then to [returnTo]. */
+    data class Archive(val returnTo: Browser, val entry: RemoteEntry, val dir: String) : Screen
 
     /** The bin of the file browser, every share together; back returns to [returnTo]. */
     data class Trash(val returnTo: Screen) : Screen
@@ -146,6 +154,13 @@ data class BrowserState(
 
 /** Entries waiting for "Incolla qui" in another folder. */
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
+
+/** The folder of a ZIP archive being shown. */
+data class ArchiveState(
+    val items: List<ZipArchive.Entry> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+)
 
 /** The bin of the file browser as the screen shows it. */
 data class TrashState(
@@ -405,6 +420,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             Screen.Cleanup -> {
                 _screen.value = Screen.Gallery
+                return true
+            }
+            is Screen.Archive -> {
+                if (s.dir.isEmpty()) {
+                    closeArchive()
+                    _screen.value = s.returnTo
+                    refresh()
+                } else {
+                    _screen.value = s.copy(dir = RemotePath.parent(s.dir))
+                    showArchiveDir()
+                }
                 return true
             }
             is Screen.Trash -> {
@@ -874,6 +900,136 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _transfer.value = null
         }
+    }
+
+    // --- music --------------------------------------------------------------------------------------------------
+
+    val music: StateFlow<MusicState> = app.music.state
+
+    /** Plays [entry] and, after it, the other songs of the folder as the list shows them. */
+    fun playMusic(entry: RemoteEntry) {
+        val songs = _browser.value.visible.filter { it.isAudio }.ifEmpty { listOf(entry) }
+        app.music.play(songs, songs.indexOf(entry).coerceAtLeast(0))
+    }
+
+    fun musicToggle() = app.music.toggle()
+    fun musicNext() = app.music.next()
+    fun musicPrevious() = app.music.previous()
+    fun musicSeek(position: Long) = app.music.seek(position)
+    fun musicStop() = app.music.stop()
+
+    // --- ZIP archives ---------------------------------------------------------------------------------------------
+
+    private val _archive = MutableStateFlow(ArchiveState())
+    val archive: StateFlow<ArchiveState> = _archive.asStateFlow()
+
+    private var openArchive: Pair<ZipArchive, RandomReader>? = null
+
+    /** Opens a ZIP of the NAS like a folder: only its index is read, not the whole file. */
+    fun openArchive(entry: RemoteEntry) {
+        val s = _screen.value as? Screen.Browser ?: return
+        closeArchive()
+        _screen.value = Screen.Archive(s, entry, "")
+        _archive.value = ArchiveState(loading = true)
+        viewModelScope.launch {
+            try {
+                openArchive = repo.io { fs ->
+                    val reader = fs.openRandom(entry.share, entry.path)
+                    try {
+                        ZipArchive.read(reader) to reader
+                    } catch (e: Exception) {
+                        reader.close()
+                        throw e
+                    }
+                }
+                showArchiveDir()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _archive.value = ArchiveState(error = e.readable())
+            }
+        }
+    }
+
+    fun openArchiveFolder(item: ZipArchive.Entry) {
+        val s = _screen.value as? Screen.Archive ?: return
+        _screen.value = s.copy(dir = item.path)
+        showArchiveDir()
+    }
+
+    private fun showArchiveDir() {
+        val s = _screen.value as? Screen.Archive ?: return
+        val (zip, _) = openArchive ?: return
+        val items = zip.list(s.dir).sortedWith(compareByDescending<ZipArchive.Entry> { it.isDirectory }.thenBy { it.name.lowercase() })
+        _archive.value = ArchiveState(items = items, loading = false)
+    }
+
+    private fun closeArchive() {
+        openArchive?.second?.let { r -> viewModelScope.launch(Dispatchers.IO) { runCatching { r.close() } } }
+        openArchive = null
+    }
+
+    /** Extracts one file of the archive to the phone and opens it with another app; nothing is written to the NAS. */
+    fun openFromArchive(item: ZipArchive.Entry) = viewModelScope.launch {
+        val (zip, _) = openArchive ?: return@launch
+        val dir = app.shareCache.newFolder()
+        val local = File(dir, item.name)
+        try {
+            withContext(Dispatchers.IO) {
+                zip.open(item).use { input ->
+                    local.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var done = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            done += n
+                            _transfer.value = Transfer("Estraggo ${item.name}", done, item.size)
+                        }
+                    }
+                }
+            }
+            app.shareCache.scheduleCleanup()
+            events.send(UiEvent.OpenFile(local, item.name, edit = false))
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            if (e is CancellationException) throw e
+            message(e.readable())
+        } finally {
+            _transfer.value = null
+        }
+    }
+
+    /**
+     * Extracts [item] (a file or a folder of the archive), or everything when null, into the NAS folder of the
+     * archive: everything goes into a new folder named after the archive. It runs in the transfer queue.
+     */
+    fun extractFromArchive(item: ZipArchive.Entry?) {
+        val s = _screen.value as? Screen.Archive ?: return
+        val zipEntry = s.entry
+        val folder = s.returnTo
+        val base = if (item == null) "" else RemotePath.parent(item.path)
+        val targetName = item?.name ?: zipEntry.name.substringBeforeLast('.').ifEmpty { zipEntry.name }
+        val start = { conflict: Conflict ->
+            val log = TransferLog()
+            app.transfers.enqueue("Estrai «$targetName» da ${zipEntry.name}") { fs, progress ->
+                fs.openRandom(zipEntry.share, zipEntry.path).use { reader ->
+                    val zip = ZipArchive.read(reader)
+                    val files = zip.filesUnder(item?.path ?: "")
+                    val toDir = if (item == null) RemotePath.child(folder.path, targetName) else folder.path
+                    if (item == null && fs.stat(folder.share, toDir) == null) fs.createDirectory(folder.share, toDir)
+                    ZipExtract.extract(fs, zip, files, base, folder.share, toDir, conflict, log, progress)
+                }
+                when (log.skipped) {
+                    0 -> "estratto in ${RemotePath.name(folder.path).ifEmpty { folder.share }}"
+                    else -> "${log.skipped} file già presenti, lasciati com'erano"
+                }
+            }
+            message("Estrazione in coda: la trovi in ${RemotePath.name(folder.path).ifEmpty { folder.share }}")
+        }
+        // names in the NAS folder as it was listed before opening the archive
+        val taken = (listingCache["${folder.share}/${folder.path}"] ?: emptyList()).mapTo(HashSet()) { it.name.lowercase() }
+        if (targetName.lowercase() in taken) _conflictAsk.value = ConflictAsk(listOf(targetName), 1) { start(it) } else start(Conflict.KeepBoth)
     }
 
     // --- bin of the file browser ------------------------------------------------------------------------------------

@@ -31,6 +31,15 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
   non rovina mai l'originale.
+- **Musica**: tocca un brano e parte in streaming dal NAS, seguito dagli altri brani della cartella. Un piccolo lettore
+  resta in basso su ogni schermata (toccalo per la barra di avanzamento), e la musica continua con lo schermo spento,
+  con i comandi nella notifica, sulla schermata di blocco e dalle cuffie; staccando le cuffie si mette in pausa.
+- **Anteprime di PDF e copertine**: negli elenchi i PDF (fino a 30 MB) mostrano la prima pagina e le canzoni la
+  copertina dell'album salvata nel file, con lo stesso sistema di cache delle foto.
+- **Archivi ZIP**: un file `.zip` sul NAS si apre come una cartella senza scaricarlo (viaggia solo l'indice). Un file
+  dell'archivio si apre con un'altra app estraendo solo quello; «Estrai nella cartella del NAS» mette sul NAS un file,
+  una cartella o tutto l'archivio (in una cartella con il suo nome), con le solite verifiche e la coda dei
+  trasferimenti.
 - **Info** su ogni file, dal visualizzatore, dalla selezione in Galleria o dal menu di un elemento: percorso sul NAS e
   percorso di rete da copiare, dimensione, date e, per foto e video, risoluzione, data di scatto, fotocamera, durata e
   posizione.
