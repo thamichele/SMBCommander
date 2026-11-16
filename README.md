@@ -37,11 +37,20 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
 - **Ogni trasferimento è verificato**: caricamenti, copie, spostamenti e download confrontano l'impronta SHA-256 di
   ciò che è partito con quella di ciò che è arrivato. Un file diverso non viene mai tenuto, e uno spostamento elimina
   l'originale solo dopo che la copia è risultata identica.
-- Operazioni di base: carica dal telefono, scarica sul telefono, nuova cartella, nuovo file di testo vuoto, rinomina,
-  elimina.
+- Operazioni di base: carica dal telefono (file singoli o un'intera cartella con le sue sottocartelle), scarica sul
+  telefono, nuova cartella, nuovo file di testo vuoto, rinomina, elimina.
 - **Copia e sposta** tra cartelle del NAS: tieni premuto per selezionare uno o più elementi, scegli Copia o Sposta,
   apri la cartella di destinazione e premi «Incolla qui». I trasferimenti vanno in una coda con l'avanzamento e
   continuano mentre navighi; quando possibile la copia la fa il NAS stesso, senza passare dal telefono.
+- **Trasferimenti affidabili**: copie, spostamenti e caricamenti vanno avanti anche con l'app chiusa o lo schermo
+  spento, con una notifica che mostra l'avanzamento e i pulsanti Pausa e Annulla. Si possono mettere in pausa e
+  riprendere; se il Wi-Fi o il NAS spariscono per un momento l'app riprova da sola, aspettando un po' di più ogni
+  volta, e riparte da dove si era fermata senza ricopiare i file già arrivati. Un trasferimento fallito si riprende con
+  «Riprova».
+- **Nomi già presenti**: se nella cartella di destinazione c'è già un elemento con lo stesso nome, l'app chiede se
+  sostituirlo, saltarlo o tenere entrambi (il nuovo prende « (2)»). Le cartelle con lo stesso nome vengono unite e la
+  scelta vale per ogni file al loro interno; un file viene sostituito solo dopo che la nuova copia è risultata
+  identica all'originale.
 - **Salva sul NAS dalle altre app**: dal menu Condividi di qualunque app scegli «Salva sul NAS», poi la cartella.
 - **Widget** per la schermata Home: avvia il backup o apre una cartella scelta.
 

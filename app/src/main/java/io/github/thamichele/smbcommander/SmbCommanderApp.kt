@@ -20,6 +20,13 @@ import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.PhotoSorter
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.data.TransferQueue
+import io.github.thamichele.smbcommander.data.TransferService
+import io.github.thamichele.smbcommander.ui.isConnectionLost
+import io.github.thamichele.smbcommander.ui.readable
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
 import kotlinx.coroutines.flow.MutableSharedFlow
 import java.io.File
@@ -61,7 +68,13 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         backupSettings = BackupSettingsStore(this)
         backupLedger = BackupLedger(File(filesDir, "backup-ledger.txt"))
         galleryPrefs = GalleryPrefs(this)
-        transfers = TransferQueue(repository)
+        transfers = TransferQueue(repository, isConnectionLost = { it.isConnectionLost() }, describe = { it.readable() })
+        // the service keeps the app alive while there is work, also with the app closed
+        MainScope().launch {
+            transfers.jobs.map { jobs -> jobs.any { it.busy } }.distinctUntilChanged().collect { busy ->
+                if (busy) TransferService.start(this@SmbCommanderApp)
+            }
+        }
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))

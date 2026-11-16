@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.backup.BackupScheduler
+import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
@@ -16,12 +17,13 @@ import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
+import io.github.thamichele.smbcommander.core.TransferLog
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.PhoneUploads
 import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.TransferJob
-import io.github.thamichele.smbcommander.data.describe
 import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -128,6 +130,9 @@ data class BrowserState(
 /** Entries waiting for "Incolla qui" in another folder. */
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
 
+/** Some of the elements about to go into a folder are already there: [go] runs with the user's choice. */
+data class ConflictAsk(val names: List<String>, val total: Int, val go: (Conflict) -> Unit)
+
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
     data class OpenFile(val file: File, val name: String, val edit: Boolean) : UiEvent
@@ -194,6 +199,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 app.nasChanged.tryEmit(null)
                 refresh()
                 if (job.state == TransferJob.State.Failed) message("${job.label}: ${job.error}")
+                else if (job.state == TransferJob.State.Done && job.note != null) message("${job.label}: ${job.note}")
             }
         }
     }
@@ -471,23 +477,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _clipboard.value = null
     }
 
+    private val _conflictAsk = MutableStateFlow<ConflictAsk?>(null)
+    /** Names already in the destination: the user chooses whether to replace, skip or keep both. */
+    val conflictAsk: StateFlow<ConflictAsk?> = _conflictAsk.asStateFlow()
+
+    /** The choice for [conflictAsk]; null closes it without doing anything. */
+    fun answerConflict(choice: Conflict?) {
+        val ask = _conflictAsk.value ?: return
+        _conflictAsk.value = null
+        if (choice != null) ask.go(choice)
+    }
+
+    /**
+     * Runs [go] at once when none of [names] is in the folder being browsed, else asks first. The listing on screen
+     * is enough to know: the NAS compares names without regard to case, and so does this.
+     */
+    private fun askIfTaken(names: List<String>, go: (Conflict) -> Unit) {
+        val taken = _browser.value.entries.mapTo(HashSet()) { it.name.lowercase() }
+        val clashes = names.filter { it.lowercase() in taken }
+        if (clashes.isEmpty()) go(Conflict.KeepBoth) else _conflictAsk.value = ConflictAsk(clashes, names.size, go)
+    }
+
     /** Queues one job per clipboard entry, into the folder being browsed. */
     fun paste() {
         val s = _screen.value as? Screen.Browser ?: return
         val clip = _clipboard.value ?: return
         val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
-        for (entry in clip.entries) {
-            val label = (if (clip.move) "Sposta" else "Copia") + " «${entry.name}» in $destination"
-            app.transfers.enqueue(label) { fs, progress ->
-                val listener = Transfers.Listener { name, done, total -> progress(name, done, total) }
-                if (clip.move) Transfers.move(fs, entry, s.share, s.path, listener)
-                else Transfers.copy(fs, entry, s.share, s.path, listener)
+        // what is already in this very folder is not a clash: a copy there is always a new copy, a move does nothing
+        val here = { e: RemoteEntry -> e.share == s.share && RemotePath.parent(e.path) == RemotePath.normalize(s.path) }
+        askIfTaken(clip.entries.filterNot(here).map { it.name }) { conflict ->
+            for (entry in clip.entries) {
+                val label = (if (clip.move) "Sposta" else "Copia") + " «${entry.name}» in $destination"
+                val log = TransferLog()
+                app.transfers.enqueue(label) { fs, progress ->
+                    val listener = Transfers.Listener { name, done, total -> progress(name, done, total) }
+                    if (clip.move) Transfers.move(fs, entry, s.share, s.path, listener, conflict, log)
+                    else Transfers.copy(fs, entry, s.share, s.path, listener, conflict, log)
+                    when (log.skipped) {
+                        0 -> null
+                        1 -> "1 file già presente, lasciato com'era"
+                        else -> "${log.skipped} file già presenti, lasciati com'erano"
+                    }
+                }
             }
+            _clipboard.value = null
         }
-        _clipboard.value = null
     }
 
     fun cancelTransfers() = app.transfers.cancelAll()
+
+    fun pauseTransfers() = app.transfers.pause()
+
+    fun resumeTransfers() = app.transfers.resume()
+
+    fun retryTransfer(id: Long) = app.transfers.retry(id)
+
+    val transfersPaused: StateFlow<Boolean> = app.transfers.paused
 
     fun clearTransfers() = app.transfers.clearFinished()
 
@@ -656,32 +701,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
     }
 
-    /** Copies documents picked on the phone into the current folder; names already taken get " (2)", " (3)"... */
+    /** Queues the documents picked on the phone for the current folder; names already taken are asked about. */
     fun upload(uris: List<Uri>) {
-        val s = _screen.value as? Screen.Browser ?: return
         if (uris.isEmpty()) return
         viewModelScope.launch {
             val resolver = getApplication<Application>().contentResolver
-            var count = 0
-            try {
-                for ((i, uri) in uris.withIndex()) {
-                    val (name, size) = withContext(Dispatchers.IO) { resolver.describe(uri) }
-                    val label = if (uris.size > 1) "Carico ${i + 1} di ${uris.size}: $name" else "Carico $name"
-                    repo.io { fs ->
-                        val target = EditSync.freePath(fs, s.share, RemotePath.child(s.path, name))
-                        EditSync.safeUpload(fs, s.share, target, size, {
-                            resolver.openInputStream(uri) ?: error("Impossibile leggere «$name»")
-                        }) { done, total -> _transfer.value = Transfer(label, done, total) }
-                    }
-                    count++
-                }
-                message(if (count == 1) "File caricato" else "$count file caricati")
+            val items = withContext(Dispatchers.IO) { uris.map { PhoneUploads.file(resolver, it) } }
+            queueUpload(items, if (items.size == 1) "Carica «${items[0].name}»" else "Carica ${items.size} file")
+        }
+    }
+
+    /** Queues a whole folder of the phone, with its subfolders, for the current folder. */
+    fun uploadFolder(tree: Uri?) {
+        tree ?: return
+        viewModelScope.launch {
+            val resolver = getApplication<Application>().contentResolver
+            val item = try {
+                withContext(Dispatchers.IO) { PhoneUploads.folder(resolver, tree) }
             } catch (e: Exception) {
-                message(e.readable())
-            } finally {
-                _transfer.value = null
-                app.nasChanged.tryEmit(NasChange(s.share, s.path))
-                refresh()
+                message("Impossibile leggere la cartella scelta")
+                return@launch
+            }
+            queueUpload(listOf(item), "Carica la cartella «${item.name}»")
+        }
+    }
+
+    private fun queueUpload(items: List<PhoneUploads.Item>, label: String) {
+        val s = _screen.value as? Screen.Browser ?: return
+        val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
+        val resolver = getApplication<Application>().contentResolver
+        askIfTaken(items.map { it.name }) { conflict ->
+            val log = TransferLog()
+            app.transfers.enqueue("$label in $destination") { fs, progress ->
+                PhoneUploads.send(resolver, fs, items, s.share, s.path, conflict, log, progress)
             }
         }
     }

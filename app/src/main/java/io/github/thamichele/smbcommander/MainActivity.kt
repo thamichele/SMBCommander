@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
         private fun base(context: Context) = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+        fun open(context: Context): Intent = base(context)
+
         fun openBackup(context: Context): Intent = base(context).putExtra(EXTRA_OPEN, OPEN_BACKUP)
 
         fun openFolder(context: Context, share: String, path: String): Intent = base(context)

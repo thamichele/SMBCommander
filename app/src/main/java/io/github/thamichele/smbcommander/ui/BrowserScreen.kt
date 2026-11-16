@@ -88,6 +88,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
 
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.uploadFolder(it) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val entry = pendingDownload
         pendingDownload = null
@@ -239,6 +240,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             }
             DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, containerColor = c.surfaceRaised) {
                 MenuItem(AppIcons.Upload, "Carica file dal telefono") { addMenu = false; pickFiles.launch(arrayOf("*/*")) }
+                MenuItem(AppIcons.Folder, "Carica una cartella dal telefono") { addMenu = false; pickFolder.launch(null) }
                 MenuItem(AppIcons.FolderPlus, "Nuova cartella") { addMenu = false; dialog = Dialog.NewFolder }
                 MenuItem(AppIcons.Document, "Nuovo file di testo") { addMenu = false; dialog = Dialog.NewTextFile }
             }

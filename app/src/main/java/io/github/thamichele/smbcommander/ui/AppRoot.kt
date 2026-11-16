@@ -62,6 +62,8 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val transfer by vm.transfer.collectAsStateWithLifecycle()
     val prompt by vm.syncPrompt.collectAsStateWithLifecycle()
     val jobs by vm.transfers.collectAsStateWithLifecycle()
+    val transfersPaused by vm.transfersPaused.collectAsStateWithLifecycle()
+    val conflictAsk by vm.conflictAsk.collectAsStateWithLifecycle()
     val deletion by vm.deletion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -113,8 +115,18 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
             }
             if (viewer != null) ViewerScreen(vm, viewer)
             if (jobs.isNotEmpty() && transfer == null) {
-                TransferCard(jobs, onCancel = vm::cancelTransfers, onClose = vm::clearTransfers, modifier = Modifier.align(Alignment.BottomCenter))
+                TransferCard(
+                    jobs,
+                    paused = transfersPaused,
+                    onCancel = vm::cancelTransfers,
+                    onPause = vm::pauseTransfers,
+                    onResume = vm::resumeTransfers,
+                    onRetry = vm::retryTransfer,
+                    onClose = vm::clearTransfers,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
+            conflictAsk?.let { ConflictDialog(it, onChoice = vm::answerConflict) }
             deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
             transfer?.let { t ->
                 Column(

@@ -25,3 +25,27 @@ fun Throwable.readable(): String = when (this) {
     }
     else -> message ?: javaClass.simpleName
 }
+
+/** True when [this] means the network or the NAS went away (Wi-Fi lost, NAS asleep or restarting): worth retrying. */
+fun Throwable.isConnectionLost(): Boolean {
+    var e: Throwable? = this
+    var depth = 0
+    while (e != null && depth++ < 8) {
+        when (e) {
+            is java.io.FileNotFoundException -> return false
+            is java.io.IOException, is java.util.concurrent.TimeoutException -> return true
+            is SMBApiException -> if (e.status in CONNECTION_LOST) return true
+        }
+        e = e.cause
+    }
+    return false
+}
+
+private val CONNECTION_LOST = setOf(
+    NtStatus.STATUS_CONNECTION_DISCONNECTED,
+    NtStatus.STATUS_CONNECTION_RESET,
+    NtStatus.STATUS_NETWORK_NAME_DELETED,
+    NtStatus.STATUS_IO_TIMEOUT,
+    NtStatus.STATUS_NETWORK_SESSION_EXPIRED,
+    NtStatus.STATUS_USER_SESSION_DELETED,
+)
