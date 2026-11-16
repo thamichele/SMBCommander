@@ -2,6 +2,7 @@ package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -50,6 +51,8 @@ import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isMedia
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlinx.coroutines.delay
 
 /**
@@ -85,8 +88,7 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(c.surface, RoundedCornerShape(12.dp))
-                .border(1.dp, c.border, RoundedCornerShape(12.dp))
+                .dialogPanel(c)
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -118,16 +120,11 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (deletion.finished && !allGood) c.textSecondary else c.accent,
-                    trackColor = c.border,
-                )
+                ArancioProgress(fraction, color = if (deletion.finished && !allGood) c.textSecondary else c.accent)
                 Text(
                     if (deletion.preparing != null) deletion.preparingNote
                     else "${deletion.steps.size} di ${deletion.total}" + if (deletion.left > 0) " · ne mancano ${deletion.left}" else "",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = ArancioType.data,
                     color = c.textSecondary,
                 )
             }
@@ -146,9 +143,9 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 if (deletion.finished) {
-                    TextButton(onClick = onClose) { Text("Chiudi") }
+                    GhostButton(onClick = onClose) { Text("Chiudi") }
                 } else {
-                    TextButton(onClick = onStop, enabled = !deletion.stopping) {
+                    GhostButton(onClick = onStop, enabled = !deletion.stopping) {
                         Text(if (deletion.stopping) "Mi fermo dopo questo…" else "Interrompi")
                     }
                 }
@@ -165,7 +162,7 @@ private fun CurrentFile(entry: RemoteEntry) {
     val c = Arancio.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
-            Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised),
+            Modifier.size(56.dp).clip(ArancioShape.menu).background(c.surfaceRaised),
             contentAlignment = Alignment.Center,
         ) {
             if (entry.isMedia) {
@@ -210,10 +207,10 @@ private fun Summary(deletion: Deletion) {
 private fun Status(icon: ImageVector, tint: Color, title: String, detail: String?, pop: Boolean = false) {
     val c = Arancio.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised), contentAlignment = Alignment.Center) {
-            // the final tick pops in with a little bounce
-            val scale = remember { Animatable(if (pop) 0.3f else 1f) }
-            LaunchedEffect(pop) { if (pop) scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)) }
+        Box(Modifier.size(56.dp).clip(ArancioShape.menu).background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+            // the final tick grows in, without bounce (the kit allows none)
+            val scale = remember { Animatable(if (pop) 0.6f else 1f) }
+            LaunchedEffect(pop) { if (pop) scale.animateTo(1f, tween(240, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) }
             Icon(
                 icon,
                 contentDescription = null,

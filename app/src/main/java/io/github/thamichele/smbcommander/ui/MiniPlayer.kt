@@ -53,13 +53,12 @@ fun MiniPlayer(
         modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth()
+            .floating(c)
             .clip(RoundedCornerShape(12.dp))
-            .background(c.surfaceRaised)
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
             .clickable { open = !open },
     ) {
         Row(Modifier.padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(c.media.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(c.media.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
                 val cover = music.cover
                 if (cover != null) {
                     Image(cover.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(44.dp))
@@ -100,9 +99,9 @@ fun MiniPlayer(
                 }
             }
         } else if (music.buffering) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
+            ArancioProgress(null)
         } else {
-            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
+            ArancioProgress(fraction)
         }
     }
 }

@@ -62,6 +62,6 @@ fun LockScreen(onUnlock: () -> Unit, onExit: () -> Unit) {
             color = c.textSecondary,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onUnlock, shape = RoundedCornerShape(8.dp)) { Text("Sblocca") }
+        PrimaryButton(onClick = onUnlock) { Text("Sblocca") }
     }
 }

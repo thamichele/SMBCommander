@@ -56,7 +56,7 @@ fun ArchiveScreen(vm: AppViewModel, screen: Screen.Archive) {
         }
         when {
             state.error != null -> ErrorCard(state.error.orEmpty(), "Riprova") { vm.openArchive(screen.entry) }
-            state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = c.accent) }
+            state.loading -> SkeletonList()
             state.items.isEmpty() -> Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text("Archivio vuoto", style = MaterialTheme.typography.bodyLarge, color = c.textSecondary)
             }
@@ -88,7 +88,7 @@ fun ArchiveScreen(vm: AppViewModel, screen: Screen.Archive) {
                         }
                         Box {
                             ToolButton(AppIcons.More, "Azioni per ${item.name}", { menu = true }, tint = c.textSecondary)
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surfaceRaised) {
+                            ArancioMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 if (!item.isDirectory) {
                                     DropdownMenuItem(
                                         text = { Text("Apri") },

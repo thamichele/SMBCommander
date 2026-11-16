@@ -10,12 +10,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,15 +47,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.AppIcons
+import io.github.thamichele.smbcommander.ui.ArancioProgress
+import io.github.thamichele.smbcommander.ui.DangerButton
+import io.github.thamichele.smbcommander.ui.GhostButton
+import io.github.thamichele.smbcommander.ui.Notice
+import io.github.thamichele.smbcommander.ui.NoticeKind
 import io.github.thamichele.smbcommander.ui.PageHeader
+import io.github.thamichele.smbcommander.ui.PrimaryButton
+import io.github.thamichele.smbcommander.ui.SecondaryButton
+import io.github.thamichele.smbcommander.ui.SectionLabel
+import io.github.thamichele.smbcommander.ui.arancioSwitchColors
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 @Composable
 fun BackupScreen(vm: BackupViewModel = viewModel()) {
@@ -96,9 +111,8 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
             item {
                 Card {
                     Text("Per salvare le foto serve il permesso di leggere la galleria.", style = MaterialTheme.typography.bodyLarge)
-                    Button(
+                    PrimaryButton(
                         onClick = { askPermission.launch(PhotoBackupWorker.mediaPermissions()) },
-                        shape = RoundedCornerShape(8.dp),
                     ) { Text("Consenti l'accesso alle foto") }
                 }
             }
@@ -120,12 +134,7 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                         checked = settings.enabled,
                         onCheckedChange = vm::setEnabled,
                         enabled = settings.destination != null && settings.albums.isNotEmpty(),
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = c.accent,
-                            checkedThumbColor = c.onAccent,
-                            uncheckedTrackColor = c.surfaceRaised,
-                            uncheckedBorderColor = c.border,
-                        ),
+                        colors = arancioSwitchColors(),
                     )
                 }
                 if (progress.running) {
@@ -134,26 +143,11 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                         style = MaterialTheme.typography.labelMedium,
                         color = c.accentText,
                     )
-                    if (progress.total > 0) {
-                        LinearProgressIndicator(
-                            progress = { progress.done.toFloat() / progress.total },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = c.accent,
-                            trackColor = c.border,
-                        )
-                    } else {
-                        LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
-                    }
+                    ArancioProgress(if (progress.total > 0) progress.done.toFloat() / progress.total else null)
                 } else if (settings.enabled) {
-                    OutlinedButton(onClick = { vm.runNow() }, shape = RoundedCornerShape(8.dp)) { Text("Esegui ora") }
+                    SecondaryButton(onClick = { vm.runNow() }) { Text("Esegui ora") }
                 }
-                status.lastError?.let {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(AppIcons.Alert, contentDescription = null, tint = c.danger, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = c.danger)
-                    }
-                }
+                status.lastError?.let { Notice(NoticeKind.Error, "Ultimo backup non riuscito", it) }
             }
         }
 
@@ -166,7 +160,7 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                         Text("Cartella sul NAS", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                         Text(
                             settings.destination?.fullPath ?: "Scegli dove salvare le foto",
-                            style = MaterialTheme.typography.titleSmall,
+                            style = if (settings.destination == null) MaterialTheme.typography.titleSmall else ArancioType.code,
                             color = if (settings.destination == null) c.accentText else c.text,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -182,46 +176,55 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         }
 
         item { SectionTitle("Album da salvare") }
-        if (albums.isEmpty()) {
-            item {
+        item {
+            if (albums.isEmpty()) {
                 Text(
                     "Nessun album trovato sul telefono.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = c.textSecondary,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
-            }
-        }
-        items(albums, key = { it.id }) { album ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.toggleAlbum(album.id) }
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = album.id in settings.albums,
-                    onCheckedChange = { vm.toggleAlbum(album.id) },
-                    colors = CheckboxDefaults.colors(checkedColor = c.accent, checkmarkColor = c.onAccent, uncheckedColor = c.border),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(album.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text("${album.count}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            } else {
+                Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
+                    albums.forEachIndexed { i, album ->
+                        if (i > 0) Divider()
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { vm.toggleAlbum(album.id) }
+                                .padding(start = 4.dp, end = 16.dp, top = 2.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = album.id in settings.albums,
+                                onCheckedChange = { vm.toggleAlbum(album.id) },
+                                colors = CheckboxDefaults.colors(checkedColor = c.accent, checkmarkColor = c.onAccent, uncheckedColor = c.borderStrong),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(album.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text("${album.count}", style = ArancioType.data, color = c.textSecondary)
+                        }
+                    }
+                }
             }
         }
 
         item { SectionTitle("Opzioni") }
-        item { Option("Includi i video", "I video occupano molto spazio sul NAS", settings.includeVideos, vm::setIncludeVideos) }
-        item { Option("Dividi per anno e mese", "Per esempio 2026/10", settings.byMonth, vm::setByMonth) }
-        item { Option("Solo quando è in carica", "Il backup aspetta che il telefono sia collegato", settings.chargingOnly, vm::setChargingOnly) }
         item {
-            Option(
-                "Notifica dello stato",
-                "Foto ancora da salvare, ultimo backup ed eventuali errori",
-                settings.statusNotification,
-                vm::setStatusNotification,
-            )
+            Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
+                Option("Includi i video", "I video occupano molto spazio sul NAS", settings.includeVideos, vm::setIncludeVideos)
+                Divider()
+                Option("Dividi per anno e mese", "Per esempio 2026/10", settings.byMonth, vm::setByMonth)
+                Divider()
+                Option("Solo quando è in carica", "Il backup aspetta che il telefono sia collegato", settings.chargingOnly, vm::setChargingOnly)
+                Divider()
+                Option(
+                    "Notifica dello stato",
+                    "Foto ancora da salvare, ultimo backup ed eventuali errori",
+                    settings.statusNotification,
+                    vm::setStatusNotification,
+                )
+            }
         }
         item {
             Text(
@@ -238,7 +241,7 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         val ready = freeSpace as? FreeSpace.Ready
         AlertDialog(
             onDismissRequest = { confirmFree = false },
-            containerColor = c.surface,
+            containerColor = c.surfaceRaised,
             title = { Text("Eliminare dal telefono?", style = MaterialTheme.typography.titleLarge) },
             text = {
                 Text(
@@ -248,16 +251,14 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                 )
             },
             confirmButton = {
-                Button(
+                DangerButton(
                     onClick = {
                         confirmFree = false
                         launchDelete()
                     },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = c.danger),
                 ) { Text("Elimina dal telefono") }
             },
-            dismissButton = { TextButton(onClick = { confirmFree = false }) { Text("Annulla") } },
+            dismissButton = { GhostButton(onClick = { confirmFree = false }) { Text("Annulla") } },
         )
     }
 
@@ -288,7 +289,7 @@ private fun FreeSpaceCard(state: FreeSpace, onCheck: () -> Unit, onFree: () -> U
                     color = c.textSecondary,
                 )
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    OutlinedButton(onClick = onCheck, shape = RoundedCornerShape(8.dp)) { Text("Controlla") }
+                    SecondaryButton(onClick = onCheck) { Text("Controlla") }
                 } else {
                     Text("Serve Android 11 o successivo.", style = MaterialTheme.typography.bodySmall, color = c.danger)
                 }
@@ -299,17 +300,8 @@ private fun FreeSpaceCard(state: FreeSpace, onCheck: () -> Unit, onFree: () -> U
                     style = MaterialTheme.typography.labelMedium,
                     color = c.accentText,
                 )
-                if (state.total > 0) {
-                    LinearProgressIndicator(
-                        progress = { state.done.toFloat() / state.total },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = c.accent,
-                        trackColor = c.border,
-                    )
-                } else {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
-                }
-                TextButton(onClick = onClose) { Text("Annulla") }
+                ArancioProgress(if (state.total > 0) state.done.toFloat() / state.total else null)
+                GhostButton(onClick = onClose) { Text("Annulla") }
             }
             is FreeSpace.Ready -> if (state.items.isEmpty()) {
                 Text(
@@ -317,31 +309,28 @@ private fun FreeSpaceCard(state: FreeSpace, onCheck: () -> Unit, onFree: () -> U
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )
-                TextButton(onClick = onClose) { Text("Chiudi") }
+                GhostButton(onClick = onClose) { Text("Chiudi") }
             } else {
+                Text(formatSize(state.bytes), style = ArancioType.figure, color = c.text)
                 Text(
-                    "${state.items.size} foto e video sono già sul NAS: ${formatSize(state.bytes)} da liberare.",
-                    style = MaterialTheme.typography.bodyLarge,
+                    "da liberare: ${state.items.size} foto e video sono già sul NAS, identici a quelli sul telefono.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.textSecondary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    DangerButton(
                         onClick = onFree,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = c.danger),
                     ) { Text("Elimina dal telefono") }
-                    TextButton(onClick = onClose) { Text("Annulla") }
+                    GhostButton(onClick = onClose) { Text("Annulla") }
                 }
             }
             is FreeSpace.Freed -> {
-                Text(
-                    "Eliminati ${state.count} file dal telefono, liberati ${formatSize(state.bytes)}.",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                TextButton(onClick = onClose) { Text("Chiudi") }
+                Notice(NoticeKind.Success, "Liberati ${formatSize(state.bytes)}", "Eliminati ${state.count} file dal telefono.")
+                GhostButton(onClick = onClose) { Text("Chiudi") }
             }
             is FreeSpace.Failed -> {
-                Text(state.message, style = MaterialTheme.typography.bodySmall, color = c.danger)
-                OutlinedButton(onClick = onCheck, shape = RoundedCornerShape(8.dp)) { Text("Riprova") }
+                Notice(NoticeKind.Error, state.message)
+                SecondaryButton(onClick = onCheck) { Text("Riprova") }
             }
         }
     }
@@ -364,49 +353,51 @@ private fun statusLine(settings: BackupSettings, status: BackupStatus, saved: In
 }
 
 @Composable
-private fun Card(onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun Card(
+    onClick: (() -> Unit)? = null,
+    padding: PaddingValues = PaddingValues(16.dp),
+    spacing: Dp = 12.dp,
+    content: @Composable () -> Unit,
+) {
     val c = Arancio.colors
     Column(
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
-            .background(c.surface, RoundedCornerShape(12.dp))
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .clip(ArancioShape.card)
+            .background(c.surface)
+            .border(1.dp, c.border, ArancioShape.card)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(padding),
+        verticalArrangement = Arrangement.spacedBy(spacing),
     ) { content() }
 }
 
 @Composable
+private fun Divider() {
+    Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(Arancio.colors.border))
+}
+
+@Composable
 private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleLarge,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
-    )
+    SectionLabel(text, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 2.dp))
 }
 
 @Composable
 private fun Option(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     val c = Arancio.colors
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
         }
         Switch(
             checked = checked,
             onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = c.accent,
-                checkedThumbColor = c.onAccent,
-                uncheckedTrackColor = c.surfaceRaised,
-                uncheckedBorderColor = c.border,
-            ),
+            colors = arancioSwitchColors(),
         )
     }
 }
@@ -423,7 +414,7 @@ private fun FolderChooser(
     val c = Arancio.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = c.surface,
+        containerColor = c.surfaceRaised,
         title = { Text("Dove salvare le foto", style = MaterialTheme.typography.titleLarge) },
         text = {
             if (folders.isEmpty()) {
@@ -441,22 +432,21 @@ private fun FolderChooser(
                             RadioButton(
                                 selected = choice == f,
                                 onClick = { choice = f },
-                                colors = RadioButtonDefaults.colors(selectedColor = c.accent, unselectedColor = c.border),
+                                colors = RadioButtonDefaults.colors(selectedColor = c.accent, unselectedColor = c.borderStrong),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(f.fullPath, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(f.fullPath, style = ArancioType.code, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
+            PrimaryButton(
                 onClick = { choice?.let(onChoose) },
                 enabled = choice != null,
-                shape = RoundedCornerShape(8.dp),
             ) { Text("Usa questa cartella") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
+        dismissButton = { GhostButton(onClick = onDismiss) { Text("Annulla") } },
     )
 }

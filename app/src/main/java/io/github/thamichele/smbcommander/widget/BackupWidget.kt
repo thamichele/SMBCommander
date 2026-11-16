@@ -42,7 +42,7 @@ class BackupWidget : AppWidgetProvider() {
 
             views.setTextViewText(R.id.widget_folder_name, folder?.name ?: "SMBCommander")
             // the icons take the main colour chosen in the settings (the widget is always on the dark ground)
-            val accent = AccentStore.get(context).main.toArgb()
+            val accent = AccentStore.get(context).icon.toArgb()
             views.setInt(R.id.widget_folder_icon, "setColorFilter", accent)
             views.setInt(R.id.widget_backup_icon, "setColorFilter", accent)
             val open = if (folder != null) MainActivity.openFolder(context, folder.share, folder.path)

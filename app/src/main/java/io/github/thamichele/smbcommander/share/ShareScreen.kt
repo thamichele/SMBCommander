@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,9 +34,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.AppIcons
+import io.github.thamichele.smbcommander.ui.ArancioProgress
+import io.github.thamichele.smbcommander.ui.EmptyState
+import io.github.thamichele.smbcommander.ui.Notice
+import io.github.thamichele.smbcommander.ui.NoticeKind
 import io.github.thamichele.smbcommander.ui.PageHeader
+import io.github.thamichele.smbcommander.ui.PrimaryButton
+import io.github.thamichele.smbcommander.ui.SkeletonList
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 @Composable
 fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Unit) {
@@ -67,9 +75,7 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
             else -> {
                 Box(Modifier.weight(1f)) {
                     when {
-                        state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = c.accent)
-                        }
+                        state.loading -> SkeletonList(rows = 6)
                         else -> LazyColumn(Modifier.fillMaxSize()) {
                             items(state.subfolders, key = { it.path }) { sub ->
                                 FolderRow(sub.name, null) { vm.open(SavedFolder(sub.share, sub.path)) }
@@ -77,28 +83,23 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
                         }
                     }
                 }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(c.surface)
+                        .background(c.nav)
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    state.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.danger) }
+                    state.error?.let { Notice(NoticeKind.Error, it) }
                     val progress = state.progress
                     if (progress != null) {
                         Text(progress, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val fraction = state.fraction
-                        if (fraction != null) {
-                            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
-                        } else {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.border)
-                        }
+                        ArancioProgress(state.fraction)
                     } else {
-                        Button(
+                        PrimaryButton(
                             onClick = { vm.saveHere(onDone) },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                         ) { Text("Salva qui $what") }
                     }
                 }
@@ -114,11 +115,16 @@ private fun FolderRow(name: String, detail: String?, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(24.dp))
+        Box(
+            Modifier.size(40.dp).background(c.folder.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(22.dp))
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
+            if (detail != null) Text(detail, style = ArancioType.data, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(AppIcons.ChevronRight, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
     }
@@ -126,10 +132,5 @@ private fun FolderRow(name: String, detail: String?, onClick: () -> Unit) {
 
 @Composable
 private fun Message(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyLarge,
-        color = Arancio.colors.textSecondary,
-        modifier = Modifier.padding(16.dp),
-    )
+    EmptyState(icon = AppIcons.Folder, title = text)
 }

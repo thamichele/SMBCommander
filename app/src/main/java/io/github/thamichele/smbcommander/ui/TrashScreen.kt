@@ -58,18 +58,14 @@ fun TrashScreen(vm: AppViewModel) {
         )
         if (state.items.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { vm.restoreFromTrash(state.items) }, enabled = !state.working) { Text("Ripristina tutto") }
-                TextButton(onClick = { confirmEmpty = true }, enabled = !state.working) { Text("Svuota cestino", color = c.danger) }
+                GhostButton(onClick = { vm.restoreFromTrash(state.items) }, enabled = !state.working) { Text("Ripristina tutto") }
+                GhostButton(onClick = { confirmEmpty = true }, enabled = !state.working) { Text("Svuota cestino", color = c.danger) }
             }
         }
         when {
             state.error != null && state.items.isEmpty() -> ErrorCard(state.error.orEmpty(), "Riprova", vm::loadTrash)
-            state.loading && state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = c.accent)
-            }
-            state.items.isEmpty() -> Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text("Il cestino è vuoto", style = MaterialTheme.typography.bodyLarge, color = c.textSecondary)
-            }
+            state.loading && state.items.isEmpty() -> SkeletonList()
+            state.items.isEmpty() -> EmptyState(AppIcons.Delete, "Il cestino è vuoto")
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
                 items(state.items, key = { it.share + "/" + it.slot }) { item ->
                     Row(
@@ -93,7 +89,7 @@ fun TrashScreen(vm: AppViewModel) {
                                 color = c.textSecondary,
                             )
                         }
-                        TextButton(onClick = { vm.restoreFromTrash(listOf(item)) }, enabled = !state.working) { Text("Ripristina") }
+                        GhostButton(onClick = { vm.restoreFromTrash(listOf(item)) }, enabled = !state.working) { Text("Ripristina") }
                         ToolButton(AppIcons.Delete, "Elimina definitivamente ${item.entry.name}", { confirmDelete = item }, tint = c.danger)
                     }
                 }

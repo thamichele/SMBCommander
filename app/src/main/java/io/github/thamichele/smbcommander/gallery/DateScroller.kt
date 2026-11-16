@@ -33,15 +33,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioShape
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
+import io.github.thamichele.smbcommander.ui.theme.JetBrainsMono
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlin.math.roundToInt
 
 /** What the date scroller needs of a lazy list or grid. */
 interface ScrollPosition {
@@ -153,7 +157,7 @@ fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: Int
                 lastY = y
                 Text(
                     group.year.toString(),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = ArancioType.data,
                     color = c.textSecondary,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -175,12 +179,13 @@ fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: Int
                 if (dragging) {
                     Text(
                         "${monthName(month.month)} ${month.year}",
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall.copy(fontFamily = JetBrainsMono),
                         color = c.text,
                         modifier = Modifier
                             .padding(end = 48.dp)
-                            .background(c.surfaceRaised, RoundedCornerShape(999.dp))
-                            .border(1.dp, c.border, RoundedCornerShape(999.dp))
+                            .shadow(6.dp, ArancioShape.menu, ambientColor = c.shadow, spotColor = c.shadow)
+                            .background(c.surfaceRaised, ArancioShape.menu)
+                            .border(1.dp, c.borderStrong, ArancioShape.menu)
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     )
                 }
@@ -189,7 +194,7 @@ fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: Int
                         .padding(end = 4.dp)
                         .size(width = 28.dp, height = THUMB_HEIGHT)
                         .background(if (dragging) c.accent else c.surfaceRaised, RoundedCornerShape(999.dp))
-                        .border(1.dp, if (dragging) c.accent else c.border, RoundedCornerShape(999.dp)),
+                        .border(1.dp, if (dragging) c.accent else c.borderStrong, RoundedCornerShape(999.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(

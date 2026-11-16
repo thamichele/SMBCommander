@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
 /** The copy, move and upload queue: the job running now, how many wait, and the ones that failed. */
 @Composable
@@ -45,8 +46,7 @@ fun TransferCard(
         modifier
             .padding(16.dp)
             .fillMaxWidth()
-            .background(c.surfaceRaised, RoundedCornerShape(12.dp))
-            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .floating(c)
             .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -58,19 +58,14 @@ fun TransferCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = c.accentText,
                 )
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), color = c.textSecondary, trackColor = c.border)
+                ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
             }
             running != null -> {
                 Text(running.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (running.current.isNotEmpty()) {
                     Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                val fraction = running.fraction
-                if (fraction != null) {
-                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(end = 8.dp), color = c.accent, trackColor = c.border)
-                } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(end = 8.dp), color = c.accent, trackColor = c.border)
-                }
+                ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
             }
             paused -> {
                 Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
@@ -93,7 +88,7 @@ fun TransferCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { onRetry(job.id) }) { Text("Riprova") }
+                GhostButton(onClick = { onRetry(job.id) }) { Text("Riprova") }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -102,15 +97,15 @@ fun TransferCard(
                     if (waiting > 0) "$waiting in coda" else null,
                     if (done > 0) "$done completati" else null,
                 ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
+                style = ArancioType.data,
                 color = c.textSecondary,
                 modifier = Modifier.weight(1f),
             )
             if (active) {
-                if (paused) TextButton(onClick = onResume) { Text("Riprendi") } else TextButton(onClick = onPause) { Text("Pausa") }
-                TextButton(onClick = onCancel) { Text("Annulla", color = c.danger) }
+                if (paused) GhostButton(onClick = onResume) { Text("Riprendi") } else GhostButton(onClick = onPause) { Text("Pausa") }
+                GhostButton(onClick = onCancel) { Text("Annulla", color = c.danger) }
             } else {
-                TextButton(onClick = onClose) { Text("Chiudi") }
+                GhostButton(onClick = onClose) { Text("Chiudi") }
             }
         }
     }
@@ -139,10 +134,10 @@ fun ConflictDialog(ask: ConflictAsk, onChoice: (Conflict?) -> Unit) {
         },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = { onChoice(Conflict.Replace) }) { Text("Sostituisci", color = c.danger) }
-                TextButton(onClick = { onChoice(Conflict.Skip) }) { Text("Salta quelli già presenti") }
-                TextButton(onClick = { onChoice(Conflict.KeepBoth) }) { Text("Tieni entrambi (aggiunge un numero)") }
-                TextButton(onClick = { onChoice(null) }) { Text("Annulla") }
+                GhostButton(onClick = { onChoice(Conflict.Replace) }) { Text("Sostituisci", color = c.danger) }
+                GhostButton(onClick = { onChoice(Conflict.Skip) }) { Text("Salta quelli già presenti") }
+                GhostButton(onClick = { onChoice(Conflict.KeepBoth) }) { Text("Tieni entrambi (aggiunge un numero)") }
+                GhostButton(onClick = { onChoice(null) }) { Text("Annulla") }
             }
         },
     )
