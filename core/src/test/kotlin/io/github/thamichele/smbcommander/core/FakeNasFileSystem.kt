@@ -75,8 +75,19 @@ class FakeNasFileSystem : NasFileSystem {
     override fun rename(share: String, from: String, to: String, replace: Boolean) {
         val f = key(share, from)
         val t = key(share, to)
-        if (!replace && t in files) throw NasException("exists")
-        files[t] = files.remove(f) ?: throw NasException("not found")
+        if (!replace && (t in files || files.keys.any { it.startsWith("$t/") })) throw NasException("exists")
+        if (f !in files) {
+            // a folder: everything under it moves
+            val inside = files.keys.filter { it.startsWith("$f/") }
+            if (inside.isEmpty()) throw NasException("not found")
+            for (k in inside) {
+                val n = t + k.removePrefix(f)
+                files[n] = files.remove(k)!!
+                modified[n] = modified.remove(k)!!
+            }
+            return
+        }
+        files[t] = files.remove(f)!!
         modified[t] = modified.remove(f)!!
     }
 

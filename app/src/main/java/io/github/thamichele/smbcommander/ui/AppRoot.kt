@@ -30,7 +30,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -76,6 +78,12 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                     snackbar.currentSnackbarData?.dismiss()
                     snackbar.showSnackbar(event.text)
                 }
+                is UiEvent.MessageWithAction -> scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    if (snackbar.showSnackbar(event.text, actionLabel = event.action, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                        event.onAction()
+                    }
+                }
                 is UiEvent.OpenFile -> if (!openExternally(context, event.file, event.name, event.edit)) {
                     vm.openFailed(event.file)
                 }
@@ -109,6 +117,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Shares -> FoldersScreen(vm)
                 Screen.Gallery -> GalleryScreen(vm)
                 Screen.Cleanup -> CleanupScreen(vm)
+                is Screen.Trash -> TrashScreen(vm)
                 Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)

@@ -39,6 +39,14 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   l'originale solo dopo che la copia è risultata identica.
 - Operazioni di base: carica dal telefono (file singoli o un'intera cartella con le sue sottocartelle), scarica sul
   telefono, nuova cartella, nuovo file di testo vuoto, rinomina, elimina.
+- **Cestino**: ciò che elimini dalle cartelle non sparisce subito, va in un cestino nascosto in cima alla cartella
+  condivisa (`.smbcommander-cestino-file`, con uno spostamento istantaneo che non copia nulla). Subito dopo puoi
+  premere «Annulla»; dalla schermata **Cestino** (in «Le mie cartelle» o dal menu di una cartella) ogni elemento si
+  ripristina esattamente dov'era o si elimina definitivamente. Dopo 30 giorni se ne va da solo.
+- **Ricerca anche nelle sottocartelle**: durante la ricerca scegli «Anche nelle sottocartelle» e l'app cerca il nome
+  a ogni livello sotto la cartella aperta, mostrando i risultati man mano con la cartella in cui si trovano.
+- **Spazio e dimensioni**: le Info di una cartella (anche di quella aperta, dal menu) contano file, sottocartelle e
+  dimensione totale a ogni livello, e mostrano quanto spazio resta sul disco del NAS.
 - **Copia e sposta** tra cartelle del NAS: tieni premuto per selezionare uno o più elementi, scegli Copia o Sposta,
   apri la cartella di destinazione e premi «Incolla qui». I trasferimenti vanno in una coda con l'avanzamento e
   continuano mentre navighi; quando possibile la copia la fa il NAS stesso, senza passare dal telefono.

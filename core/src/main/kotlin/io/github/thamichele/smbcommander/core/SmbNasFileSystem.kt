@@ -156,6 +156,11 @@ class SmbNasFileSystem(
         }
     }
 
+    override fun space(share: String): DiskSpace? = withRetry {
+        val info = disk(share).shareInformation
+        if (info.totalSpace > 0) DiskSpace(info.totalSpace, info.callerFreeSpace) else null
+    }
+
     override fun rename(share: String, from: String, to: String, replace: Boolean) = withRetry {
         disk(share).open(
             RemotePath.toSmb(from),

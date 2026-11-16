@@ -58,6 +58,7 @@ fun FoldersScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(context = host, title = "Le mie cartelle") {
+                ToolButton(AppIcons.Delete, "Cestino", vm::openTrash)
                 ToolButton(AppIcons.Server, "Impostazioni", vm::openSettings)
             }
             if (folders.isEmpty()) {

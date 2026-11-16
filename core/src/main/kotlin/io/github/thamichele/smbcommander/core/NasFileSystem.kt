@@ -91,6 +91,14 @@ interface NasFileSystem : Closeable {
      * Returns the SHA-256 of the bytes when they were streamed through the phone, null when the NAS copied them.
      */
     fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress = { _, _ -> }): String?
+
+    /** Size of the disk behind [share] and how much of it is free, as the NAS reports them; null when it does not. */
+    fun space(share: String): DiskSpace? = null
+}
+
+/** Bytes of a disk: all of it and the part still free for this user. */
+data class DiskSpace(val total: Long, val free: Long) {
+    val used: Long get() = (total - free).coerceAtLeast(0)
 }
 
 class NasException(message: String, cause: Throwable? = null) : Exception(message, cause)

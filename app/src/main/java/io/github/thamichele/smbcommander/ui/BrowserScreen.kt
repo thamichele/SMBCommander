@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import io.github.thamichele.smbcommander.core.FileTrash
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.Thumb
@@ -113,7 +114,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         info = { dialog = Dialog.Info(it) },
         select = vm::toggleSelected,
     )
-    val single = if (selected.size == 1) state.entries.firstOrNull { it.path in selected } else null
+    val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -146,7 +147,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     }
                 }
             } else if (state.searching) {
-                SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) })
+                SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) }, deep = state.deep)
             } else {
                 val title = if (screen.path.isEmpty()) screen.share else RemotePath.name(screen.path)
                 val context = if (screen.path.isEmpty()) "Cartella condivisa" else
@@ -169,6 +170,11 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                             if (!pinned) {
                                 MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
                             }
+                            MenuItem(AppIcons.Info, "Info su questa cartella") {
+                                moreMenu = false
+                                dialog = Dialog.Info(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
+                            }
+                            MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
                             MenuItem(AppIcons.Server, "Impostazioni") { moreMenu = false; vm.openSettings() }
                         }
                     }
@@ -180,12 +186,33 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 12.dp),
             ) {
+                if (state.searching) {
+                    item { Pill("Questa cartella", !state.deep) { vm.setDeepSearch(false) } }
+                    item { Pill("Anche nelle sottocartelle", state.deep) { vm.setDeepSearch(true) } }
+                }
                 item { Pill("Nome", state.sort == SortMode.Name) { vm.setSort(SortMode.Name) } }
                 item { Pill("Data", state.sort == SortMode.Date) { vm.setSort(SortMode.Date) } }
                 item { Pill("Dimensione", state.sort == SortMode.Size) { vm.setSort(SortMode.Size) } }
             }
 
             val visible = state.visible
+            if (state.showingDeep && state.deepBusy) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(14.dp), color = c.accent, strokeWidth = 2.dp)
+                    Text(
+                        "Cerco in " + (listOf(screen.share) + state.deepFolder.split('/').filter { it.isNotEmpty() }).joinToString(" / ") +
+                            " · trovati ${visible.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             PullToRefreshBox(
                 isRefreshing = state.loading && state.entries.isNotEmpty(),
                 onRefresh = vm::refresh,
@@ -201,12 +228,18 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     visible.isEmpty() ->
                         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                             Text(
-                                if (state.query.isNotBlank()) "Nessun elemento contiene «${state.query.trim()}»" else "Cartella vuota",
+                                when {
+                                    state.showingDeep && state.query.trim().length < 2 -> "Scrivi almeno due lettere per cercare nelle sottocartelle"
+                                    state.showingDeep && state.deepBusy -> "Cerco «${state.query.trim()}» in tutte le sottocartelle…"
+                                    state.showingDeep -> "Nessun elemento contiene «${state.query.trim()}», nemmeno nelle sottocartelle"
+                                    state.query.isNotBlank() -> "Nessun elemento contiene «${state.query.trim()}»"
+                                    else -> "Cartella vuota"
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = c.textSecondary,
                             )
                         }
-                    state.grid -> LazyVerticalGrid(
+                    state.grid && !state.showingDeep -> LazyVerticalGrid(
                         columns = GridCells.Adaptive(112.dp),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -219,7 +252,16 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                         contentPadding = PaddingValues(bottom = 96.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(visible, key = { it.path }) { ListRow(it, actions) }
+                        items(visible, key = { it.path }) { entry ->
+                            // matches from the subfolders say where they are
+                            val location = if (state.showingDeep) {
+                                val parent = RemotePath.parent(entry.path)
+                                val base = RemotePath.normalize(screen.path)
+                                val rel = if (base.isEmpty()) parent else parent.removePrefix(base).trimStart('/')
+                                if (rel.isEmpty()) "In questa cartella" else "In " + rel.replace("/", " / ")
+                            } else null
+                            ListRow(entry, actions, location)
+                        }
                     }
                 }
             }
@@ -258,7 +300,8 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         }
         Dialog.DeleteSelected -> ConfirmDialog(
             title = if (selected.size == 1) "Eliminare l'elemento selezionato?" else "Eliminare ${selected.size} elementi?",
-            text = "Verranno eliminati dal NAS, cartelle comprese con tutto il loro contenuto.",
+            text = if (screen.path.let { FileTrash.isInside(it) }) "Verranno eliminati definitivamente dal NAS, cartelle comprese con tutto il loro contenuto."
+            else "Andranno nel cestino del NAS, cartelle comprese con tutto il loro contenuto: si possono ripristinare per ${FileTrash.KEEP_DAYS} giorni.",
             confirm = "Elimina",
             danger = true,
             onDismiss = { dialog = null },
@@ -273,8 +316,11 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         }
         is Dialog.Delete -> ConfirmDialog(
             title = "Eliminare «${d.entry.name}»?",
-            text = if (d.entry.isDirectory) "La cartella e tutto il suo contenuto verranno eliminati dal NAS."
-            else "Il file verrà eliminato dal NAS.",
+            text = when {
+                FileTrash.isInside(d.entry.path) -> "Verrà eliminato definitivamente dal NAS."
+                d.entry.isDirectory -> "La cartella e tutto il suo contenuto andranno nel cestino del NAS: si possono ripristinare per ${FileTrash.KEEP_DAYS} giorni."
+                else -> "Il file andrà nel cestino del NAS: si può ripristinare per ${FileTrash.KEEP_DAYS} giorni."
+            },
             confirm = "Elimina",
             danger = true,
             onDismiss = { dialog = null },
@@ -305,7 +351,7 @@ private class EntryActions(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
+private fun ListRow(entry: RemoteEntry, actions: EntryActions, location: String? = null) {
     var menu by remember { mutableStateOf(false) }
     val isSelected = entry.path in actions.selected
     Row(
@@ -323,6 +369,9 @@ private fun ListRow(entry: RemoteEntry, actions: EntryActions) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (location != null) {
+                Text(location, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             Text(entryDetails(entry), style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary, maxLines = 1)
         }
         if (actions.selected.isEmpty()) Box {
@@ -453,7 +502,7 @@ private fun MenuItem(icon: ImageVector, label: String, danger: Boolean = false, 
 }
 
 @Composable
-private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> Unit) {
+private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> Unit, deep: Boolean) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     Row(
@@ -466,7 +515,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
             value = query,
             onValueChange = onQuery,
             singleLine = true,
-            placeholder = { Text("Cerca in questa cartella") },
+            placeholder = { Text(if (deep) "Cerca anche nelle sottocartelle" else "Cerca in questa cartella") },
             leadingIcon = { Icon(AppIcons.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
             trailingIcon = if (query.isNotEmpty()) {
                 { ToolButton(AppIcons.Close, "Cancella", { onQuery("") }, tint = Arancio.colors.textSecondary) }

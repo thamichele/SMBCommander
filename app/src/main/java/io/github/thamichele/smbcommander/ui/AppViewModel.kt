@@ -12,6 +12,8 @@ import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
+import io.github.thamichele.smbcommander.core.FileTrash
+import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -28,6 +30,8 @@ import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +57,9 @@ sealed interface Screen {
 
     /** The quick cleanup of the gallery: one photo at a time, swipe to keep or discard. */
     data object Cleanup : Screen
+
+    /** The bin of the file browser, every share together; back returns to [returnTo]. */
+    data class Trash(val returnTo: Screen) : Screen
 
     /** Full-screen photos, swiping through [images] starting at [index]; back returns to [returnTo]. */
     data class Viewer(val returnTo: Screen, val images: List<RemoteEntry>, val index: Int) : Screen
@@ -111,9 +118,19 @@ data class BrowserState(
     val searching: Boolean = false,
     val showHidden: Boolean = false,
     val grid: Boolean = false,
+    /** Search also in the subfolders: the results come from [deepResults], not from [entries]. */
+    val deep: Boolean = false,
+    val deepResults: List<RemoteEntry> = emptyList(),
+    /** The search in the subfolders is still walking; [deepFolder] is the folder it is reading. */
+    val deepBusy: Boolean = false,
+    val deepFolder: String = "",
 ) {
+    /** True while the list shows matches from every level under the folder. */
+    val showingDeep: Boolean get() = searching && deep && query.isNotBlank()
+
     /** What the list shows: hidden and system entries filtered out, search applied, folders first. Worked out once. */
     val visible: List<RemoteEntry> by lazy {
+        if (showingDeep) return@lazy deepResults
         val filtered = entries.filter { e ->
             (showHidden || !(e.name.startsWith(".") || e.name.startsWith("@"))) &&
                 (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true))
@@ -130,11 +147,21 @@ data class BrowserState(
 /** Entries waiting for "Incolla qui" in another folder. */
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
 
+/** The bin of the file browser as the screen shows it. */
+data class TrashState(
+    val items: List<FileTrash.Item> = emptyList(),
+    val loading: Boolean = true,
+    val working: Boolean = false,
+    val error: String? = null,
+)
+
 /** Some of the elements about to go into a folder are already there: [go] runs with the user's choice. */
 data class ConflictAsk(val names: List<String>, val total: Int, val go: (Conflict) -> Unit)
 
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
+    /** A message with a button, such as "Annulla" after moving something to the bin. */
+    data class MessageWithAction(val text: String, val action: String, val onAction: () -> Unit) : UiEvent
     data class OpenFile(val file: File, val name: String, val edit: Boolean) : UiEvent
     /** Temporary copies ready for the system's share sheet. */
     data class Share(val files: List<File>) : UiEvent
@@ -363,7 +390,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (_selected.value.isNotEmpty()) {
                     _selected.value = emptySet()
                 } else if (_browser.value.searching) {
-                    _browser.update { it.copy(searching = false, query = "") }
+                    setSearching(false)
                 } else if (s.path.isEmpty()) {
                     listJob?.cancel()
                     _screen.value = Screen.Shares
@@ -378,6 +405,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             Screen.Cleanup -> {
                 _screen.value = Screen.Gallery
+                return true
+            }
+            is Screen.Trash -> {
+                _screen.value = s.returnTo
+                if (s.returnTo is Screen.Browser) refresh()
                 return true
             }
             Screen.Backup, Screen.Gallery -> {
@@ -411,8 +443,69 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _browser.update { it.copy(sort = sort) }
     }
 
-    fun setQuery(query: String) = _browser.update { it.copy(query = query) }
-    fun setSearching(on: Boolean) = _browser.update { it.copy(searching = on, query = if (on) it.query else "") }
+    fun setQuery(query: String) {
+        _browser.update { it.copy(query = query) }
+        if (_browser.value.deep) startDeepSearch()
+    }
+
+    fun setSearching(on: Boolean) {
+        if (!on) deepJob?.cancel()
+        _browser.update { it.copy(searching = on, query = if (on) it.query else "", deepResults = if (on) it.deepResults else emptyList(), deepBusy = false) }
+    }
+
+    /** Switches the search between this folder only and every subfolder too. */
+    fun setDeepSearch(on: Boolean) {
+        _browser.update { it.copy(deep = on) }
+        if (on) startDeepSearch() else {
+            deepJob?.cancel()
+            _browser.update { it.copy(deepResults = emptyList(), deepBusy = false) }
+        }
+    }
+
+    private var deepJob: Job? = null
+
+    /** Walks every level under the folder for names with the query; results appear while it walks. */
+    private fun startDeepSearch() {
+        deepJob?.cancel()
+        val s = _screen.value as? Screen.Browser ?: return
+        val query = _browser.value.query.trim()
+        if (query.length < 2) {
+            _browser.update { it.copy(deepResults = emptyList(), deepBusy = false) }
+            return
+        }
+        val hidden = _browser.value.showHidden
+        _browser.update { it.copy(deepResults = emptyList(), deepBusy = true, deepFolder = "") }
+        deepJob = viewModelScope.launch {
+            delay(350) // typing: wait for a pause before walking the NAS
+            val found = java.util.Collections.synchronizedList(ArrayList<RemoteEntry>())
+            var folder = ""
+            val publisher = launch {
+                while (true) {
+                    delay(250)
+                    val snapshot = synchronized(found) { found.toList() }
+                    _browser.update { if (it.query.trim() == query) it.copy(deepResults = snapshot, deepFolder = folder) else it }
+                }
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    val fs = repo.fs()
+                    FolderScan.search(
+                        fs, s.share, s.path, query,
+                        includeHidden = hidden,
+                        stopped = { !isActive },
+                        onFolder = { folder = it },
+                    ) { found += it }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                message(e.readable())
+            } finally {
+                publisher.cancel()
+                val snapshot = synchronized(found) { found.toList() }
+                _browser.update { if (it.query.trim() == query) it.copy(deepResults = snapshot, deepBusy = false) else it }
+            }
+        }
+    }
     fun toggleHidden() = _browser.update { it.copy(showHidden = !it.showHidden).also { s -> browserPrefs.showHidden = s.showHidden } }
     fun toggleGrid() = _browser.update { it.copy(grid = !it.grid).also { s -> browserPrefs.grid = s.grid } }
 
@@ -461,7 +554,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun selectedEntries(): List<RemoteEntry> {
         val paths = _selected.value
-        return _browser.value.entries.filter { it.path in paths }
+        val b = _browser.value
+        return (if (b.showingDeep) b.deepResults else b.entries).filter { it.path in paths }
     }
 
     /** Puts the selection on the clipboard; it is pasted in whichever folder the user opens next. */
@@ -548,8 +642,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val s = _screen.value as? Screen.Browser ?: return
         viewModelScope.launch {
             try {
-                val result = deleteFromNas(entries)
-                if (entries.size == 1) message(result.message("«${entries[0].name}» eliminato"))
+                // the bin itself, and shares as a whole, are deleted for good
+                val toTrash = entries.none { it.path.isEmpty() || FileTrash.isInside(it.path) }
+                val result = deleteFromNas(entries, toTrash)
+                val trashed = lastTrashed
+                if (toTrash && trashed.isNotEmpty()) {
+                    val text = if (trashed.size == 1) "«${trashed[0].entry.name}» spostato nel cestino" else "${trashed.size} elementi spostati nel cestino"
+                    events.trySend(UiEvent.MessageWithAction(text, "Annulla") { restoreFromTrash(trashed) })
+                } else if (entries.size == 1) {
+                    message(result.message("«${entries[0].name}» eliminato"))
+                }
             } catch (e: Exception) {
                 // with more than one file the deletion window shows what went wrong
                 if (entries.size == 1) message(e.readable())
@@ -596,7 +698,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * the others. Those of the backup folder are written to its list of deleted photos first, and taken off it again
      * if they were skipped or not deleted: a photo moved elsewhere must not stay remembered as deleted.
      */
-    private suspend fun deleteFromNas(entries: List<RemoteEntry>): Deletion {
+    /** What the last deletion of the browser moved to the bin, for its "Annulla". */
+    private var lastTrashed: List<FileTrash.Item> = emptyList()
+
+    private suspend fun deleteFromNas(entries: List<RemoteEntry>, toTrash: Boolean = false): Deletion {
+        lastTrashed = emptyList()
+        val trashed = ArrayList<FileTrash.Item>()
         val many = entries.size > 1
         stopDeletion = false
         var state = Deletion(total = entries.size, preparing = 0)
@@ -617,7 +724,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (stopDeletion) break
                 publish(state.copy(current = entry))
                 val outcome = try {
-                    val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
+                    val done = repo.io { fs ->
+                        fs.unlessGone(entry.share, entry.path) {
+                            if (toTrash) trashed.add(FileTrash.discard(fs, entry)) else fs.delete(entry.share, entry.path)
+                        }
+                    }
                     if (done != null) DeletionStep(entry, DeletionStep.Outcome.Deleted) else DeletionStep(entry, DeletionStep.Outcome.Skipped)
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -627,6 +738,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         } finally {
             publish(state.copy(current = null, finished = true))
+            lastTrashed = trashed
             val deleted = state.deleted.toSet()
             // two identical photos share a line: it stays while one of them was deleted
             val stillDeleted = deleted.mapNotNull { remembered[it] }.toSet()
@@ -695,7 +807,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val keys = gone.map { it.share + "/" + it.path }.toSet()
         val isGone = { e: RemoteEntry -> e.share + "/" + e.path in keys }
         listingCache.replaceAll { _, list -> list.filterNot(isGone) }
-        _browser.update { it.copy(entries = it.entries.filterNot(isGone)) }
+        _browser.update { it.copy(entries = it.entries.filterNot(isGone), deepResults = it.deepResults.filterNot(isGone)) }
         val s = _screen.value as? Screen.Viewer ?: return
         val left = s.images.filterNot(isGone)
         _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
@@ -762,6 +874,72 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _transfer.value = null
         }
+    }
+
+    // --- bin of the file browser ------------------------------------------------------------------------------------
+
+    private val _trash = MutableStateFlow(TrashState())
+    val trash: StateFlow<TrashState> = _trash.asStateFlow()
+
+    fun openTrash() {
+        val here = _screen.value
+        _screen.value = Screen.Trash(if (here is Screen.Trash) here.returnTo else here)
+        loadTrash()
+    }
+
+    /** Reads the bin of every share with a saved folder, after deleting for good what is older than 30 days. */
+    fun loadTrash() {
+        _trash.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val browsing = ((_screen.value as? Screen.Trash)?.returnTo as? Screen.Browser)?.share
+                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing)).distinctBy { it.lowercase() }
+                val items = repo.io { fs ->
+                    shares.flatMap { share ->
+                        runCatching { FileTrash.purge(fs, share) }
+                        runCatching { FileTrash.contents(fs, share) }.getOrDefault(emptyList())
+                    }
+                }.sortedByDescending { it.deletedAt }
+                _trash.value = TrashState(items = items)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _trash.update { it.copy(loading = false, error = e.readable()) }
+            }
+        }
+    }
+
+    /** Puts elements of the bin back where they were. */
+    fun restoreFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
+        try {
+            val places = repo.io { fs -> items.map { FileTrash.restore(fs, it) } }
+            val where = RemotePath.parent(places[0]).ifEmpty { items[0].share }
+            message(if (items.size == 1) "«${items[0].entry.name}» ripristinato in $where" else "${items.size} elementi ripristinati")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+        listingCache.clear()
+        app.nasChanged.tryEmit(null)
+        if (_screen.value is Screen.Trash) loadTrash() else refresh()
+    }
+
+    /** Deletes elements of the bin for good. */
+    fun deleteFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
+        _trash.update { it.copy(working = true) }
+        try {
+            val skipped = repo.io { fs -> items.count { !FileTrash.delete(fs, it) } }
+            message(
+                when {
+                    items.size == 1 && skipped == 0 -> "Eliminato definitivamente"
+                    skipped == 0 -> "${items.size} elementi eliminati definitivamente"
+                    else -> "${items.size - skipped} eliminati, $skipped non erano più nel cestino"
+                }
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+        loadTrash()
     }
 
     // --- open and edit ----------------------------------------------------------------------------------------------

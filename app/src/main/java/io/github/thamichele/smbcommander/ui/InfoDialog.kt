@@ -20,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.DiskSpace
+import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.MediaDetails
@@ -41,6 +44,10 @@ import io.github.thamichele.smbcommander.data.isImage
 import io.github.thamichele.smbcommander.data.isMedia
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 /**
  * Everything known about a file or folder: first its path on the NAS, ready to copy, then size and dates, and for
@@ -58,6 +65,28 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
     var details by remember(entry) { mutableStateOf<List<Pair<String, String>>?>(if (entry.isMedia) null else emptyList()) }
     LaunchedEffect(entry) {
         if (entry.isMedia) details = runCatching { app.repository.io { MediaDetails.read(it, entry) } }.getOrDefault(emptyList())
+    }
+
+    // a folder: what it holds, all levels, counted while the dialog is open; the disk: how full it is
+    var totals by remember(entry) { mutableStateOf<FolderScan.Totals?>(null) }
+    var counting by remember(entry) { mutableStateOf(entry.isDirectory) }
+    var unreadable by remember(entry) { mutableStateOf(0) }
+    var space by remember(entry) { mutableStateOf<DiskSpace?>(null) }
+    LaunchedEffect(entry) {
+        space = runCatching { app.repository.io { it.space(entry.share) } }.getOrNull()
+    }
+    LaunchedEffect(entry) {
+        if (!entry.isDirectory) return@LaunchedEffect
+        try {
+            withContext(Dispatchers.IO) {
+                val fs = app.repository.fs()
+                FolderScan.measure(fs, entry.share, entry.path, stopped = { !isActive }, onUnreadable = { unreadable++ }) { totals = it }
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        } finally {
+            counting = false
+        }
     }
 
     val copy = { label: String, text: String ->
@@ -83,6 +112,36 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
                         InfoRow(
                             "Dimensione",
                             "${Formatter.formatFileSize(context, entry.size)} (${"%,d".format(java.util.Locale.ITALY, entry.size)} byte)",
+                        )
+                    }
+                    if (entry.isDirectory) {
+                        val t = totals
+                        val value = when {
+                            t == null && counting -> "Conto i file…"
+                            t == null -> "Non leggibile"
+                            else -> buildString {
+                                append(Formatter.formatFileSize(context, t.bytes))
+                                append(" · ")
+                                append(if (t.files == 1) "1 file" else "${"%,d".format(java.util.Locale.ITALY, t.files)} file")
+                                append(", ")
+                                append(if (t.folders == 1) "1 cartella" else "${"%,d".format(java.util.Locale.ITALY, t.folders)} cartelle")
+                                if (counting) append(" (conto ancora…)")
+                                if (unreadable > 0) append(" · $unreadable cartelle non leggibili")
+                            }
+                        }
+                        InfoRow("Contenuto, sottocartelle comprese", value)
+                    }
+                    space?.let { d ->
+                        val percent = if (d.total > 0) (d.used * 100 / d.total).toInt() else 0
+                        InfoRow(
+                            "Spazio sul disco di ${entry.share}",
+                            "${Formatter.formatFileSize(context, d.free)} liberi su ${Formatter.formatFileSize(context, d.total)} (pieno al $percent%)",
+                        )
+                        LinearProgressIndicator(
+                            progress = { if (d.total > 0) d.used.toFloat() / d.total else 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (percent >= 90) c.danger else c.accent,
+                            trackColor = c.border,
                         )
                     }
                     if (entry.modified > 0) {
