@@ -151,7 +151,8 @@ Dal tasto con la scopetta della Galleria: una foto alla volta, come su Tinder. S
   `IMG_1234 - Copia`, la versione HEIC accanto alla JPG), nella stessa cartella o in due cartelle diverse, per esempio
   le vecchie cartelle di QuMagie. Le due copie stanno una accanto all'altra con il percorso completo sotto: scegli
   quale tenere e l'altra va nel cestino, oppure le tieni entrambe. Se hanno la stessa dimensione l'app confronta il
-  contenuto e ti dice se sono identiche. Con tre o più copie, quella tenuta si confronta con la successiva.
+  contenuto: quando sono identiche le due foto hanno il bordo verde e sopra c'è «Sono identiche», quando sono diverse
+  il bordo è rosso e c'è «Sono diverse», con il motivo. Con tre o più copie, quella tenuta si confronta con la successiva.
   Finché una foto ha ancora una copia da confrontare compare solo qui, non in **Da verificare** né in **Tutte le
   altre**: ci arriva quando è rimasta singola.
 - **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle. Sono divise in gruppi:
