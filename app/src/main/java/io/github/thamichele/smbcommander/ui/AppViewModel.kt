@@ -8,24 +8,38 @@ import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.NasChange
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.backup.BackupScheduler
+import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.core.DeletedPhotos
 import io.github.thamichele.smbcommander.core.EditSession
 import io.github.thamichele.smbcommander.core.EditSync
+import io.github.thamichele.smbcommander.core.FileTrash
+import io.github.thamichele.smbcommander.core.RandomReader
+import io.github.thamichele.smbcommander.core.ZipArchive
+import io.github.thamichele.smbcommander.core.ZipExtract
+import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
+import io.github.thamichele.smbcommander.core.TransferLog
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
+import io.github.thamichele.smbcommander.data.FoundNas
+import io.github.thamichele.smbcommander.data.MusicState
+import io.github.thamichele.smbcommander.data.NasFinder
+import io.github.thamichele.smbcommander.data.WakeOnLan
+import io.github.thamichele.smbcommander.data.PhoneUploads
+import io.github.thamichele.smbcommander.data.isAudio
 import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.TransferJob
-import io.github.thamichele.smbcommander.data.describe
 import io.github.thamichele.smbcommander.data.isMedia
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +65,12 @@ sealed interface Screen {
 
     /** The quick cleanup of the gallery: one photo at a time, swipe to keep or discard. */
     data object Cleanup : Screen
+
+    /** A ZIP archive on the NAS opened like a folder, at [dir] inside it; back goes up, then to [returnTo]. */
+    data class Archive(val returnTo: Browser, val entry: RemoteEntry, val dir: String) : Screen
+
+    /** The bin of the file browser, every share together; back returns to [returnTo]. */
+    data class Trash(val returnTo: Screen) : Screen
 
     /** Full-screen photos, swiping through [images] starting at [index]; back returns to [returnTo]. */
     data class Viewer(val returnTo: Screen, val images: List<RemoteEntry>, val index: Int) : Screen
@@ -109,9 +129,19 @@ data class BrowserState(
     val searching: Boolean = false,
     val showHidden: Boolean = false,
     val grid: Boolean = false,
+    /** Search also in the subfolders: the results come from [deepResults], not from [entries]. */
+    val deep: Boolean = false,
+    val deepResults: List<RemoteEntry> = emptyList(),
+    /** The search in the subfolders is still walking; [deepFolder] is the folder it is reading. */
+    val deepBusy: Boolean = false,
+    val deepFolder: String = "",
 ) {
+    /** True while the list shows matches from every level under the folder. */
+    val showingDeep: Boolean get() = searching && deep && query.isNotBlank()
+
     /** What the list shows: hidden and system entries filtered out, search applied, folders first. Worked out once. */
     val visible: List<RemoteEntry> by lazy {
+        if (showingDeep) return@lazy deepResults
         val filtered = entries.filter { e ->
             (showHidden || !(e.name.startsWith(".") || e.name.startsWith("@"))) &&
                 (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true))
@@ -128,8 +158,31 @@ data class BrowserState(
 /** Entries waiting for "Incolla qui" in another folder. */
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
 
+/** The optional functions as the settings show them. */
+data class ExtrasState(val lock: Boolean, val wakeOnLan: Boolean, val wakeMac: String, val followNas: Boolean)
+
+/** The folder of a ZIP archive being shown. */
+data class ArchiveState(
+    val items: List<ZipArchive.Entry> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
+/** The bin of the file browser as the screen shows it. */
+data class TrashState(
+    val items: List<FileTrash.Item> = emptyList(),
+    val loading: Boolean = true,
+    val working: Boolean = false,
+    val error: String? = null,
+)
+
+/** Some of the elements about to go into a folder are already there: [go] runs with the user's choice. */
+data class ConflictAsk(val names: List<String>, val total: Int, val go: (Conflict) -> Unit)
+
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
+    /** A message with a button, such as "Annulla" after moving something to the bin. */
+    data class MessageWithAction(val text: String, val action: String, val onAction: () -> Unit) : UiEvent
     data class OpenFile(val file: File, val name: String, val edit: Boolean) : UiEvent
     /** Temporary copies ready for the system's share sheet. */
     data class Share(val files: List<File>) : UiEvent
@@ -194,6 +247,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 app.nasChanged.tryEmit(null)
                 refresh()
                 if (job.state == TransferJob.State.Failed) message("${job.label}: ${job.error}")
+                else if (job.state == TransferJob.State.Done && job.note != null) message("${job.label}: ${job.note}")
             }
         }
     }
@@ -357,7 +411,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (_selected.value.isNotEmpty()) {
                     _selected.value = emptySet()
                 } else if (_browser.value.searching) {
-                    _browser.update { it.copy(searching = false, query = "") }
+                    setSearching(false)
                 } else if (s.path.isEmpty()) {
                     listJob?.cancel()
                     _screen.value = Screen.Shares
@@ -372,6 +426,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             Screen.Cleanup -> {
                 _screen.value = Screen.Gallery
+                return true
+            }
+            is Screen.Archive -> {
+                if (s.dir.isEmpty()) {
+                    closeArchive()
+                    _screen.value = s.returnTo
+                    refresh()
+                } else {
+                    _screen.value = s.copy(dir = RemotePath.parent(s.dir))
+                    showArchiveDir()
+                }
+                return true
+            }
+            is Screen.Trash -> {
+                _screen.value = s.returnTo
+                if (s.returnTo is Screen.Browser) refresh()
                 return true
             }
             Screen.Backup, Screen.Gallery -> {
@@ -396,6 +466,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 if (_screen.value == s) _browser.update { it.copy(loading = false, error = e.readable()) }
+                followIfMoved(e)
             }
         }
     }
@@ -405,8 +476,69 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _browser.update { it.copy(sort = sort) }
     }
 
-    fun setQuery(query: String) = _browser.update { it.copy(query = query) }
-    fun setSearching(on: Boolean) = _browser.update { it.copy(searching = on, query = if (on) it.query else "") }
+    fun setQuery(query: String) {
+        _browser.update { it.copy(query = query) }
+        if (_browser.value.deep) startDeepSearch()
+    }
+
+    fun setSearching(on: Boolean) {
+        if (!on) deepJob?.cancel()
+        _browser.update { it.copy(searching = on, query = if (on) it.query else "", deepResults = if (on) it.deepResults else emptyList(), deepBusy = false) }
+    }
+
+    /** Switches the search between this folder only and every subfolder too. */
+    fun setDeepSearch(on: Boolean) {
+        _browser.update { it.copy(deep = on) }
+        if (on) startDeepSearch() else {
+            deepJob?.cancel()
+            _browser.update { it.copy(deepResults = emptyList(), deepBusy = false) }
+        }
+    }
+
+    private var deepJob: Job? = null
+
+    /** Walks every level under the folder for names with the query; results appear while it walks. */
+    private fun startDeepSearch() {
+        deepJob?.cancel()
+        val s = _screen.value as? Screen.Browser ?: return
+        val query = _browser.value.query.trim()
+        if (query.length < 2) {
+            _browser.update { it.copy(deepResults = emptyList(), deepBusy = false) }
+            return
+        }
+        val hidden = _browser.value.showHidden
+        _browser.update { it.copy(deepResults = emptyList(), deepBusy = true, deepFolder = "") }
+        deepJob = viewModelScope.launch {
+            delay(350) // typing: wait for a pause before walking the NAS
+            val found = java.util.Collections.synchronizedList(ArrayList<RemoteEntry>())
+            var folder = ""
+            val publisher = launch {
+                while (true) {
+                    delay(250)
+                    val snapshot = synchronized(found) { found.toList() }
+                    _browser.update { if (it.query.trim() == query) it.copy(deepResults = snapshot, deepFolder = folder) else it }
+                }
+            }
+            try {
+                withContext(Dispatchers.IO) {
+                    val fs = repo.fs()
+                    FolderScan.search(
+                        fs, s.share, s.path, query,
+                        includeHidden = hidden,
+                        stopped = { !isActive },
+                        onFolder = { folder = it },
+                    ) { found += it }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                message(e.readable())
+            } finally {
+                publisher.cancel()
+                val snapshot = synchronized(found) { found.toList() }
+                _browser.update { if (it.query.trim() == query) it.copy(deepResults = snapshot, deepBusy = false) else it }
+            }
+        }
+    }
     fun toggleHidden() = _browser.update { it.copy(showHidden = !it.showHidden).also { s -> browserPrefs.showHidden = s.showHidden } }
     fun toggleGrid() = _browser.update { it.copy(grid = !it.grid).also { s -> browserPrefs.grid = s.grid } }
 
@@ -455,7 +587,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun selectedEntries(): List<RemoteEntry> {
         val paths = _selected.value
-        return _browser.value.entries.filter { it.path in paths }
+        val b = _browser.value
+        return (if (b.showingDeep) b.deepResults else b.entries).filter { it.path in paths }
     }
 
     /** Puts the selection on the clipboard; it is pasted in whichever folder the user opens next. */
@@ -471,23 +604,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _clipboard.value = null
     }
 
+    private val _conflictAsk = MutableStateFlow<ConflictAsk?>(null)
+    /** Names already in the destination: the user chooses whether to replace, skip or keep both. */
+    val conflictAsk: StateFlow<ConflictAsk?> = _conflictAsk.asStateFlow()
+
+    /** The choice for [conflictAsk]; null closes it without doing anything. */
+    fun answerConflict(choice: Conflict?) {
+        val ask = _conflictAsk.value ?: return
+        _conflictAsk.value = null
+        if (choice != null) ask.go(choice)
+    }
+
+    /**
+     * Runs [go] at once when none of [names] is in the folder being browsed, else asks first. The listing on screen
+     * is enough to know: the NAS compares names without regard to case, and so does this.
+     */
+    private fun askIfTaken(names: List<String>, go: (Conflict) -> Unit) {
+        val taken = _browser.value.entries.mapTo(HashSet()) { it.name.lowercase() }
+        val clashes = names.filter { it.lowercase() in taken }
+        if (clashes.isEmpty()) go(Conflict.KeepBoth) else _conflictAsk.value = ConflictAsk(clashes, names.size, go)
+    }
+
     /** Queues one job per clipboard entry, into the folder being browsed. */
     fun paste() {
         val s = _screen.value as? Screen.Browser ?: return
         val clip = _clipboard.value ?: return
         val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
-        for (entry in clip.entries) {
-            val label = (if (clip.move) "Sposta" else "Copia") + " «${entry.name}» in $destination"
-            app.transfers.enqueue(label) { fs, progress ->
-                val listener = Transfers.Listener { name, done, total -> progress(name, done, total) }
-                if (clip.move) Transfers.move(fs, entry, s.share, s.path, listener)
-                else Transfers.copy(fs, entry, s.share, s.path, listener)
+        // what is already in this very folder is not a clash: a copy there is always a new copy, a move does nothing
+        val here = { e: RemoteEntry -> e.share == s.share && RemotePath.parent(e.path) == RemotePath.normalize(s.path) }
+        askIfTaken(clip.entries.filterNot(here).map { it.name }) { conflict ->
+            for (entry in clip.entries) {
+                val label = (if (clip.move) "Sposta" else "Copia") + " «${entry.name}» in $destination"
+                val log = TransferLog()
+                app.transfers.enqueue(label) { fs, progress ->
+                    val listener = Transfers.Listener { name, done, total -> progress(name, done, total) }
+                    if (clip.move) Transfers.move(fs, entry, s.share, s.path, listener, conflict, log)
+                    else Transfers.copy(fs, entry, s.share, s.path, listener, conflict, log)
+                    when (log.skipped) {
+                        0 -> null
+                        1 -> "1 file già presente, lasciato com'era"
+                        else -> "${log.skipped} file già presenti, lasciati com'erano"
+                    }
+                }
             }
+            _clipboard.value = null
         }
-        _clipboard.value = null
     }
 
     fun cancelTransfers() = app.transfers.cancelAll()
+
+    fun pauseTransfers() = app.transfers.pause()
+
+    fun resumeTransfers() = app.transfers.resume()
+
+    fun retryTransfer(id: Long) = app.transfers.retry(id)
+
+    val transfersPaused: StateFlow<Boolean> = app.transfers.paused
 
     fun clearTransfers() = app.transfers.clearFinished()
 
@@ -503,8 +675,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val s = _screen.value as? Screen.Browser ?: return
         viewModelScope.launch {
             try {
-                val result = deleteFromNas(entries)
-                if (entries.size == 1) message(result.message("«${entries[0].name}» eliminato"))
+                // the bin itself, and shares as a whole, are deleted for good
+                val toTrash = entries.none { it.path.isEmpty() || FileTrash.isInside(it.path) }
+                val result = deleteFromNas(entries, toTrash)
+                val trashed = lastTrashed
+                if (toTrash && trashed.isNotEmpty()) {
+                    val text = if (trashed.size == 1) "«${trashed[0].entry.name}» spostato nel cestino" else "${trashed.size} elementi spostati nel cestino"
+                    events.trySend(UiEvent.MessageWithAction(text, "Annulla") { restoreFromTrash(trashed) })
+                } else if (entries.size == 1) {
+                    message(result.message("«${entries[0].name}» eliminato"))
+                }
             } catch (e: Exception) {
                 // with more than one file the deletion window shows what went wrong
                 if (entries.size == 1) message(e.readable())
@@ -551,7 +731,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * the others. Those of the backup folder are written to its list of deleted photos first, and taken off it again
      * if they were skipped or not deleted: a photo moved elsewhere must not stay remembered as deleted.
      */
-    private suspend fun deleteFromNas(entries: List<RemoteEntry>): Deletion {
+    /** What the last deletion of the browser moved to the bin, for its "Annulla". */
+    private var lastTrashed: List<FileTrash.Item> = emptyList()
+
+    private suspend fun deleteFromNas(entries: List<RemoteEntry>, toTrash: Boolean = false): Deletion {
+        lastTrashed = emptyList()
+        val trashed = ArrayList<FileTrash.Item>()
         val many = entries.size > 1
         stopDeletion = false
         var state = Deletion(total = entries.size, preparing = 0)
@@ -572,7 +757,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (stopDeletion) break
                 publish(state.copy(current = entry))
                 val outcome = try {
-                    val done = repo.io { fs -> fs.unlessGone(entry.share, entry.path) { fs.delete(entry.share, entry.path) } }
+                    val done = repo.io { fs ->
+                        fs.unlessGone(entry.share, entry.path) {
+                            if (toTrash) trashed.add(FileTrash.discard(fs, entry)) else fs.delete(entry.share, entry.path)
+                        }
+                    }
                     if (done != null) DeletionStep(entry, DeletionStep.Outcome.Deleted) else DeletionStep(entry, DeletionStep.Outcome.Skipped)
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -582,6 +771,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         } finally {
             publish(state.copy(current = null, finished = true))
+            lastTrashed = trashed
             val deleted = state.deleted.toSet()
             // two identical photos share a line: it stays while one of them was deleted
             val stillDeleted = deleted.mapNotNull { remembered[it] }.toSet()
@@ -650,38 +840,45 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val keys = gone.map { it.share + "/" + it.path }.toSet()
         val isGone = { e: RemoteEntry -> e.share + "/" + e.path in keys }
         listingCache.replaceAll { _, list -> list.filterNot(isGone) }
-        _browser.update { it.copy(entries = it.entries.filterNot(isGone)) }
+        _browser.update { it.copy(entries = it.entries.filterNot(isGone), deepResults = it.deepResults.filterNot(isGone)) }
         val s = _screen.value as? Screen.Viewer ?: return
         val left = s.images.filterNot(isGone)
         _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
     }
 
-    /** Copies documents picked on the phone into the current folder; names already taken get " (2)", " (3)"... */
+    /** Queues the documents picked on the phone for the current folder; names already taken are asked about. */
     fun upload(uris: List<Uri>) {
-        val s = _screen.value as? Screen.Browser ?: return
         if (uris.isEmpty()) return
         viewModelScope.launch {
             val resolver = getApplication<Application>().contentResolver
-            var count = 0
-            try {
-                for ((i, uri) in uris.withIndex()) {
-                    val (name, size) = withContext(Dispatchers.IO) { resolver.describe(uri) }
-                    val label = if (uris.size > 1) "Carico ${i + 1} di ${uris.size}: $name" else "Carico $name"
-                    repo.io { fs ->
-                        val target = EditSync.freePath(fs, s.share, RemotePath.child(s.path, name))
-                        EditSync.safeUpload(fs, s.share, target, size, {
-                            resolver.openInputStream(uri) ?: error("Impossibile leggere «$name»")
-                        }) { done, total -> _transfer.value = Transfer(label, done, total) }
-                    }
-                    count++
-                }
-                message(if (count == 1) "File caricato" else "$count file caricati")
+            val items = withContext(Dispatchers.IO) { uris.map { PhoneUploads.file(resolver, it) } }
+            queueUpload(items, if (items.size == 1) "Carica «${items[0].name}»" else "Carica ${items.size} file")
+        }
+    }
+
+    /** Queues a whole folder of the phone, with its subfolders, for the current folder. */
+    fun uploadFolder(tree: Uri?) {
+        tree ?: return
+        viewModelScope.launch {
+            val resolver = getApplication<Application>().contentResolver
+            val item = try {
+                withContext(Dispatchers.IO) { PhoneUploads.folder(resolver, tree) }
             } catch (e: Exception) {
-                message(e.readable())
-            } finally {
-                _transfer.value = null
-                app.nasChanged.tryEmit(NasChange(s.share, s.path))
-                refresh()
+                message("Impossibile leggere la cartella scelta")
+                return@launch
+            }
+            queueUpload(listOf(item), "Carica la cartella «${item.name}»")
+        }
+    }
+
+    private fun queueUpload(items: List<PhoneUploads.Item>, label: String) {
+        val s = _screen.value as? Screen.Browser ?: return
+        val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
+        val resolver = getApplication<Application>().contentResolver
+        askIfTaken(items.map { it.name }) { conflict ->
+            val log = TransferLog()
+            app.transfers.enqueue("$label in $destination") { fs, progress ->
+                PhoneUploads.send(resolver, fs, items, s.share, s.path, conflict, log, progress)
             }
         }
     }
@@ -710,6 +907,284 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _transfer.value = null
         }
+    }
+
+    // --- optional functions ---------------------------------------------------------------------------------------
+
+    private val _extras = MutableStateFlow(readExtras())
+    val extras: StateFlow<ExtrasState> = _extras.asStateFlow()
+
+    private fun readExtras() = app.extras.let { ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas) }
+
+    fun setLock(on: Boolean) {
+        if (on && !AppLock.available(app)) {
+            message("Imposta prima un'impronta, il volto o un blocco schermo nelle impostazioni del telefono")
+            return
+        }
+        app.extras.lock = on
+        if (on) app.extras.lastUnlocked = System.currentTimeMillis()
+        _extras.value = readExtras()
+    }
+
+    fun setWakeOnLan(on: Boolean) {
+        app.extras.wakeOnLan = on
+        _extras.value = readExtras()
+    }
+
+    fun setWakeMac(mac: String) {
+        app.extras.wakeMac = mac
+        _extras.value = readExtras()
+    }
+
+    fun setFollowNas(on: Boolean) {
+        app.extras.followNas = on
+        _extras.value = readExtras()
+    }
+
+    /** Sends the Wake-on-LAN packet to the NAS. */
+    fun wakeNas() = viewModelScope.launch {
+        try {
+            WakeOnLan.wake(app.extras.wakeMac, repo.host())
+            message("Segnale di accensione inviato: il NAS di solito risponde dopo un paio di minuti")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+    }
+
+    private val _found = MutableStateFlow<List<FoundNas>?>(null)
+    /** NAS announced on the Wi-Fi, for the address field of the settings; null until searched. */
+    val found: StateFlow<List<FoundNas>?> = _found.asStateFlow()
+    private val _finding = MutableStateFlow(false)
+    val finding: StateFlow<Boolean> = _finding.asStateFlow()
+
+    fun findNas() = viewModelScope.launch {
+        _finding.value = true
+        try {
+            _found.value = NasFinder.discover(app)
+        } finally {
+            _finding.value = false
+        }
+    }
+
+    private var lastFollow = 0L
+
+    /**
+     * The NAS does not answer at its address: with the option on, looks for it on the network and moves to its new
+     * address when the same NAS (same identity) answers there. At most once a minute.
+     */
+    private fun followIfMoved(error: Throwable) {
+        if (!app.extras.followNas || !error.isConnectionLost() && error !is java.net.UnknownHostException) return
+        val now = System.currentTimeMillis()
+        if (now - lastFollow < 60_000) return
+        lastFollow = now
+        viewModelScope.launch {
+            val candidates = runCatching { NasFinder.discover(app) }.getOrDefault(emptyList())
+            for (nas in candidates) {
+                if (repo.follow(nas.address)) {
+                    message("Il NAS ha cambiato indirizzo: ora è ${nas.address}, aggiornato nelle impostazioni")
+                    listingCache.clear()
+                    refresh()
+                    return@launch
+                }
+            }
+        }
+    }
+
+    // --- music --------------------------------------------------------------------------------------------------
+
+    val music: StateFlow<MusicState> = app.music.state
+
+    /** Plays [entry] and, after it, the other songs of the folder as the list shows them. */
+    fun playMusic(entry: RemoteEntry) {
+        val songs = _browser.value.visible.filter { it.isAudio }.ifEmpty { listOf(entry) }
+        app.music.play(songs, songs.indexOf(entry).coerceAtLeast(0))
+    }
+
+    fun musicToggle() = app.music.toggle()
+    fun musicNext() = app.music.next()
+    fun musicPrevious() = app.music.previous()
+    fun musicSeek(position: Long) = app.music.seek(position)
+    fun musicStop() = app.music.stop()
+
+    // --- ZIP archives ---------------------------------------------------------------------------------------------
+
+    private val _archive = MutableStateFlow(ArchiveState())
+    val archive: StateFlow<ArchiveState> = _archive.asStateFlow()
+
+    private var openArchive: Pair<ZipArchive, RandomReader>? = null
+
+    /** Opens a ZIP of the NAS like a folder: only its index is read, not the whole file. */
+    fun openArchive(entry: RemoteEntry) {
+        val s = _screen.value as? Screen.Browser ?: return
+        closeArchive()
+        _screen.value = Screen.Archive(s, entry, "")
+        _archive.value = ArchiveState(loading = true)
+        viewModelScope.launch {
+            try {
+                openArchive = repo.io { fs ->
+                    val reader = fs.openRandom(entry.share, entry.path)
+                    try {
+                        ZipArchive.read(reader) to reader
+                    } catch (e: Exception) {
+                        reader.close()
+                        throw e
+                    }
+                }
+                showArchiveDir()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _archive.value = ArchiveState(error = e.readable())
+            }
+        }
+    }
+
+    fun openArchiveFolder(item: ZipArchive.Entry) {
+        val s = _screen.value as? Screen.Archive ?: return
+        _screen.value = s.copy(dir = item.path)
+        showArchiveDir()
+    }
+
+    private fun showArchiveDir() {
+        val s = _screen.value as? Screen.Archive ?: return
+        val (zip, _) = openArchive ?: return
+        val items = zip.list(s.dir).sortedWith(compareByDescending<ZipArchive.Entry> { it.isDirectory }.thenBy { it.name.lowercase() })
+        _archive.value = ArchiveState(items = items, loading = false)
+    }
+
+    private fun closeArchive() {
+        openArchive?.second?.let { r -> viewModelScope.launch(Dispatchers.IO) { runCatching { r.close() } } }
+        openArchive = null
+    }
+
+    /** Extracts one file of the archive to the phone and opens it with another app; nothing is written to the NAS. */
+    fun openFromArchive(item: ZipArchive.Entry) = viewModelScope.launch {
+        val (zip, _) = openArchive ?: return@launch
+        val dir = app.shareCache.newFolder()
+        val local = File(dir, item.name)
+        try {
+            withContext(Dispatchers.IO) {
+                zip.open(item).use { input ->
+                    local.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var done = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            done += n
+                            _transfer.value = Transfer("Estraggo ${item.name}", done, item.size)
+                        }
+                    }
+                }
+            }
+            app.shareCache.scheduleCleanup()
+            events.send(UiEvent.OpenFile(local, item.name, edit = false))
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            if (e is CancellationException) throw e
+            message(e.readable())
+        } finally {
+            _transfer.value = null
+        }
+    }
+
+    /**
+     * Extracts [item] (a file or a folder of the archive), or everything when null, into the NAS folder of the
+     * archive: everything goes into a new folder named after the archive. It runs in the transfer queue.
+     */
+    fun extractFromArchive(item: ZipArchive.Entry?) {
+        val s = _screen.value as? Screen.Archive ?: return
+        val zipEntry = s.entry
+        val folder = s.returnTo
+        val base = if (item == null) "" else RemotePath.parent(item.path)
+        val targetName = item?.name ?: zipEntry.name.substringBeforeLast('.').ifEmpty { zipEntry.name }
+        val start = { conflict: Conflict ->
+            val log = TransferLog()
+            app.transfers.enqueue("Estrai «$targetName» da ${zipEntry.name}") { fs, progress ->
+                fs.openRandom(zipEntry.share, zipEntry.path).use { reader ->
+                    val zip = ZipArchive.read(reader)
+                    val files = zip.filesUnder(item?.path ?: "")
+                    val toDir = if (item == null) RemotePath.child(folder.path, targetName) else folder.path
+                    if (item == null && fs.stat(folder.share, toDir) == null) fs.createDirectory(folder.share, toDir)
+                    ZipExtract.extract(fs, zip, files, base, folder.share, toDir, conflict, log, progress)
+                }
+                when (log.skipped) {
+                    0 -> "estratto in ${RemotePath.name(folder.path).ifEmpty { folder.share }}"
+                    else -> "${log.skipped} file già presenti, lasciati com'erano"
+                }
+            }
+            message("Estrazione in coda: la trovi in ${RemotePath.name(folder.path).ifEmpty { folder.share }}")
+        }
+        // names in the NAS folder as it was listed before opening the archive
+        val taken = (listingCache["${folder.share}/${folder.path}"] ?: emptyList()).mapTo(HashSet()) { it.name.lowercase() }
+        if (targetName.lowercase() in taken) _conflictAsk.value = ConflictAsk(listOf(targetName), 1) { start(it) } else start(Conflict.KeepBoth)
+    }
+
+    // --- bin of the file browser ------------------------------------------------------------------------------------
+
+    private val _trash = MutableStateFlow(TrashState())
+    val trash: StateFlow<TrashState> = _trash.asStateFlow()
+
+    fun openTrash() {
+        val here = _screen.value
+        _screen.value = Screen.Trash(if (here is Screen.Trash) here.returnTo else here)
+        loadTrash()
+    }
+
+    /** Reads the bin of every share with a saved folder, after deleting for good what is older than 30 days. */
+    fun loadTrash() {
+        _trash.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val browsing = ((_screen.value as? Screen.Trash)?.returnTo as? Screen.Browser)?.share
+                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing)).distinctBy { it.lowercase() }
+                val items = repo.io { fs ->
+                    shares.flatMap { share ->
+                        runCatching { FileTrash.purge(fs, share) }
+                        runCatching { FileTrash.contents(fs, share) }.getOrDefault(emptyList())
+                    }
+                }.sortedByDescending { it.deletedAt }
+                _trash.value = TrashState(items = items)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _trash.update { it.copy(loading = false, error = e.readable()) }
+            }
+        }
+    }
+
+    /** Puts elements of the bin back where they were. */
+    fun restoreFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
+        try {
+            val places = repo.io { fs -> items.map { FileTrash.restore(fs, it) } }
+            val where = RemotePath.parent(places[0]).ifEmpty { items[0].share }
+            message(if (items.size == 1) "«${items[0].entry.name}» ripristinato in $where" else "${items.size} elementi ripristinati")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+        listingCache.clear()
+        app.nasChanged.tryEmit(null)
+        if (_screen.value is Screen.Trash) loadTrash() else refresh()
+    }
+
+    /** Deletes elements of the bin for good. */
+    fun deleteFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
+        _trash.update { it.copy(working = true) }
+        try {
+            val skipped = repo.io { fs -> items.count { !FileTrash.delete(fs, it) } }
+            message(
+                when {
+                    items.size == 1 && skipped == 0 -> "Eliminato definitivamente"
+                    skipped == 0 -> "${items.size} elementi eliminati definitivamente"
+                    else -> "${items.size - skipped} eliminati, $skipped non erano più nel cestino"
+                }
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            message(e.readable())
+        }
+        loadTrash()
     }
 
     // --- open and edit ----------------------------------------------------------------------------------------------

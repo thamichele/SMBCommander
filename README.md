@@ -31,18 +31,49 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   Quando torni in SMBCommander, se il file è cambiato viene ricaricato sul NAS. Prima di sovrascrivere controlla che
   nessun altro l'abbia modificato nel frattempo, e il caricamento passa da un file temporaneo, così un'interruzione
   non rovina mai l'originale.
+- **Musica**: tocca un brano e parte in streaming dal NAS, seguito dagli altri brani della cartella. Un piccolo lettore
+  resta in basso su ogni schermata (toccalo per la barra di avanzamento), e la musica continua con lo schermo spento,
+  con i comandi nella notifica, sulla schermata di blocco e dalle cuffie; staccando le cuffie si mette in pausa.
+- **Anteprime di PDF e copertine**: negli elenchi i PDF (fino a 30 MB) mostrano la prima pagina e le canzoni la
+  copertina dell'album salvata nel file, con lo stesso sistema di cache delle foto.
+- **Archivi ZIP**: un file `.zip` sul NAS si apre come una cartella senza scaricarlo (viaggia solo l'indice). Un file
+  dell'archivio si apre con un'altra app estraendo solo quello; «Estrai nella cartella del NAS» mette sul NAS un file,
+  una cartella o tutto l'archivio (in una cartella con il suo nome), con le solite verifiche e la coda dei
+  trasferimenti.
 - **Info** su ogni file, dal visualizzatore, dalla selezione in Galleria o dal menu di un elemento: percorso sul NAS e
   percorso di rete da copiare, dimensione, date e, per foto e video, risoluzione, data di scatto, fotocamera, durata e
   posizione.
 - **Ogni trasferimento è verificato**: caricamenti, copie, spostamenti e download confrontano l'impronta SHA-256 di
   ciò che è partito con quella di ciò che è arrivato. Un file diverso non viene mai tenuto, e uno spostamento elimina
   l'originale solo dopo che la copia è risultata identica.
-- Operazioni di base: carica dal telefono, scarica sul telefono, nuova cartella, nuovo file di testo vuoto, rinomina,
-  elimina.
+- Operazioni di base: carica dal telefono (file singoli o un'intera cartella con le sue sottocartelle), scarica sul
+  telefono, nuova cartella, nuovo file di testo vuoto, rinomina, elimina.
+- **Cestino**: ciò che elimini dalle cartelle non sparisce subito, va in un cestino nascosto in cima alla cartella
+  condivisa (`.smbcommander-cestino-file`, con uno spostamento istantaneo che non copia nulla). Subito dopo puoi
+  premere «Annulla»; dalla schermata **Cestino** (in «Le mie cartelle» o dal menu di una cartella) ogni elemento si
+  ripristina esattamente dov'era o si elimina definitivamente. Dopo 30 giorni se ne va da solo.
+- **Ricerca anche nelle sottocartelle**: durante la ricerca scegli «Anche nelle sottocartelle» e l'app cerca il nome
+  a ogni livello sotto la cartella aperta, mostrando i risultati man mano con la cartella in cui si trovano.
+- **Spazio e dimensioni**: le Info di una cartella (anche di quella aperta, dal menu) contano file, sottocartelle e
+  dimensione totale a ogni livello, e mostrano quanto spazio resta sul disco del NAS.
 - **Copia e sposta** tra cartelle del NAS: tieni premuto per selezionare uno o più elementi, scegli Copia o Sposta,
   apri la cartella di destinazione e premi «Incolla qui». I trasferimenti vanno in una coda con l'avanzamento e
   continuano mentre navighi; quando possibile la copia la fa il NAS stesso, senza passare dal telefono.
+- **Trasferimenti affidabili**: copie, spostamenti e caricamenti vanno avanti anche con l'app chiusa o lo schermo
+  spento, con una notifica che mostra l'avanzamento e i pulsanti Pausa e Annulla. Si possono mettere in pausa e
+  riprendere; se il Wi-Fi o il NAS spariscono per un momento l'app riprova da sola, aspettando un po' di più ogni
+  volta, e riparte da dove si era fermata senza ricopiare i file già arrivati. Un trasferimento fallito si riprende con
+  «Riprova».
+- **Nomi già presenti**: se nella cartella di destinazione c'è già un elemento con lo stesso nome, l'app chiede se
+  sostituirlo, saltarlo o tenere entrambi (il nuovo prende « (2)»). Le cartelle con lo stesso nome vengono unite e la
+  scelta vale per ogni file al loro interno; un file viene sostituito solo dopo che la nuova copia è risultata
+  identica all'originale.
 - **Salva sul NAS dalle altre app**: dal menu Condividi di qualunque app scegli «Salva sul NAS», poi la cartella.
+- **Il NAS nel selettore file di Android**: quando un'altra app chiede di scegliere un file (allegare a una mail,
+  aprire un PDF, salvare un documento), nel menu laterale c'è **SMBCommander** con le tue cartelle. I file si leggono
+  direttamente dal NAS, senza scaricarli prima; quando un'app salva, la copia passa dalla coda dei trasferimenti con
+  le stesse verifiche (e se nel frattempo il file sul NAS era cambiato, viene salvata accanto come «nome (modificato)»).
+  Eliminare da lì sposta nel cestino. Si vedono solo le cartelle che hai aggiunto nell'app.
 - **Widget** per la schermata Home: avvia il backup o apre una cartella scelta.
 
 Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo QNAP: non usa API proprietarie.
@@ -86,6 +117,21 @@ ricarica, nemmeno dopo aver reinstallato l'app. Se nel frattempo un file non è 
 un altro dispositivo) viene saltato, gli altri vanno avanti, e non resta nell'elenco delle eliminate. Quando ne elimini
 più di uno, una finestra mostra il file in corso, la barra con quanti ne mancano e l'esito di ognuno (eliminato,
 saltato o non eliminato); si può interrompere, e si chiude da sola se è andato tutto bene.
+
+## Funzioni facoltative
+
+In **Impostazioni › Funzioni facoltative**, tutte spente finché non le accendi:
+
+- **Blocca con impronta o blocco schermo**: all'apertura, e quando torni dopo più di mezzo minuto, l'app chiede
+  impronta, volto o PIN del telefono. Con il blocco acceso le altre app vedono il NAS nel selettore file solo nei 10
+  minuti dopo lo sblocco.
+- **Accendi il NAS (Wake-on-LAN)**: con l'indirizzo MAC del NAS, «Accendi il NAS» compare in «Le mie cartelle» e
+  quando il NAS non risponde. Il Wake-on-LAN va attivato anche sul NAS.
+- **Ritrova il NAS se cambia indirizzo**: se il NAS non risponde, l'app lo cerca nella rete e passa al nuovo
+  indirizzo, solo se risponde lo stesso NAS abbinato (riconosciuto prima di inviare la password).
+
+Nelle impostazioni c'è anche «Cerca il NAS nella rete», che elenca i NAS che si presentano sul Wi-Fi (Bonjour) e
+riempie l'indirizzo con un tocco.
 
 ## Privacy e sicurezza
 
@@ -151,7 +197,8 @@ Dal tasto con la scopetta della Galleria: una foto alla volta, come su Tinder. S
   `IMG_1234 - Copia`, la versione HEIC accanto alla JPG), nella stessa cartella o in due cartelle diverse, per esempio
   le vecchie cartelle di QuMagie. Le due copie stanno una accanto all'altra con il percorso completo sotto: scegli
   quale tenere e l'altra va nel cestino, oppure le tieni entrambe. Se hanno la stessa dimensione l'app confronta il
-  contenuto e ti dice se sono identiche. Con tre o più copie, quella tenuta si confronta con la successiva.
+  contenuto: quando sono identiche le due foto hanno il bordo verde e sopra c'è «Sono identiche», quando sono diverse
+  il bordo è rosso e c'è «Sono diverse», con il motivo. Con tre o più copie, quella tenuta si confronta con la successiva.
   Finché una foto ha ancora una copia da confrontare compare solo qui, non in **Da verificare** né in **Tutte le
   altre**: ci arriva quando è rimasta singola.
 - **Tutte le altre**: il resto, dalla più recente, se vuoi controllare anche quelle. Sono divise in gruppi:

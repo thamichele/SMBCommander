@@ -3,7 +3,9 @@ package io.github.thamichele.smbcommander.data
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.pdf.PdfRenderer
 import android.media.MediaMetadataRetriever
+import android.os.ParcelFileDescriptor
 import android.media.ExifInterface
 import android.os.Process
 import coil3.ImageLoader
@@ -41,6 +43,12 @@ val RemoteEntry.isVideo: Boolean get() = !isDirectory && extension in ThumbnailC
 
 /** Photos and videos: what the gallery and the viewer show. */
 val RemoteEntry.isMedia: Boolean get() = isImage || isVideo
+
+val RemoteEntry.isAudio: Boolean get() = !isDirectory && extension in ThumbnailCache.AUDIO_EXTENSIONS
+val RemoteEntry.isPdf: Boolean get() = !isDirectory && extension == "pdf"
+
+/** Files with a picture of their own in lists: photos, videos, the first page of a PDF, the cover of a song. */
+val RemoteEntry.hasPicture: Boolean get() = isMedia || isAudio || (isPdf && size <= ThumbnailCache.MAX_PDF_BYTES)
 
 /** How big a cached copy is, its JPEG quality, and how much of the cache its kind may take. */
 enum class ImageSize(val folder: String, val quality: Int, val maxBytes: Long) {
@@ -84,8 +92,13 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     /** One lock per copy being made: a photo asked twice at once (ahead of the screen, then on it) is read once. */
     private val making = ConcurrentHashMap<String, Mutex>()
 
+    /** Files found without a picture during this run. */
+    private val noPicture: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     suspend fun get(thumb: Thumb): File {
         val target = file(thumb, thumb.variant)
+        // songs without a cover and unreadable PDFs are asked once per run, not at every scroll
+        if (key(thumb) in noPicture) throw IllegalStateException("Nessuna immagine")
         if (target.exists()) {
             target.setLastModified(System.currentTimeMillis())
             learnRatio(thumb, target)
@@ -219,7 +232,20 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val missing = variants.filter { !file(thumb, it).exists() }
         if (missing.isEmpty()) return
         dir.mkdirs()
-        if (RemotePath.extension(RemotePath.name(thumb.path)) in VIDEO_EXTENSIONS) return createFromVideo(thumb, missing)
+        val ext = RemotePath.extension(RemotePath.name(thumb.path)).lowercase()
+        if (ext in VIDEO_EXTENSIONS) return createFromVideo(thumb, missing)
+        if (ext in AUDIO_EXTENSIONS || ext == "pdf") {
+            val picture = try {
+                if (ext == "pdf") pdfPage(thumb) else audioCover(thumb)
+            } catch (e: Exception) {
+                null
+            }
+            if (picture == null) {
+                noPicture += key(thumb)
+                throw IllegalStateException("Nessuna immagine")
+            }
+            return writeBitmap(thumb, missing, picture)
+        }
         val source = File.createTempFile("src", null, dir)
         try {
             repository.fs().openRead(thumb.share, thumb.path).use { input ->
@@ -254,6 +280,49 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         }
     }
 
+    /** The cover inside a song (ID3, FLAC, MP4 tags), read straight from the NAS: only the tags travel. */
+    private fun audioCover(thumb: Thumb): Bitmap? {
+        val bytes = repository.fs().openRandom(thumb.share, thumb.path).use { reader ->
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(ReaderDataSource(reader))
+                retriever.embeddedPicture
+            } finally {
+                retriever.release()
+            }
+        } ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= THUMB_PX && bounds.outHeight / (sample * 2) >= THUMB_PX) sample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
+    /** The first page of a PDF, drawn on white by Android's own renderer; the file is fetched to the cache first. */
+    private fun pdfPage(thumb: Thumb): Bitmap? {
+        if (thumb.size > MAX_PDF_BYTES) return null
+        val source = File.createTempFile("pdf", null, dir)
+        try {
+            source.outputStream().use { out -> repository.fs().download(thumb.share, thumb.path, out) }
+            ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    if (renderer.pageCount == 0) return null
+                    renderer.openPage(0).use { page ->
+                        val scale = CARD_PX.toFloat() / max(page.width, page.height)
+                        val w = (page.width * scale).roundToInt().coerceAtLeast(1)
+                        val h = (page.height * scale).roundToInt().coerceAtLeast(1)
+                        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        return bitmap
+                    }
+                }
+            }
+        } finally {
+            source.delete()
+        }
+    }
+
     /** A frame near the start of the video, read straight from the NAS: only the parts the decoder asks for travel. */
     private fun createFromVideo(thumb: Thumb, missing: List<ImageSize>) {
         val frame = repository.fs().openRandom(thumb.share, thumb.path).use { reader ->
@@ -265,6 +334,11 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 retriever.release()
             }
         } ?: throw IllegalStateException("Video non leggibile")
+        writeBitmap(thumb, missing, frame)
+    }
+
+    /** Saves [frame] as each copy in [missing], scaled as each one wants, then frees it. */
+    private fun writeBitmap(thumb: Thumb, missing: List<ImageSize>, frame: Bitmap) {
         try {
             for (variant in missing) {
                 val scale = scaleFor(variant, frame.width, frame.height)
@@ -384,5 +458,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         private const val TRIM_EVERY = 25
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
         val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "mov", "3gp", "mkv", "webm")
+        val AUDIO_EXTENSIONS = setOf("mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma")
+        /** Bigger PDFs get no picture: the whole file would have to come to the phone for it. */
+        const val MAX_PDF_BYTES = 30L * 1024 * 1024
     }
 }

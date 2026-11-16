@@ -35,7 +35,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,6 +72,9 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val transfer by vm.transfer.collectAsStateWithLifecycle()
     val prompt by vm.syncPrompt.collectAsStateWithLifecycle()
     val jobs by vm.transfers.collectAsStateWithLifecycle()
+    val transfersPaused by vm.transfersPaused.collectAsStateWithLifecycle()
+    val conflictAsk by vm.conflictAsk.collectAsStateWithLifecycle()
+    val music by vm.music.collectAsStateWithLifecycle()
     val deletion by vm.deletion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -81,6 +86,12 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 is UiEvent.Message -> scope.launch {
                     snackbar.currentSnackbarData?.dismiss()
                     snackbar.showSnackbar(event.text)
+                }
+                is UiEvent.MessageWithAction -> scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    if (snackbar.showSnackbar(event.text, actionLabel = event.action, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                        event.onAction()
+                    }
                 }
                 is UiEvent.OpenFile -> if (!openExternally(context, event.file, event.name, event.edit)) {
                     vm.openFailed(event.file)
@@ -115,14 +126,38 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Shares -> FoldersScreen(vm)
                 Screen.Gallery -> GalleryScreen(vm)
                 Screen.Cleanup -> CleanupScreen(vm)
+                is Screen.Trash -> TrashScreen(vm)
+                is Screen.Archive -> ArchiveScreen(vm, s)
                 Screen.Backup -> BackupScreen()
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)
             }
             if (viewer != null) ViewerScreen(vm, viewer)
-            if (jobs.isNotEmpty() && transfer == null) {
-                TransferCard(jobs, onCancel = vm::cancelTransfers, onClose = vm::clearTransfers, modifier = Modifier.align(Alignment.BottomCenter))
+            // the song playing stays on every screen but the full-screen viewer, above the transfers
+            if (music.active && viewer == null) {
+                MiniPlayer(
+                    music,
+                    onToggle = vm::musicToggle,
+                    onNext = vm::musicNext,
+                    onPrevious = vm::musicPrevious,
+                    onSeek = vm::musicSeek,
+                    onClose = vm::musicStop,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (jobs.isNotEmpty() || transfer != null) 120.dp else 0.dp),
+                )
             }
+            if (jobs.isNotEmpty() && transfer == null) {
+                TransferCard(
+                    jobs,
+                    paused = transfersPaused,
+                    onCancel = vm::cancelTransfers,
+                    onPause = vm::pauseTransfers,
+                    onResume = vm::resumeTransfers,
+                    onRetry = vm::retryTransfer,
+                    onClose = vm::clearTransfers,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+            conflictAsk?.let { ConflictDialog(it, onChoice = vm::answerConflict) }
             deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
             transfer?.let { t ->
                 Column(

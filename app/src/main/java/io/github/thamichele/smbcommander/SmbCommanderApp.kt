@@ -13,13 +13,22 @@ import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.AspectRatios
 import io.github.thamichele.smbcommander.data.CredentialStore
 import io.github.thamichele.smbcommander.data.EditSessionStore
+import io.github.thamichele.smbcommander.data.Extras
 import io.github.thamichele.smbcommander.data.FolderStore
+import io.github.thamichele.smbcommander.data.MusicController
 import io.github.thamichele.smbcommander.data.NasRepository
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.PhotoSorter
 import io.github.thamichele.smbcommander.data.ThumbnailCache
 import io.github.thamichele.smbcommander.data.TransferQueue
+import io.github.thamichele.smbcommander.data.TransferService
+import io.github.thamichele.smbcommander.ui.isConnectionLost
+import io.github.thamichele.smbcommander.ui.readable
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
 import kotlinx.coroutines.flow.MutableSharedFlow
 import java.io.File
@@ -46,6 +55,10 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var shareCache: ShareCache
         private set
+    lateinit var extras: Extras
+        private set
+    /** The music player, connected to its service the first time a song is played. */
+    val music: MusicController by lazy { MusicController(this) }
 
     /** Photos just deleted from the NAS, so every screen that shows them can drop them. */
     val deletedPhotos = MutableSharedFlow<List<RemoteEntry>>(extraBufferCapacity = 16)
@@ -56,12 +69,19 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         repository = NasRepository(CredentialStore(this))
+        extras = Extras(this)
         editSessions = EditSessionStore(this)
         folders = FolderStore(this)
         backupSettings = BackupSettingsStore(this)
         backupLedger = BackupLedger(File(filesDir, "backup-ledger.txt"))
         galleryPrefs = GalleryPrefs(this)
-        transfers = TransferQueue(repository)
+        transfers = TransferQueue(repository, isConnectionLost = { it.isConnectionLost() }, describe = { it.readable() })
+        // the service keeps the app alive while there is work, also with the app closed
+        MainScope().launch {
+            transfers.jobs.map { jobs -> jobs.any { it.busy } }.distinctUntilChanged().collect { busy ->
+                if (busy) TransferService.start(this@SmbCommanderApp)
+            }
+        }
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))

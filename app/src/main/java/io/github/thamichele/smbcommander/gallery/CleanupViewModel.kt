@@ -42,6 +42,9 @@ data class CleanupCard(val entry: RemoteEntry, val reason: CleanupReason?)
 
 enum class CleanupTab { Suspects, Others, Duplicates }
 
+/** Bigger files (long videos) are not read twice over the network just to compare them. */
+const val MAX_COMPARE_BYTES = 150L * 1024 * 1024
+
 /** Two copies of the same photo side by side: [first] is the likeliest original. */
 data class DuplicatePair(val first: RemoteEntry, val second: RemoteEntry) {
     val key: String get() = first.path + "\n" + second.path
@@ -149,8 +152,6 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
     private val history = ArrayDeque<Action>()
 
     private companion object {
-        /** Bigger files (long videos) are not read twice over the network just to compare them. */
-        const val MAX_COMPARE = 150L * 1024 * 1024
         /** Photos sorted together: the thumbnails missing are fetched side by side. */
         const val SORT_BATCH = 4
     }
@@ -253,7 +254,7 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
 
     /** Compares the two files of [pair] byte for byte, when they have the same size and are not too big to read. */
     fun compare(pair: DuplicatePair) {
-        if (pair.first.size != pair.second.size || pair.first.size > MAX_COMPARE || pair.key in _sameContent.value) return
+        if (pair.first.size != pair.second.size || pair.first.size > MAX_COMPARE_BYTES || pair.key in _sameContent.value) return
         viewModelScope.launch(Dispatchers.IO) {
             val same = runCatching {
                 app.repository.io { fs ->

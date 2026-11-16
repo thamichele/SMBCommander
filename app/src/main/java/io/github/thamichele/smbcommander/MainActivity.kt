@@ -4,7 +4,15 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import io.github.thamichele.smbcommander.ui.AppLock
+import io.github.thamichele.smbcommander.ui.LockScreen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -13,9 +21,14 @@ import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.theme.ArancioTheme
 import io.github.thamichele.smbcommander.ui.theme.LauncherIcon
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: AppViewModel by viewModels()
+
+    /** With the app lock on: covered until the fingerprint, face or screen lock confirms it is the owner. */
+    private val locked = mutableStateOf(false)
+    private var stoppedAt = 0L
+    private val extras get() = (application as SmbCommanderApp).extras
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,9 +36,40 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         setContent {
             ArancioTheme {
-                AppRoot(viewModel, onExit = ::finish)
+                Box(Modifier.fillMaxSize()) {
+                    AppRoot(viewModel, onExit = ::finish)
+                    if (locked.value) LockScreen(onUnlock = ::askUnlock, onExit = ::finish)
+                }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // locked at every start, and when back after more than half a minute away
+        if (extras.lock && (stoppedAt == 0L || System.currentTimeMillis() - stoppedAt > RELOCK_MS)) {
+            locked.value = true
+            askUnlock()
+        }
+    }
+
+    private fun askUnlock() {
+        if (!extras.lock) {
+            locked.value = false
+            return
+        }
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                locked.value = false
+                extras.lastUnlocked = System.currentTimeMillis()
+            }
+        })
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Sblocca SMBCommander")
+            .setSubtitle("Impronta, volto o blocco schermo")
+            .setAllowedAuthenticators(AppLock.AUTHENTICATORS)
+            .build()
+        runCatching { prompt.authenticate(info) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -43,6 +87,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        stoppedAt = System.currentTimeMillis()
+        if (!locked.value && extras.lock) extras.lastUnlocked = stoppedAt
         // the launcher icon follows the colour chosen in the settings; changed only now that the app is in the
         // background, because some launchers close an app whose launcher entry changes while it is open
         LauncherIcon.sync(this)
@@ -60,6 +106,8 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** Away for longer than this, the app asks again. */
+        private const val RELOCK_MS = 30_000L
         private const val EXTRA_OPEN = "open"
         private const val EXTRA_SHARE = "share"
         private const val EXTRA_PATH = "path"
@@ -68,6 +116,8 @@ class MainActivity : ComponentActivity() {
 
         private fun base(context: Context) = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        fun open(context: Context): Intent = base(context)
 
         fun openBackup(context: Context): Intent = base(context).putExtra(EXTRA_OPEN, OPEN_BACKUP)
 

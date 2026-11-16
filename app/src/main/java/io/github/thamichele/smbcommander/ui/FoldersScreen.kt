@@ -53,6 +53,7 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioType
 /** Start screen: only the folders the user added, hidden shares included; nothing appears on its own. */
 @Composable
 fun FoldersScreen(vm: AppViewModel) {
+    val extras by vm.extras.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
     val host = remember { vm.savedHost() }
     val c = Arancio.colors
@@ -61,6 +62,8 @@ fun FoldersScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(context = host, title = "Le mie cartelle") {
+                if (extras.wakeOnLan) ToolButton(AppIcons.Power, "Accendi il NAS", { vm.wakeNas() })
+                ToolButton(AppIcons.Delete, "Cestino", vm::openTrash)
                 ToolButton(AppIcons.Server, "Impostazioni", vm::openSettings)
             }
             if (folders.isEmpty()) {

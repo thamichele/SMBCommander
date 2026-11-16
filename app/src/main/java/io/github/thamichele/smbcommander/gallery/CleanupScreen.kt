@@ -500,34 +500,80 @@ private fun DuplicatesPane(
 ) {
     val c = Arancio.colors
     LaunchedEffect(pair.key) { onCompare() }
-    val sameSize = pair.first.size == pair.second.size
+    val verdict = when {
+        same == true -> Verdict.Same
+        same == false || pair.first.size != pair.second.size -> Verdict.Different
+        pair.first.size > MAX_COMPARE_BYTES -> Verdict.Unknown
+        else -> Verdict.Checking
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        val (verdict, tint) = when {
-            same == true -> "Contenuto identico: puoi tenerne uno solo" to c.success
-            same == false -> "Stesso nome, contenuto diverso" to c.textSecondary
-            sameSize -> "Stessa dimensione, confronto il contenuto…" to c.textSecondary
-            else -> "Stesso nome, dimensioni diverse" to c.textSecondary
-        }
         Text("Scegli quale tenere", style = MaterialTheme.typography.titleMedium)
-        Text(verdict, style = MaterialTheme.typography.bodySmall, color = tint)
+        VerdictBanner(verdict, sameSize = pair.first.size == pair.second.size)
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for (entry in listOf(pair.first, pair.second)) {
-                DuplicateSide(entry, root, Modifier.weight(1f), onKeep = { onKeep(entry) }, onOpen = { onOpen(entry) })
+                DuplicateSide(entry, root, verdict, Modifier.weight(1f), onKeep = { onKeep(entry) }, onOpen = { onOpen(entry) })
             }
         }
     }
 }
 
+/** What the comparison of two copies said: drives the banner over them and the colour of their outline. */
+private enum class Verdict { Same, Different, Checking, Unknown }
+
+/** The verdict in large type and colour, so "identical" and "different" are clear at a glance. */
 @Composable
-private fun DuplicateSide(entry: RemoteEntry, root: String, modifier: Modifier, onKeep: () -> Unit, onOpen: () -> Unit) {
+private fun VerdictBanner(verdict: Verdict, sameSize: Boolean) {
     val c = Arancio.colors
+    val (tint, icon, title, detail) = when (verdict) {
+        Verdict.Same -> Banner(c.success, AppIcons.Check, "Sono identiche", "Stessi byte: puoi tenerne una sola senza perdere nulla")
+        Verdict.Different -> Banner(
+            c.danger, AppIcons.Alert, "Sono diverse",
+            if (sameSize) "Stessa dimensione ma contenuto diverso: guardale prima di scegliere"
+            else "Dimensioni diverse: una delle due è stata modificata o ricompressa",
+        )
+        Verdict.Unknown -> Banner(c.textSecondary, AppIcons.Info, "Non confrontate", "File troppo grandi per confrontarli dalla rete: guardale tu")
+        Verdict.Checking -> Banner(c.textSecondary, null, "Confronto il contenuto…", "Stessa dimensione: controllo se sono gli stessi byte")
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(tint.copy(alpha = 0.16f))
+            .border(1.5.dp, tint, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
+        } else {
+            CircularProgressIndicator(color = tint, strokeWidth = 2.5.dp, modifier = Modifier.size(24.dp))
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = tint)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = c.text)
+        }
+    }
+}
+
+private data class Banner(val tint: Color, val icon: ImageVector?, val title: String, val detail: String)
+
+@Composable
+private fun DuplicateSide(entry: RemoteEntry, root: String, verdict: Verdict, modifier: Modifier, onKeep: () -> Unit, onOpen: () -> Unit) {
+    val c = Arancio.colors
+    // identical copies get a thick green outline, different ones a red one: the answer shows on the photos themselves
+    val (outline, width) = when (verdict) {
+        Verdict.Same -> c.success to 3.dp
+        Verdict.Different -> c.danger to 2.dp
+        else -> c.border to 1.dp
+    }
     val folder = CleanupRules.relative(entry.path, root).substringBeforeLast('/', "").ifEmpty { "cartella del backup" }
     Column(
         modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(12.dp))
             .background(c.surface)
-            .border(1.dp, c.border, RoundedCornerShape(12.dp)),
+            .border(width, outline, RoundedCornerShape(12.dp)),
     ) {
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(onClick = onOpen)) {
             SubcomposeAsyncImage(
