@@ -60,6 +60,11 @@ ma hanno problemi che nell'uso di tutti i giorni pesano:
   scelta vale per ogni file al loro interno; un file viene sostituito solo dopo che la nuova copia è risultata
   identica all'originale.
 - **Salva sul NAS dalle altre app**: dal menu Condividi di qualunque app scegli «Salva sul NAS», poi la cartella.
+- **Il NAS nel selettore file di Android**: quando un'altra app chiede di scegliere un file (allegare a una mail,
+  aprire un PDF, salvare un documento), nel menu laterale c'è **SMBCommander** con le tue cartelle. I file si leggono
+  direttamente dal NAS, senza scaricarli prima; quando un'app salva, la copia passa dalla coda dei trasferimenti con
+  le stesse verifiche (e se nel frattempo il file sul NAS era cambiato, viene salvata accanto come «nome (modificato)»).
+  Eliminare da lì sposta nel cestino. Si vedono solo le cartelle che hai aggiunto nell'app.
 - **Widget** per la schermata Home: avvia il backup o apre una cartella scelta.
 
 Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo QNAP: non usa API proprietarie.

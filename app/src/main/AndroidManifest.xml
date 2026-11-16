@@ -164,6 +164,18 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- the saved folders of the NAS in Android's file picker, for every other app -->
+        <provider
+            android:name=".data.NasDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- copies, moves and uploads keep going with the app closed -->
         <service
             android:name=".data.TransferService"
