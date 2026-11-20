@@ -118,12 +118,23 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     // photos waiting for "Elimina" in the confirmation dialog
     var toDelete by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
     var info by remember { mutableStateOf<RemoteEntry?>(null) }
+    // photos waiting for the album they are moved to
+    var toMove by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    LaunchedEffect(vm) { vm.notices.collect { appVm.showMessage(it) } }
     // photos deleted or reloaded meanwhile leave the selection
     val shown = state.shownPhotos
     LaunchedEffect(shown) {
         if (selected.isNotEmpty()) selected = selected intersect shown.mapTo(HashSet()) { it.path }
     }
+    // Back leaves an album for the list of the albums, and the list for all the photos; a selection goes first
+    BackHandler(enabled = state.album != null || state.albumsOpen) { vm.leaveAlbums() }
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
+
+    if (state.albumsOpen && state.folder != null) {
+        AlbumsPage(state, vm)
+        return
+    }
+    val albumTitle = state.album?.let { albumTitle(state, it) }
 
     val onTap: (RemoteEntry, Int) -> Unit = { photo, index ->
         when {
@@ -146,23 +157,33 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
 
     Column(Modifier.fillMaxSize()) {
         if (selected.isEmpty()) {
-            PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria") {
+            PageHeader(
+                context = if (albumTitle != null) "Album" else state.folder?.fullPath ?: "Foto salvate sul NAS",
+                title = albumTitle ?: state.kind?.label ?: "Galleria",
+                navigation = if (albumTitle == null) null else {
+                    { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) }
+                },
+            ) {
                 if (state.folder != null) {
                     KindMenu(state.kind, state.kindCounts, vm::setKind)
                     ViewMenu(state.view, vm::setView)
-                    ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
+                    // the quick cleanup goes through the whole gallery, not one album
+                    if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
                     ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
                 }
             }
+            if (state.folder != null && albumTitle == null) GalleryTabs(albumsOpen = false, vm)
         } else {
+            // a short title: four buttons leave little room next to it
             PageHeader(
-                context = "Galleria",
-                title = if (selected.size == 1) "1 foto selezionata" else "${selected.size} foto selezionate",
+                context = albumTitle ?: "Galleria",
+                title = if (selected.size == 1) "1 selezionata" else "${selected.size} selezionate",
                 navigation = { ToolButton(AppIcons.Close, "Annulla selezione", { selected = emptySet() }) },
             ) {
                 if (selected.size == 1) {
                     ToolButton(AppIcons.Info, "Informazioni", { info = shown.firstOrNull { it.path in selected } })
                 }
+                ToolButton(AppIcons.Move, "Sposta in un album", { toMove = shown.filter { it.path in selected } })
                 ToolButton(AppIcons.Share, "Condividi", {
                     val photos = shown.filter { it.path in selected }
                     selected = emptySet()
@@ -213,6 +234,11 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 title = "Ancora nessuna foto",
                 text = "La cartella del backup è vuota: le foto arrivano con il prossimo backup.",
             )
+            state.shown.isEmpty() && state.kind == null -> EmptyState(
+                icon = AppIcons.Folder,
+                title = "Album vuoto",
+                text = "Per riempirlo seleziona delle foto nella Galleria o in un altro album e premi «Sposta in un album».",
+            )
             state.shown.isEmpty() -> EmptyState(
                 icon = state.kind?.icon ?: AppIcons.Categories,
                 title = "Nessuna foto in «${state.kind?.label}»",
@@ -235,6 +261,15 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     }
 
     info?.let { InfoDialog(it, onDismiss = { info = null }) }
+
+    if (toMove.isNotEmpty()) {
+        val photos = toMove
+        AlbumPicker(state, vm, count = photos.size, onDismiss = { toMove = emptyList() }) { album ->
+            toMove = emptyList()
+            selected = emptySet()
+            vm.moveToAlbum(photos, album)
+        }
+    }
 
     if (toDelete.isNotEmpty()) {
         val photos = toDelete

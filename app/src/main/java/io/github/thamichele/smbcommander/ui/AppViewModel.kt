@@ -1413,6 +1413,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         events.trySend(UiEvent.Message(text))
     }
 
+    /**
+     * showMessage() - shows a short message at the bottom of the screen, for screens with a view model of their own
+     * @param text what to say; nothing is shown when empty
+     *
+     * Return: nothing.
+     */
+    fun showMessage(text: String) {
+        if (text.isNotEmpty()) message(text)
+    }
+
     private companion object {
         /** Unchanged copies are forgotten after a week: the editor is long closed by then. */
         const val KEEP_UNCHANGED_MS = 7L * 24 * 60 * 60 * 1000

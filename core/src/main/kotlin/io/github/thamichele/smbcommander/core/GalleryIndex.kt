@@ -11,16 +11,25 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
 
     private val byDir = HashMap<String, List<RemoteEntry>>()
 
+    /** Folders with nothing inside: the albums still to be filled. */
+    private val emptyDirs = HashSet<String>()
+
     init {
-        initial.groupBy { RemotePath.parent(it.path) }.forEach { (dir, media) -> byDir[dir] = media }
+        val (dirs, media) = initial.partition { it.isDirectory }
+        media.groupBy { RemotePath.parent(it.path) }.forEach { (dir, list) -> byDir[dir] = list }
+        dirs.mapTo(emptyDirs) { it.path }
     }
 
-    /** Sets the media found directly in [dir]; true when that changed anything. */
+    /**
+     * Sets the media found directly in [dir]; true when that changed anything. [isEmptyAlbum] says the folder holds
+     * neither media nor other folders, so it stays known as an album to fill.
+     */
     @Synchronized
-    fun replace(dir: String, media: List<RemoteEntry>): Boolean {
+    fun replace(dir: String, media: List<RemoteEntry>, isEmptyAlbum: Boolean = false): Boolean {
+        val emptyChanged = if (isEmptyAlbum && media.isEmpty()) emptyDirs.add(dir) else emptyDirs.remove(dir)
         val before = byDir[dir].orEmpty()
-        if (media.isEmpty()) return byDir.remove(dir) != null
-        if (before.size == media.size && before.toSet() == media.toSet()) return false
+        if (media.isEmpty()) return (byDir.remove(dir) != null) || emptyChanged
+        if (before.size == media.size && before.toSet() == media.toSet()) return emptyChanged
         byDir[dir] = media
         return true
     }
@@ -31,9 +40,10 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
      */
     @Synchronized
     fun retain(seen: Set<String>, failed: Set<String>): Boolean {
-        val gone = byDir.keys.filter { dir -> dir !in seen && failed.none { dir == it || dir.startsWith("$it/") } }
+        val isGone = { dir: String -> dir !in seen && failed.none { dir == it || dir.startsWith("$it/") } }
+        val gone = byDir.keys.filter(isGone)
         gone.forEach { byDir.remove(it) }
-        return gone.isNotEmpty()
+        return emptyDirs.removeAll(isGone) || gone.isNotEmpty()
     }
 
     @Synchronized
@@ -44,8 +54,71 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
         }
     }
 
+    /**
+     * addEmpty() - makes a folder just created known as an empty album, before the next walk finds it
+     * @param dir the new folder, normalized
+     *
+     * Return: nothing.
+     */
+    @Synchronized
+    fun addEmpty(dir: String) {
+        if (dir !in byDir) emptyDirs += dir
+    }
+
+    /**
+     * move() - follows a photo moved on the NAS, without waiting for the next walk
+     * @param entry the photo as the index knows it
+     * @param to its new path
+     *
+     * Safe to repeat: a transfer run again after a dropped connection reports the same moves twice. A folder left
+     * without photos and without known subfolders stays as an empty album, as it does on the NAS.
+     *
+     * Return: nothing.
+     */
+    @Synchronized
+    fun move(entry: RemoteEntry, to: String) {
+        val from = RemotePath.parent(entry.path)
+        val left = byDir[from]?.filterNot { it.path == entry.path }
+        if (left != null && left.isEmpty()) {
+            byDir.remove(from)
+            if (byDir.keys.none { it.startsWith("$from/") }) emptyDirs += from
+        } else if (left != null) {
+            byDir[from] = left
+        }
+        val dir = RemotePath.parent(to)
+        val there = byDir[dir].orEmpty()
+        if (there.none { it.path == to }) byDir[dir] = there + entry.copy(path = to)
+        emptyDirs -= dir
+    }
+
     @Synchronized
     fun all(): List<RemoteEntry> = byDir.values.flatten()
+
+    /**
+     * folders() - the media of each folder that has any, by folder path
+     *
+     * Return: a copy, safe to read while a walk goes on.
+     */
+    @Synchronized
+    fun folders(): Map<String, List<RemoteEntry>> = HashMap(byDir)
+
+    /**
+     * emptyFolders() - the folders known to hold nothing: albums still to be filled
+     *
+     * Return: a copy of their paths.
+     */
+    @Synchronized
+    fun emptyFolders(): Set<String> = HashSet(emptyDirs)
+
+    /**
+     * stored() - everything worth keeping on the phone between two runs of the app
+     * @param share the share of the backup folder, for the entries of the empty folders
+     *
+     * Return: the media, followed by one directory entry per empty folder; what the constructor takes back.
+     */
+    @Synchronized
+    fun stored(share: String): List<RemoteEntry> =
+        byDir.values.flatten() + emptyDirs.map { RemoteEntry(share, it, true, 0, 0) }
 }
 
 /**
@@ -86,6 +159,14 @@ object GalleryDates {
             else -> Taken(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, fileKey)
         }
     }
+
+    /**
+     * namesMonth() - whether a chain of folders names a month, as "2026/10" or "2019-03-14" do
+     * @param folders the folder names, outermost first
+     *
+     * Return: true when photos in that folder get their month from the folder names.
+     */
+    fun namesMonth(folders: List<String>): Boolean = folderMonth(folders) != null
 
     /** The deepest folder (or pair of folders) that names a month. */
     private fun folderMonth(folders: List<String>): Pair<Int, Int>? {
