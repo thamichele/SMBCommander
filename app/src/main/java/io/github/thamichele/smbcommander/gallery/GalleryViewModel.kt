@@ -4,14 +4,22 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.thamichele.smbcommander.SmbCommanderApp
+import io.github.thamichele.smbcommander.core.Album
+import io.github.thamichele.smbcommander.core.Albums
+import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.core.GalleryDates
 import io.github.thamichele.smbcommander.core.GalleryIndex
+import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.core.TransferLog
+import io.github.thamichele.smbcommander.core.Transfers
+import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.isMedia
+import io.github.thamichele.smbcommander.ui.readable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,7 +27,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -31,6 +41,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -66,6 +77,12 @@ data class GalleryState(
     val kindCounts: Map<PhotoKind, Int> = emptyMap(),
     /** Photos still to be sorted into categories, while it goes on. */
     val sorting: Int = 0,
+    /** Every folder of the backup folder that is an album, in display order. */
+    val albums: List<Album> = emptyList(),
+    /** The folder of the album shown; null for the whole gallery. */
+    val album: String? = null,
+    /** The list of the albums is on screen instead of the photos. */
+    val albumsOpen: Boolean = false,
 ) {
     /** All photos in display order, newest first. */
     val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
@@ -89,6 +106,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private var index = GalleryIndex()
     private var lastWalk = 0L
 
+    private val _notices = MutableSharedFlow<String>(extraBufferCapacity = NOTICE_BUFFER)
+    /** Short messages about the albums (a name refused, nothing to move), for the screen to show. */
+    val notices: SharedFlow<String> = _notices
+
     /** Deleted from the gallery while a walk may have listed them already: kept out until the next walk. */
     private val deleted = ConcurrentHashMap.newKeySet<String>()
 
@@ -108,7 +129,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 deleted += keys
                 index.remove(::isDeleted)
                 publish()
-                _state.value.folder?.let { folder -> launch(Dispatchers.IO) { store.save(folder, index.all()) } }
+                _state.value.folder?.let { folder -> launch(Dispatchers.IO) { store.save(folder, index.stored(folder.share)) } }
             }
         }
         viewModelScope.launch {
@@ -225,7 +246,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 ticker.cancel()
                 publish()
                 lastWalk = System.currentTimeMillis()
-                store.save(folder, idx.all())
+                store.save(folder, idx.stored(folder.share))
                 _state.update {
                     it.copy(
                         loading = false,
@@ -258,10 +279,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     ) {
         seen += dir
         val visible = entries.filterNot { hidden(it.name) }
-        if (idx.replace(dir, visible.filter { it.isMedia && !isDeleted(it) })) dirty = true
-        if (depth >= MAX_DEPTH) return
+        val media = visible.filter { it.isMedia && !isDeleted(it) }
         // newest folders first, so "2026/10" shows before "2019/01"
         val dirs = visible.filter { it.isDirectory }.sortedByDescending { it.name }
+        // a folder with nothing in it is an album to fill; the backup folder itself is not
+        if (idx.replace(dir, media, isEmptyAlbum = depth > 0 && visible.isEmpty())) dirty = true
+        if (depth >= MAX_DEPTH) return
         coroutineScope {
             for (sub in dirs) {
                 launch {
@@ -290,11 +313,153 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
         val counts = HashMap<PhotoKind, Int>()
         for (m in months) for (p in m.photos) kindOf(p)?.let { counts[it] = (counts[it] ?: 0) + 1 }
+        val folders = index.folders()
+        val emptyFolders = index.emptyFolders()
         _state.update { st ->
-            val kind = st.kind
-            val shown = if (kind == null) months
-            else months.mapNotNull { m -> m.photos.filter { kindOf(it) == kind }.takeIf { it.isNotEmpty() }?.let { m.copy(photos = it) } }
-            st.copy(months = months, shown = shown, kindCounts = counts)
+            val root = RemotePath.normalize(st.folder?.path.orEmpty())
+            val albums = if (st.folder == null) emptyList() else Albums.list(root, folders, emptyFolders) { taken(it).sortKey }
+            st.copy(months = months, shown = filtered(months, st.album, st.kind), kindCounts = counts, albums = albums)
+        }
+    }
+
+    /** The months with only the photos of [album] and of [kind]; null leaves that filter out. */
+    private fun filtered(months: List<MonthGroup>, album: String?, kind: PhotoKind?): List<MonthGroup> {
+        if (album == null && kind == null) return months
+        val isShown = { e: RemoteEntry -> (album == null || Albums.holds(album, e.path)) && (kind == null || kindOf(e) == kind) }
+        return months.mapNotNull { m -> m.photos.filter(isShown).takeIf { it.isNotEmpty() }?.let { m.copy(photos = it) } }
+    }
+
+    /**
+     * openAlbums() - shows the list of the albums in place of the photos
+     *
+     * Return: nothing.
+     */
+    fun openAlbums() = _state.update { it.copy(albumsOpen = true) }
+
+    /**
+     * openAlbum() - shows only the photos of one album
+     * @param path the folder of the album, as in [Album.path]
+     *
+     * Return: nothing.
+     */
+    fun openAlbum(path: String) {
+        _state.update { it.copy(album = path, albumsOpen = false) }
+        publish()
+    }
+
+    /**
+     * leaveAlbums() - one step back: from an album to the list of the albums, from the list to all the photos
+     *
+     * Return: false when neither was open, so Back is for someone else.
+     */
+    fun leaveAlbums(): Boolean {
+        val st = _state.value
+        if (st.album == null && !st.albumsOpen) return false
+        _state.update { it.copy(album = null, albumsOpen = it.album != null) }
+        publish()
+        return true
+    }
+
+    /**
+     * createAlbum() - creates the folder of a new album, directly in the backup folder
+     * @param name the name typed by the user
+     * @param onCreated called on the main thread with the path of the new folder, once it exists on the NAS
+     *
+     * A name already taken by any folder or file is refused: nothing is merged or replaced. A refused name or a
+     * failure is said through [notices].
+     *
+     * Context: returns at once; the NAS is asked in the background.
+     * Return: nothing.
+     */
+    fun createAlbum(name: String, onCreated: (String) -> Unit = {}) {
+        val folder = _state.value.folder ?: return
+        val path = try {
+            Albums.newPath(folder.path, name)
+        } catch (e: IllegalArgumentException) {
+            _notices.tryEmit(e.message.orEmpty())
+            return
+        }
+        val idx = index
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val fs = app.repository.fs()
+                    if (fs.stat(folder.share, path) != null) throw NasException("Esiste già una cartella chiamata «${name.trim()}»")
+                    fs.createDirectory(folder.share, path)
+                    idx.addEmpty(path)
+                    store.save(folder, idx.stored(folder.share))
+                }
+                publish()
+                onCreated(path)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _notices.tryEmit(e.readable())
+            }
+        }
+    }
+
+    /**
+     * moveToAlbum() - moves photos into the folder of an album, as one job of the transfer queue
+     * @param photos the photos to move; those already in the album are left out
+     * @param album the folder of the album, as in [Album.path]
+     *
+     * The move is [Transfers.move], the same of the file browser: inside the backup folder a rename on the NAS,
+     * with no data travelling, and a copy verified by SHA-256 before the original goes wherever a rename cannot
+     * do. A name already taken in the album gets " (2)": nothing is overwritten.
+     *
+     * Context: returns at once; the job goes on with the app closed, see TransferService.
+     * Return: nothing.
+     */
+    fun moveToAlbum(photos: List<RemoteEntry>, album: String) {
+        val folder = _state.value.folder ?: return
+        val moving = photos.filterNot { Albums.holds(album, it.path) }
+        if (moving.isEmpty()) {
+            _notices.tryEmit("Le foto sono già in questo album")
+            return
+        }
+        val name = Albums.nameOf(RemotePath.normalize(folder.path), album).ifEmpty { folder.fullPath }
+        val what = if (moving.size == 1) "«${moving[0].name}»" else "${moving.size} foto"
+        val log = TransferLog()
+        val idx = index
+        app.transfers.enqueue("Sposta $what in «$name»") { fs, progress ->
+            try {
+                moveAll(fs, moving, folder.share, album, log, idx, progress)
+            } finally {
+                // what was moved shows in its album at once, also when the job stops half way
+                publish()
+            }
+        }
+    }
+
+    /**
+     * Moves [photos] one by one and tells [idx] where each went. Runs on the thread of the transfer queue, maybe
+     * more than once: [log] remembers what is done. Returns the note for the end of the job, or null.
+     */
+    private fun moveAll(
+        fs: NasFileSystem,
+        photos: List<RemoteEntry>,
+        share: String,
+        album: String,
+        log: TransferLog,
+        idx: GalleryIndex,
+        progress: (name: String, done: Long, total: Long) -> Unit,
+    ): String? {
+        var gone = 0
+        for ((i, photo) in photos.withIndex()) {
+            // a pause or a cancel interrupts the thread: stop between two photos, never in the middle of one
+            if (Thread.currentThread().isInterrupted) throw InterruptedException()
+            progress(photo.name, i.toLong(), photos.size.toLong())
+            val listener = Transfers.Listener { _, _, _ -> }
+            val target = fs.unlessGone(photo.share, photo.path) {
+                Transfers.move(fs, photo, share, album, listener, Conflict.KeepBoth, log)
+            }
+            if (target == null) gone++ else idx.move(photo, target)
+        }
+        return when (gone) {
+            0 -> null
+            1 -> "1 foto non era più sul NAS, saltata"
+            else -> "$gone foto non erano più sul NAS, saltate"
         }
     }
 
@@ -316,6 +481,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         const val AUTO_REFRESH_MS = 60_000L
         /** Photos sorted together: the thumbnails missing are fetched side by side. */
         const val SORT_BATCH = 4
+        /** Notices waiting for the screen: more than a few at once would be noise anyway. */
+        const val NOTICE_BUFFER = 4
 
         /** Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots. */
         fun hidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#") ||

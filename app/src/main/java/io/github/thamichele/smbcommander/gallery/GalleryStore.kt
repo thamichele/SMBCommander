@@ -18,7 +18,9 @@ class GalleryStore(private val dir: File) {
         val rows = JSONArray(file.readText())
         List(rows.length()) { i ->
             val row = rows.getJSONArray(i)
-            RemoteEntry(folder.share, row.getString(0), false, row.getLong(1), row.getLong(2))
+            // an empty album is kept as a folder with a size no file can have
+            val isDirectory = row.getLong(1) == DIRECTORY_SIZE
+            RemoteEntry(folder.share, row.getString(0), isDirectory, if (isDirectory) 0 else row.getLong(1), row.getLong(2))
         }
     }.getOrDefault(emptyList())
 
@@ -26,7 +28,7 @@ class GalleryStore(private val dir: File) {
         runCatching {
             dir.mkdirs()
             val rows = JSONArray()
-            for (e in media) rows.put(JSONArray().put(e.path).put(e.size).put(e.modified))
+            for (e in media) rows.put(JSONArray().put(e.path).put(if (e.isDirectory) DIRECTORY_SIZE else e.size).put(e.modified))
             val target = file(folder)
             val temp = File(dir, target.name + ".part")
             temp.writeText(rows.toString())
@@ -37,5 +39,10 @@ class GalleryStore(private val dir: File) {
     private fun file(folder: SavedFolder): File {
         val key = MessageDigest.getInstance("SHA-1").digest(folder.fullPath.toByteArray()).joinToString("") { "%02x".format(it) }
         return File(dir, "$key.json")
+    }
+
+    private companion object {
+        /** Written in place of the size for a folder: the empty albums, see GalleryIndex.stored. */
+        const val DIRECTORY_SIZE = -1L
     }
 }

@@ -98,12 +98,21 @@ Funziona con qualunque NAS o computer che condivida cartelle via SMB, non solo Q
 ## Galleria foto
 
 La sezione **Galleria** mostra solo le foto e i video della cartella in cui finisce il backup, e nient'altro: niente
-indicizzazione dell'intero NAS, niente album automatici o riconoscimento volti. Le foto sono divise per mese, dalla più
+indicizzazione dell'intero NAS, niente album inventati dall'app o riconoscimento volti. Le foto sono divise per mese, dalla più
 recente, con le stesse miniature e lo stesso visualizzatore veloce della sezione File.
 Va bene qualunque struttura di sottocartelle, anche quelle vecchie di QuMagie o di altre app: il mese viene dal nome
 della cartella (`2026/10`, `2026-10`, `2019-03-14`...), altrimenti dalla data nel nome del file, altrimenti dalla data
 del file. Il contenuto della galleria resta salvato sul telefono, così si apre subito; ogni aggiornamento guarda solo
 cosa è cambiato sul NAS, e dopo un backup o un caricamento la galleria si aggiorna da sola.
+**Album**: sotto il titolo si passa da «Foto» (tutto, per data) ad «Album». Ogni cartella dentro la cartella del
+backup che contiene foto è un album, con il nome della cartella (`Vacanze`, `2026/10`): prima quelli con un nome
+tuo, poi le cartelle per data, dalla più recente. L'app non rinomina e non riordina nulla da sola, e le cartelle
+`anno/mese` create dal backup restano come sono. «Nuovo album» crea la cartella corrispondente sul NAS. Per spostare
+delle foto in un album le selezioni (tenendo premuto) e premi «Sposta in un album»: sul NAS cambiano cartella, con
+lo stesso spostamento sicuro della sezione File (nella stessa cartella condivisa è istantaneo, altrimenti l'originale
+si elimina solo dopo una copia verificata) e senza mai sovrascrivere: un nome già presente diventa `nome (2).jpg`.
+Lo spostamento va nella coda dei trasferimenti e continua anche ad app chiusa.
+
 Si può vedere a griglia, a mosaico (foto più grandi, ognuna con la sua forma, che si incastrano in righe piene;
 le proporzioni si ricordano sul telefono, senza rileggere il NAS) o a elenco. Con il pulsante delle categorie si passa da tutte
 le foto a una sola categoria: Persone, Schermate, Scritte, Altre foto o Video, con il numero di foto di ognuna. Le
