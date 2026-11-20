@@ -288,6 +288,13 @@ private fun OptionalSection(vm: AppViewModel) {
         extras.followNas,
         vm::setFollowNas,
     )
+    OptionRow(
+        "Avvia subito i video",
+        "Un video aperto da un elenco parte da solo a schermo intero, senza toccare Riproduci, e così anche " +
+            "quelli a cui arrivi scorrendo.",
+        extras.autoplayVideo,
+        vm::setAutoplayVideo,
+    )
 }
 
 @Composable

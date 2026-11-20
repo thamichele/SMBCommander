@@ -159,7 +159,14 @@ data class BrowserState(
 data class Clipboard(val entries: List<RemoteEntry>, val move: Boolean)
 
 /** The optional functions as the settings show them. */
-data class ExtrasState(val lock: Boolean, val wakeOnLan: Boolean, val wakeMac: String, val followNas: Boolean)
+data class ExtrasState(
+    val lock: Boolean,
+    val wakeOnLan: Boolean,
+    val wakeMac: String,
+    val followNas: Boolean,
+    /** A video opened from a list starts by itself. */
+    val autoplayVideo: Boolean,
+)
 
 /** The folder of a ZIP archive being shown. */
 data class ArchiveState(
@@ -914,7 +921,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _extras = MutableStateFlow(readExtras())
     val extras: StateFlow<ExtrasState> = _extras.asStateFlow()
 
-    private fun readExtras() = app.extras.let { ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas) }
+    private fun readExtras() = app.extras.let {
+        ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo)
+    }
 
     fun setLock(on: Boolean) {
         if (on && !AppLock.available(app)) {
@@ -938,6 +947,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setFollowNas(on: Boolean) {
         app.extras.followNas = on
+        _extras.value = readExtras()
+    }
+
+    /**
+     * setAutoplayVideo() - turns "videos start by themselves" on or off
+     * @param on the new value of the setting
+     *
+     * Return: nothing.
+     */
+    fun setAutoplayVideo(on: Boolean) {
+        app.extras.autoplayVideo = on
         _extras.value = readExtras()
     }
 
