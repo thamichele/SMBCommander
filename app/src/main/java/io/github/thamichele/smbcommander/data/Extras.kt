@@ -16,7 +16,7 @@ import java.net.InetAddress
 
 /**
  * The optional functions, all off until turned on in the settings: app lock, Wake-on-LAN, finding the NAS again
- * when its address changes. Kept on the phone only, outside the backups like the rest of the settings.
+ * when its address changes, videos that start by themselves. Kept on the phone only, outside the backups like the rest of the settings.
  */
 class Extras(context: Context) {
 
@@ -49,10 +49,16 @@ class Extras(context: Context) {
         get() = prefs.getBoolean("follow", false)
         set(value) = prefs.edit().putBoolean("follow", value).apply()
 
+    /** A video opened from a list starts by itself, without a tap on Play. */
+    var autoplayVideo: Boolean
+        get() = prefs.getBoolean(KEY_AUTOPLAY_VIDEO, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTOPLAY_VIDEO, value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
         const val PICKER_WINDOW_MS = 10 * 60_000L
+        private const val KEY_AUTOPLAY_VIDEO = "autoplay_video"
     }
 }
 
