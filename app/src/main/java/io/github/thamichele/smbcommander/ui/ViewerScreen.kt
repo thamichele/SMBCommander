@@ -7,7 +7,7 @@
  * a video page is drawn by VideoPage.kt with the player of VideoPlayerState.kt.
  * It reads the NAS only through the image loader and the player.
  *
- * Version: 1.20.0
+ * Version: 1.21.0
  */
 package io.github.thamichele.smbcommander.ui
 

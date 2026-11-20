@@ -6,7 +6,7 @@
  * position, turning it into a fraction of the bar and back, clamping a jump.
  * No player, no Android: the screens pass plain milliseconds.
  *
- * Version: 1.20.0
+ * Version: 1.21.0
  */
 package io.github.thamichele.smbcommander.core
 

@@ -1,9 +1,9 @@
 # Changelog
 
-Storia delle versioni di SMBCommander, la più recente in alto. Le versioni precedenti alla 1.20.0 sono descritte
-nelle [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
+Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
+[release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
-## 1.20.0 — 2026-11-20
+## 1.21.0 — 2026-11-20
 - Aggiunto: opzione «Avvia subito i video» in Impostazioni › Funzioni facoltative (spenta finché non la accendi)
 - Aggiunto: si scorre da un video all'altro anche durante la riproduzione, e il video successivo parte da solo
 - Aggiunto: pulsanti indietro e avanti di 10 secondi nella barra dei comandi, oltre al doppio tocco
@@ -15,3 +15,11 @@ nelle [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 - Modificato: il video parte prima (un solo lettore riusato per tutti i video, meno attesa iniziale sulla rete di
   casa) e la musica in riproduzione si ferma quando parte un video
 - Modificato: il video va in pausa quando esci dall'app, e lo schermo può spegnersi quando è in pausa
+
+## 1.20.0 — 2026-11-20
+- Aggiunto: album nella Galleria. Ogni cartella dentro la cartella del backup è un album con le foto che contiene;
+  si aprono dalla nuova scheda «Album», divisi tra album con un nome proprio e cartelle per data.
+- Aggiunto: «Nuovo album» crea la cartella corrispondente sul NAS.
+- Aggiunto: «Sposta in un album» dalla selezione sposta le foto di cartella sul NAS, nella coda dei trasferimenti,
+  senza mai sovrascrivere un file con lo stesso nome.
+- Modificato: con delle foto selezionate il titolo è più corto («3 selezionate»), per fare posto al nuovo pulsante.

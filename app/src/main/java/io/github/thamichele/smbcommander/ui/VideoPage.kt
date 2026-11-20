@@ -8,7 +8,7 @@
  * drawn over the video. The player itself lives in VideoPlayerState.kt; the
  * pages, the top bar and the rules for turning the page are in ViewerScreen.kt.
  *
- * Version: 1.20.0
+ * Version: 1.21.0
  */
 package io.github.thamichele.smbcommander.ui
 
