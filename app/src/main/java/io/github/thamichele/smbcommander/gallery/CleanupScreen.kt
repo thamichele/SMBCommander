@@ -118,7 +118,6 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     val deletion by vm.deletion.collectAsStateWithLifecycle()
     val sameContent by vm.sameContent.collectAsStateWithLifecycle()
     val c = Arancio.colors
-    val context = LocalContext.current
     var trashDialog by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf<RemoteEntry?>(null) }
 
@@ -128,27 +127,8 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
     }
     DisposableEffect(Unit) { onDispose { vm.flushNow() } }
 
-    val queue = state.queue
-    val top = queue.firstOrNull()
-    val next = queue.getOrNull(1)
-
-    // the next pairs of copies are fetched while the user compares this one
-    val nextPairs = state.pairs.drop(1).take(2)
-    LaunchedEffect(nextPairs) {
-        val loader = SingletonImageLoader.get(context)
-        nextPairs.forEach { pair ->
-            listOf(pair.first, pair.second).forEach { loader.enqueue(ImageRequest.Builder(context).data(Thumb(it, ImageSize.Card)).build()) }
-        }
-    }
-
-    // the next previews are fetched while the user looks at this one
-    LaunchedEffect(top?.entry) {
-        val loader = SingletonImageLoader.get(context)
-        queue.drop(1).take(6).forEachIndexed { i, card ->
-            loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry)).build())
-            if (i < 2) loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry, ImageSize.Card)).build())
-        }
-    }
+    val top = state.queue.firstOrNull()
+    PrefetchCards(state, top)
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(
@@ -159,138 +139,201 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             if (top != null) ToolButton(AppIcons.Info, "Informazioni", { info = top.entry })
             ToolButton(AppIcons.Delete, "Cestino (${state.trashCount})", { trashDialog = true }, tint = if (state.trashCount > 0) c.danger else c.accentIcon)
         }
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(bottom = 12.dp),
-        ) {
-            item { TabPill("Da verificare (${state.suspectsLeft})", state.tab == CleanupTab.Suspects) { vm.showTab(CleanupTab.Suspects) } }
-            item { TabPill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
-            item { TabPill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
-        }
-        if (state.tab == CleanupTab.Others && !state.loading) {
-            // the groups of "all the others", filled while the photos are looked at on the phone
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = if (state.sorting > 0) 4.dp else 12.dp),
-            ) {
-                item { TabPill("Tutte", state.othersKind == null, small = true) { vm.showKind(null) } }
-                for (kind in PhotoKind.entries) {
-                    item(kind.name) {
-                        TabPill("${kind.label} (${state.othersByKind[kind] ?: 0})", state.othersKind == kind, small = true) { vm.showKind(kind) }
-                    }
-                }
-            }
-            if (state.sorting > 0) {
-                Text(
-                    "Divido le foto per tipo sul telefono: ne mancano ${state.sorting}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.textSecondary,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                )
-            }
-        }
+        CleanupTabs(state, vm)
         state.error?.let { error ->
             Notice(NoticeKind.Error, error, modifier = Modifier.padding(horizontal = 16.dp).clickable { vm.clearError() })
         }
 
         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-            when {
-                state.folder == null && galleryState.folder == null ->
-                    ErrorCard("Scegli prima la cartella del backup", "Vai al backup foto", appVm::openBackup)
-                state.loading || (galleryState.loading && galleryState.months.isEmpty()) ->
-                    Box(Modifier.fillMaxSize().background(rememberShimmer(), ArancioShape.card))
-                state.tab == CleanupTab.Duplicates -> {
-                    val pair = state.pairs.firstOrNull()
-                    if (pair == null) {
-                        Done(
-                            title = "Nessun duplicato",
-                            text = "Non ci sono foto o video con lo stesso nome da confrontare.",
-                            othersLeft = false,
-                            onOthers = {},
-                            onReload = { vm.reload(galleryState.photos) },
-                        )
-                    } else {
-                        key(pair.key) {
-                            DuplicatesPane(
-                                pair = pair,
-                                root = state.folder?.path.orEmpty(),
-                                same = sameContent[pair.key],
-                                onCompare = { vm.compare(pair) },
-                                onKeep = { vm.keepOnly(pair, it) },
-                                onOpen = { appVm.openViewer(listOf(pair.first, pair.second), if (it == pair.first) 0 else 1) },
-                            )
-                        }
-                    }
-                }
-                top == null && state.tab == CleanupTab.Others && state.othersKind != null -> Done(
-                    title = "Niente in «${state.othersKind?.label}»",
-                    text = if (state.sorting > 0) "Sto ancora dividendo le foto per tipo: quelle trovate compariranno qui man mano."
-                    else "In questo gruppo hai visto tutto. Il riconoscimento è approssimativo: qualche foto può essere finita in un altro gruppo.",
-                    othersLeft = state.othersLeft > 0,
-                    othersLabel = "Mostra tutte le altre",
-                    onOthers = { vm.showKind(null) },
-                    onReload = { vm.reload(galleryState.photos) },
-                )
-                top == null -> Done(
-                    othersLeft = state.tab == CleanupTab.Suspects && state.othersLeft > 0,
-                    onOthers = { vm.showTab(CleanupTab.Others) },
-                    onReload = { vm.reload(galleryState.photos) },
-                )
-                else -> {
-                    if (next != null) key(next.entry.path) { PhotoCard(next, root = state.folder?.path.orEmpty(), behind = true) }
-                    key(top.entry.path) {
-                        SwipeCard(
-                            onKeep = { vm.keep(top) },
-                            onDiscard = { vm.discard(top) },
-                        ) { PhotoCard(top, root = state.folder?.path.orEmpty(), behind = false, onOpen = { appVm.openViewer(listOf(top.entry), 0) }) }
-                    }
-                }
-            }
+            CleanupBody(state, galleryState, sameContent, vm, appVm)
         }
-
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 16.dp, top = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (state.tab == CleanupTab.Duplicates) {
-                val pair = state.pairs.firstOrNull()
-                RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
-                RoundButton(AppIcons.Check, "Tienili entrambi", c.accent, enabled = pair != null, big = false) { pair?.let(vm::keepBoth) }
-            } else {
-                RoundButton(AppIcons.Close, "Elimina", c.danger, enabled = top != null, big = true) { top?.let(vm::discard) }
-                RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
-                RoundButton(AppIcons.Check, "Tieni", c.accent, enabled = top != null, big = true) { top?.let(vm::keep) }
-            }
-        }
+        CleanupButtons(state, top, vm)
     }
 
     info?.let { InfoDialog(it, onDismiss = { info = null }) }
 
     deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
-    if (trashDialog) {
-        val size = Formatter.formatShortFileSize(context, state.trashBytes)
-        if (state.trashCount == 0) {
-            ConfirmDialog(
-                title = "Il cestino è vuoto",
-                text = "Le foto scartate finiscono qui, in una cartella nascosta dentro la cartella del backup, finché non lo svuoti.",
-                confirm = "Ok",
-                danger = false,
-                onDismiss = { trashDialog = false },
-                onConfirm = { trashDialog = false },
-            )
-        } else {
-            TrashDialog(
-                count = state.trashCount,
-                size = size,
-                onDismiss = { trashDialog = false },
-                onEmpty = { trashDialog = false; vm.emptyTrash() },
-                onRestore = { trashDialog = false; vm.restoreTrash() },
-            )
+    if (trashDialog) CleanupTrashDialog(state, vm, onDismiss = { trashDialog = false })
+}
+
+/* Fetches the next previews and pairs of copies while the user looks at the current one. */
+@Composable
+private fun PrefetchCards(state: CleanupState, top: CleanupCard?) {
+    val context = LocalContext.current
+    // the next pairs of copies are fetched while the user compares this one
+    val nextPairs = state.pairs.drop(1).take(2)
+    LaunchedEffect(nextPairs) {
+        val loader = SingletonImageLoader.get(context)
+        nextPairs.forEach { pair ->
+            listOf(pair.first, pair.second).forEach { loader.enqueue(ImageRequest.Builder(context).data(Thumb(it, ImageSize.Card)).build()) }
         }
     }
+
+    // the next previews are fetched while the user looks at this one
+    val queue = state.queue
+    LaunchedEffect(top?.entry) {
+        val loader = SingletonImageLoader.get(context)
+        queue.drop(1).take(PREFETCH_PREVIEWS).forEachIndexed { i, card ->
+            loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry)).build())
+            if (i < PREFETCH_CARDS) loader.enqueue(ImageRequest.Builder(context).data(Thumb(card.entry, ImageSize.Card)).build())
+        }
+    }
+}
+
+/* The three tabs, and under "Tutte le altre" the groups found on the phone. */
+@Composable
+private fun CleanupTabs(state: CleanupState, vm: CleanupViewModel) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
+    ) {
+        item { TabPill("Da verificare (${state.suspectsLeft})", state.tab == CleanupTab.Suspects) { vm.showTab(CleanupTab.Suspects) } }
+        item { TabPill("Duplicati (${state.pairs.size})", state.tab == CleanupTab.Duplicates) { vm.showTab(CleanupTab.Duplicates) } }
+        item { TabPill("Tutte le altre (${state.othersLeft})", state.tab == CleanupTab.Others) { vm.showTab(CleanupTab.Others) } }
+    }
+    if (state.tab != CleanupTab.Others || state.loading) return
+    // the groups of "all the others", filled while the photos are looked at on the phone
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(bottom = if (state.sorting > 0) 4.dp else 12.dp),
+    ) {
+        item { TabPill("Tutte", state.othersKind == null, small = true) { vm.showKind(null) } }
+        for (kind in PhotoKind.entries) {
+            item(kind.name) {
+                TabPill("${kind.label} (${state.othersByKind[kind] ?: 0})", state.othersKind == kind, small = true) { vm.showKind(kind) }
+            }
+        }
+    }
+    if (state.sorting > 0) {
+        Text(
+            "Divido le foto per tipo sul telefono: ne mancano ${state.sorting}",
+            style = MaterialTheme.typography.bodySmall,
+            color = Arancio.colors.textSecondary,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        )
+    }
+}
+
+/* The middle of the page: the cards, the pair of copies, or why there is nothing left. */
+@Composable
+private fun CleanupBody(
+    state: CleanupState,
+    galleryState: GalleryState,
+    sameContent: Map<String, Boolean>,
+    vm: CleanupViewModel,
+    appVm: AppViewModel,
+) {
+    val top = state.queue.firstOrNull()
+    val reload = { vm.reload(galleryState.photos) }
+    when {
+        state.folder == null && galleryState.folder == null ->
+            ErrorCard("Scegli prima la cartella del backup", "Vai al backup foto", appVm::openBackup)
+        state.loading || (galleryState.loading && galleryState.months.isEmpty()) ->
+            Box(Modifier.fillMaxSize().background(rememberShimmer(), ArancioShape.card))
+        state.tab == CleanupTab.Duplicates -> DuplicatesBody(state, sameContent, vm, appVm, reload)
+        top == null && state.tab == CleanupTab.Others && state.othersKind != null -> Done(
+            title = "Niente in «${state.othersKind?.label}»",
+            text = if (state.sorting > 0) "Sto ancora dividendo le foto per tipo: quelle trovate compariranno qui man mano."
+            else "In questo gruppo hai visto tutto. Il riconoscimento è approssimativo: qualche foto può essere finita in un altro gruppo.",
+            othersLeft = state.othersLeft > 0,
+            othersLabel = "Mostra tutte le altre",
+            onOthers = { vm.showKind(null) },
+            onReload = reload,
+        )
+        top == null -> Done(
+            othersLeft = state.tab == CleanupTab.Suspects && state.othersLeft > 0,
+            onOthers = { vm.showTab(CleanupTab.Others) },
+            onReload = reload,
+        )
+        else -> {
+            val next = state.queue.getOrNull(1)
+            if (next != null) key(next.entry.path) { PhotoCard(next, root = state.folder?.path.orEmpty(), behind = true) }
+            key(top.entry.path) {
+                SwipeCard(
+                    onKeep = { vm.keep(top) },
+                    onDiscard = { vm.discard(top) },
+                ) { PhotoCard(top, root = state.folder?.path.orEmpty(), behind = false, onOpen = { appVm.openViewer(listOf(top.entry), 0) }) }
+            }
+        }
+    }
+}
+
+/* The tab of the copies: the first pair side by side, or a note that there is none. */
+@Composable
+private fun DuplicatesBody(
+    state: CleanupState,
+    sameContent: Map<String, Boolean>,
+    vm: CleanupViewModel,
+    appVm: AppViewModel,
+    onReload: () -> Unit,
+) {
+    val pair = state.pairs.firstOrNull()
+    if (pair == null) {
+        Done(
+            title = "Nessun duplicato",
+            text = "Non ci sono foto o video con lo stesso nome da confrontare.",
+            othersLeft = false,
+            onOthers = {},
+            onReload = onReload,
+        )
+        return
+    }
+    key(pair.key) {
+        DuplicatesPane(
+            pair = pair,
+            root = state.folder?.path.orEmpty(),
+            same = sameContent[pair.key],
+            onCompare = { vm.compare(pair) },
+            onKeep = { vm.keepOnly(pair, it) },
+            onOpen = { appVm.openViewer(listOf(pair.first, pair.second), if (it == pair.first) 0 else 1) },
+        )
+    }
+}
+
+/* The round buttons at the bottom, within reach of the thumb. */
+@Composable
+private fun CleanupButtons(state: CleanupState, top: CleanupCard?, vm: CleanupViewModel) {
+    val c = Arancio.colors
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 16.dp, top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (state.tab == CleanupTab.Duplicates) {
+            val pair = state.pairs.firstOrNull()
+            RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
+            RoundButton(AppIcons.Check, "Tienili entrambi", c.accent, enabled = pair != null, big = false) { pair?.let(vm::keepBoth) }
+        } else {
+            RoundButton(AppIcons.Close, "Elimina", c.danger, enabled = top != null, big = true) { top?.let(vm::discard) }
+            RoundButton(AppIcons.Undo, "Annulla", c.textSecondary, enabled = state.canUndo, big = false) { vm.undo() }
+            RoundButton(AppIcons.Check, "Tieni", c.accent, enabled = top != null, big = true) { top?.let(vm::keep) }
+        }
+    }
+}
+
+/* The trash of the cleanup: what it is while empty, otherwise empty it or put the photos back. */
+@Composable
+private fun CleanupTrashDialog(state: CleanupState, vm: CleanupViewModel, onDismiss: () -> Unit) {
+    if (state.trashCount == 0) {
+        ConfirmDialog(
+            title = "Il cestino è vuoto",
+            text = "Le foto scartate finiscono qui, in una cartella nascosta dentro la cartella del backup, finché non lo svuoti.",
+            confirm = "Ok",
+            danger = false,
+            onDismiss = onDismiss,
+            onConfirm = onDismiss,
+        )
+        return
+    }
+    TrashDialog(
+        count = state.trashCount,
+        size = Formatter.formatShortFileSize(LocalContext.current, state.trashBytes),
+        onDismiss = onDismiss,
+        onEmpty = { onDismiss(); vm.emptyTrash() },
+        onRestore = { onDismiss(); vm.restoreTrash() },
+    )
 }
 
 /** The card on top, following the finger; past a third of the width it flies off and the choice is made. */
@@ -606,3 +649,7 @@ private fun CardPicture(entry: RemoteEntry) {
         modifier = Modifier.fillMaxSize(),
     )
 }
+
+/* Previews fetched ahead of the card on top, and how many of them also at the card's size. */
+private const val PREFETCH_PREVIEWS = 6
+private const val PREFETCH_CARDS = 2
