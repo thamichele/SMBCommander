@@ -5,11 +5,11 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
 
 ## 1.24.0 — 2026-11-21
 - Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
-  rimpicciolisce: titolo e schede Foto/Album spariscono e restano solo i pulsanti; torna intera appena scorri in su
+  rimpicciolisce: il titolo sparisce e resta solo la riga dei pulsanti; torna intera appena scorri in su
 - Modificato: intestazioni più basse. Il titolo va a capo accanto ai pulsanti invece di spingerli su una riga sotto;
   succede solo se nemmeno la parola più lunga del titolo ci sta
-- Modificato: nella Galleria «Pulizia rapida» e «Aggiorna» sono nel menu «Altre azioni», per tenere l'intestazione
-  su una riga
+- Modificato: nella Galleria i quattro pulsanti (categorie, visualizzazione, Pulizia rapida, Aggiorna) restano
+  separati e stanno sulla riga delle schede Foto/Album; il titolo ha una riga sua e non viene mai tagliato
 - Modificato: barra di navigazione in basso più bassa, con icone più piccole e meno spazio vuoto; la pastiglia
   colorata scivola da una sezione all'altra allungandosi, e l'icona attiva si ingrandisce appena
 - Corretto: anche il pulsante delle categorie della Galleria ha l'icona nel colore principale; con una categoria

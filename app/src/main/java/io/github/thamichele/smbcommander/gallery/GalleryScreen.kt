@@ -162,25 +162,31 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     LaunchedEffect(selected.isEmpty(), albumTitle, state.kind) { collapse.show() }
     Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
         if (selected.isEmpty()) {
-            PageHeader(
-                context = if (albumTitle != null) "Album" else state.folder?.fullPath ?: "Foto salvate sul NAS",
-                title = albumTitle ?: state.kind?.label ?: "Galleria",
-                navigation = if (albumTitle == null) null else {
-                    { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) }
-                },
-                collapse = collapse,
-            ) {
+            val actions: @Composable () -> Unit = {
                 if (state.folder != null) {
                     KindMenu(state.kind, state.kindCounts, vm::setKind)
                     ViewMenu(state.view, vm::setView)
                     // the quick cleanup goes through the whole gallery, not one album
-                    GalleryMoreMenu(
-                        onCleanup = if (albumTitle == null) ({ appVm.openCleanup() }) else null,
-                        onRefresh = { vm.pull() },
-                    )
+                    if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
+                    ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
                 }
             }
-            if (state.folder != null && albumTitle == null) CollapsibleBox(collapse) { GalleryTabs(albumsOpen = false, vm) }
+            if (albumTitle != null) {
+                PageHeader(
+                    context = "Album",
+                    title = albumTitle,
+                    navigation = { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) },
+                    collapse = collapse,
+                    actions = actions,
+                )
+            } else {
+                // the title has a line of its own, so it is never cut; while scrolling it goes and the line of
+                // the tabs with the buttons stays
+                CollapsibleBox(collapse) {
+                    PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria")
+                }
+                if (state.folder != null) GalleryTabs(albumsOpen = false, vm, actions)
+            }
         } else {
             // only the number as title: four big buttons leave little room next to it
             val chosen = if (selected.size == 1) "selezionata" else "selezionate"
@@ -390,27 +396,6 @@ private val PhotoKind.icon: ImageVector
         PhotoKind.Photo -> AppIcons.Image
         PhotoKind.Video -> AppIcons.Video
     }
-
-/** The actions used less often, behind one button: the header stays one line high. onCleanup null hides it. */
-@Composable
-private fun GalleryMoreMenu(onCleanup: (() -> Unit)?, onRefresh: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ToolButton(AppIcons.More, "Altre azioni", { open = true })
-        ArancioMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (onCleanup != null) {
-                ArancioMenuItem(AppIcons.Broom, "Pulizia rapida") {
-                    open = false
-                    onCleanup()
-                }
-            }
-            ArancioMenuItem(AppIcons.Refresh, "Aggiorna") {
-                open = false
-                onRefresh()
-            }
-        }
-    }
-}
 
 /** The three ways of showing the gallery, from the button with the current one's icon. */
 @Composable

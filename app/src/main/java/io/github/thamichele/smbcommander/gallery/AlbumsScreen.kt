@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -96,17 +98,24 @@ internal fun albumTitle(state: GalleryState, path: String): String {
  * GalleryTabs() - the two faces of the gallery: all the photos by date, or the albums
  * @param albumsOpen which of the two is on screen
  * @param vm where the choice goes
+ * @param actions the buttons of the page, on the right of the tabs
  *
  * Return: nothing; draws a row of two pills under the page header.
  */
 @Composable
-internal fun GalleryTabs(albumsOpen: Boolean, vm: GalleryViewModel) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = PAGE_MARGIN, end = PAGE_MARGIN, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+@OptIn(ExperimentalLayoutApi::class)
+internal fun GalleryTabs(albumsOpen: Boolean, vm: GalleryViewModel, actions: @Composable () -> Unit = {}) {
+    // the buttons share the line of the tabs; on a screen too narrow for both they wrap under them, on the right
+    FlowRow(
+        Modifier.fillMaxWidth().padding(start = PAGE_MARGIN, end = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        Pill("Foto", selected = !albumsOpen, onClick = { vm.leaveAlbums() })
-        Pill("Album", selected = albumsOpen, onClick = vm::openAlbums)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("Foto", selected = !albumsOpen, onClick = { vm.leaveAlbums() })
+            Pill("Album", selected = albumsOpen, onClick = vm::openAlbums)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
     }
 }
 
