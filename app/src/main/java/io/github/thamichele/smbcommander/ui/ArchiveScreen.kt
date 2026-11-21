@@ -43,8 +43,15 @@ import io.github.thamichele.smbcommander.core.ZipArchive
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /**
- * Inside a ZIP of the NAS, folder by folder: a file opens with another app after extracting just that file to the
- * phone; "Estrai" puts a file, a folder or everything into the NAS folder of the archive.
+ * ArchiveScreen() - inside a ZIP of the NAS, folder by folder
+ * @param vm the archive and its actions
+ * @param screen which archive, and which folder inside it
+ *
+ * A file opens with another app after extracting just that file to the phone; "Estrai" puts a file, a folder or
+ * everything into the NAS folder of the archive.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun ArchiveScreen(vm: AppViewModel, screen: Screen.Archive) {

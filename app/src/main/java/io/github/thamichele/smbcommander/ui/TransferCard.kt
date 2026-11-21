@@ -29,7 +29,22 @@ import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
-/** The copy, move and upload queue: the job running now, how many wait, and the ones that failed. */
+/**
+ * TransferCard() - the card of the transfer queue
+ * @param jobs the jobs, running, waiting and ended
+ * @param paused the queue is held
+ * @param onCancel stops everything
+ * @param onPause holds the queue
+ * @param onResume lets it run again
+ * @param onRetry runs a failed job again
+ * @param onClose closes the card once everything ended
+ * @param modifier placement
+ *
+ * The job running now, how many wait, and the ones that failed.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun TransferCard(
     jobs: List<TransferJob>,
@@ -115,7 +130,14 @@ fun TransferCard(
     }
 }
 
-/** Some names are already in the destination: replace them, leave them alone or keep both. */
+/**
+ * ConflictDialog() - asks what to do with names already in the destination
+ * @param ask the names and how many elements go there
+ * @param onChoice replace, leave alone or keep both; null when the user gives up
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ConflictDialog(ask: ConflictAsk, onChoice: (Conflict?) -> Unit) {
     val c = Arancio.colors

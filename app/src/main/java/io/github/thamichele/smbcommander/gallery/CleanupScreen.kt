@@ -100,9 +100,16 @@ import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 /**
- * One card at a time: swipe left (or ✕) to send the photo to the bin, right (or ✓) to keep it. Only the card on top
- * and the next one are drawn, and only the next few previews are fetched, so thousands of photos cost nothing more
- * than a few.
+ * CleanupScreen() - the quick cleanup: one card at a time, swipe left to discard, right to keep
+ * @param appVm the app, for the deletion settings and the way back
+ * @param gallery the gallery, whose photos are looked at
+ * @param vm the cleanup's state and choices
+ *
+ * Only the card on top and the next one are drawn, and only the next few previews are fetched, so thousands of photos
+ * cost nothing more than a few.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), vm: CleanupViewModel = viewModel()) {

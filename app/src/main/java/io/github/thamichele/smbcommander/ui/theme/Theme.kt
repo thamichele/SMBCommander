@@ -94,7 +94,15 @@ data class ArancioColors(
     val shadow: Color,
 )
 
-/** The colours of one ground (dark or light) with the chosen main colour. Greys and status colours never change. */
+/**
+ * arancioColors() - the colours of one ground with the chosen main colour
+ * @param dark the dark ground
+ * @param accent the main colour
+ *
+ * Greys and status colours never change.
+ *
+ * Return: the tokens every screen reads.
+ */
 fun arancioColors(dark: Boolean, accent: AccentTheme): ArancioColors = if (dark) {
     ArancioColors(
         background = Color(0xFF1C1B1A),

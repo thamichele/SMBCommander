@@ -52,6 +52,15 @@ import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
+/**
+ * ShareScreen() - Salva sul NAS: choose the folder, then upload what was shared
+ * @param vm the folders and the upload
+ * @param onDone called with the message to show when the upload ended
+ * @param onCancel called when the user gives up
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()

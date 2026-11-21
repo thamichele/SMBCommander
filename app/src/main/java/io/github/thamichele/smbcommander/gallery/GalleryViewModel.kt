@@ -174,7 +174,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Shows the gallery: from the phone at once, then a refresh when the last one is old or the folder changed. */
+    /**
+     * ensureLoaded() - shows the gallery: from the phone at once, then a refresh when the last one is old or the
+     * folder changed
+     *
+     * Return: nothing.
+     */
     fun ensureLoaded() {
         val folder = app.backupSettings.load().destination
         val current = _state.value
@@ -199,7 +204,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
 
-    /** Shows only the photos of [kind], or all of them with null. */
+    /**
+     * setKind() - shows only one category of photos
+     * @param kind the category, or null for all of them
+     *
+     * Return: nothing.
+     */
     fun setKind(kind: PhotoKind?) {
         app.galleryPrefs.kind = kind
         if (needsSorting(kind)) sortWanted.value = true
@@ -235,14 +245,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private fun kindOf(e: RemoteEntry): PhotoKind? =
         kinds[e] ?: app.photoSorter.known(e)?.also { kinds[e] = it }
 
+    /**
+     * setView() - chooses how the gallery shows the photos, and remembers it
+     * @param view grid, mosaic or list
+     *
+     * Return: nothing.
+     */
     fun setView(view: GalleryView) {
         app.galleryPrefs.view = view
         _state.update { it.copy(view = view) }
     }
 
-    /** Pull to refresh or the button: like [refresh], with the spinner. */
+    /**
+     * pull() - pull to refresh or the button: like [refresh], with the spinner
+     *
+     * Return: nothing.
+     */
     fun pull() = refresh(pulling = true)
 
+    /**
+     * refresh() - walks the backup folder again for what changed on the NAS
+     * @param pulling shows the spinner of the pull to refresh
+     *
+     * Return: nothing; the gallery changes only where the NAS changed.
+     */
     fun refresh(pulling: Boolean = false) {
         val folder = _state.value.folder ?: app.backupSettings.load().destination ?: return
         if (folder != _state.value.folder) return ensureLoaded()
@@ -544,7 +570,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         /** Notices waiting for the screen: more than a few at once would be noise anyway. */
         const val NOTICE_BUFFER = 4
 
-        /** Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots. */
+        /**
+         * hidden() - tells whether a name is left out of the gallery
+         * @param name a file or folder name
+         *
+         * Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots, temporary office files.
+         *
+         * Return: true when it is left out.
+         */
         fun hidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#") ||
             name.equals("Thumbs.db", ignoreCase = true) || name.startsWith("~")
     }

@@ -39,8 +39,13 @@ import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /**
- * What was deleted from the file browser, every share together, most recent first: each element goes back where it
- * was, or goes for good. After [FileTrash.KEEP_DAYS] days it goes on its own.
+ * TrashScreen() - what was deleted from the file browser, every share together, most recent first
+ * @param vm the bin and its actions
+ *
+ * Each element goes back where it was, or goes for good. After [FileTrash.KEEP_DAYS] days it goes on its own.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun TrashScreen(vm: AppViewModel) {

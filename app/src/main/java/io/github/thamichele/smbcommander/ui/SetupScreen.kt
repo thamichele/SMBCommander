@@ -241,7 +241,13 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     }
 }
 
-/** The one option of the Gallery: deleting with a swipe, with or without asking first. */
+/**
+ * GalleryOptions() - the one option of the Gallery: deleting with a swipe, with or without asking first
+ * @param vm where the option is kept
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun GalleryOptions(vm: AppViewModel) {
     val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
@@ -270,7 +276,13 @@ internal fun GalleryOptions(vm: AppViewModel) {
     }
 }
 
-/** Functions that not everyone wants: all off until turned on here. */
+/**
+ * OptionalSection() - the functions that not everyone wants, all off until turned on here
+ * @param vm where the options are kept
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun OptionalSection(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()
@@ -349,7 +361,12 @@ private val ACCENT_GAP = 8.dp
 private val ACCENT_PADDING = 10.dp
 private val ACCENT_SWATCH = 22.dp
 
-/** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
+/**
+ * AppearanceSection() - the theme and the main colour of the app, its widget and its launcher icon
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun AppearanceSection() {
     val context = LocalContext.current

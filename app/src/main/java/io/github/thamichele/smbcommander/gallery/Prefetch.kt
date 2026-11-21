@@ -26,11 +26,16 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Loads the thumbnails just past the edge of the screen, in the direction the gallery is scrolling, so they are
- * ready (on the phone and decoded) before they come into view and scrolling does not stutter.
+ * PrefetchThumbnails() - loads the thumbnails just past the edge of the screen, in the direction of the scroll
+ * @param position the list or grid
+ * @param photos the whole gallery in order
+ * @param ahead how many photos past the edge to load
+ * @param photoAt for an item of the list, the index in [photos] of its first photo
  *
- * [photos] is the whole gallery in order; [photoAt] gives, for an item of the lazy list or grid, the index in
- * [photos] of its first photo (a month header gives the first photo of its month).
+ * So they are ready, on the phone and decoded, before they come into view and scrolling does not stutter.
+ *
+ * Context: composable; the loading runs in the image loader.
+ * Return: nothing.
  */
 @Composable
 fun PrefetchThumbnails(position: ScrollPosition, photos: List<RemoteEntry>, ahead: Int, photoAt: (Int) -> Int) {
@@ -78,7 +83,13 @@ fun PrefetchThumbnails(position: ScrollPosition, photos: List<RemoteEntry>, ahea
     }
 }
 
-/** For a list or grid made of month headers each followed by its photos: the photo index of each item. */
+/**
+ * photoIndexIn() - the photo index of each item of a list made of month headers each followed by its photos
+ * @param starts the index of the header of each month
+ * @param offsets the index in the gallery of the first photo of each month
+ *
+ * Return: a function from item index to photo index; a header gives the first photo of its month.
+ */
 fun photoIndexIn(starts: IntArray, offsets: List<Int>): (Int) -> Int = { index ->
     val m = monthAt(starts, index)
     offsets[m] + max(0, index - starts[m] - 1)

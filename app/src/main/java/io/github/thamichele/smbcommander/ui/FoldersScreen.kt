@@ -58,7 +58,15 @@ import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
-/** Start screen: only the folders the user added, hidden shares included; nothing appears on its own. */
+/**
+ * FoldersScreen() - the start screen: only the folders the user added, hidden shares included
+ * @param vm the folders and their actions
+ *
+ * Nothing appears on its own.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun FoldersScreen(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()

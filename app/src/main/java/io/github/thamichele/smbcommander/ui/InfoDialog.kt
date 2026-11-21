@@ -59,8 +59,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 /**
- * Everything known about a file or folder: first its path on the NAS, ready to copy, then size and dates, and for
- * photos and videos what the file itself says (resolution, when it was taken, camera, position).
+ * InfoDialog() - everything known about a file or folder
+ * @param entry the file or folder
+ * @param onDismiss closes the dialog
+ *
+ * First its path on the NAS, ready to copy, then size and dates, and for photos and videos what the file itself says
+ * (resolution, when it was taken, camera, position).
+ *
+ * Context: composable; the details are read from the NAS in the background.
+ * Return: nothing.
  */
 @Composable
 fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {

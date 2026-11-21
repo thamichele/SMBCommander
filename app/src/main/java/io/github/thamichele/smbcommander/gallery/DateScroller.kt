@@ -63,9 +63,23 @@ interface ScrollPosition {
     val scrolling: Boolean
     /** Index of the last item at least partly on screen. */
     val last: Int
+    /**
+     * jumpTo() - scrolls to an item at once
+     * @param index the item
+     *
+     * Context: suspends until the list has moved.
+     * Return: nothing.
+     */
     suspend fun jumpTo(index: Int)
 }
 
+/**
+ * rememberScrollPosition() - the scroll position of a lazy list, for the date scroller
+ * @param state the state of the list
+ *
+ * Context: composable.
+ * Return: the position, the same object while [state] is the same.
+ */
 @Composable
 fun rememberScrollPosition(state: LazyListState): ScrollPosition = remember(state) {
     object : ScrollPosition {
@@ -82,6 +96,13 @@ fun rememberScrollPosition(state: LazyListState): ScrollPosition = remember(stat
     }
 }
 
+/**
+ * rememberScrollPosition() - the scroll position of a lazy grid, for the date scroller
+ * @param state the state of the grid
+ *
+ * Context: composable.
+ * Return: the position, the same object while [state] is the same.
+ */
 @Composable
 fun rememberScrollPosition(state: LazyGridState): ScrollPosition = remember(state) {
     object : ScrollPosition {
@@ -100,11 +121,17 @@ fun rememberScrollPosition(state: LazyGridState): ScrollPosition = remember(stat
 }
 
 /**
- * Fast scrolling by date along the right edge, as in the phone's own gallery: a handle appears while the photos
- * scroll; dragging it (or touching the edge while it shows) runs through the whole gallery, with the month and
- * year under the finger and the years marked along the way.
+ * DateScroller() - fast scrolling by date along the right edge, as in the phone's own gallery
+ * @param position the list or grid it moves
+ * @param months the months shown, newest first
+ * @param starts the index of the header of each month in the list
+ * @param modifier placement
  *
- * [starts] holds, for each of [months], the index of its header among the items of the list or grid.
+ * A handle appears while the photos scroll; dragging it (or touching the edge while it shows) runs through the whole
+ * gallery, with the month and year shown next to the finger.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: IntArray, modifier: Modifier = Modifier) {
@@ -249,7 +276,13 @@ fun DateScroller(position: ScrollPosition, months: List<MonthGroup>, starts: Int
     }
 }
 
-/** The month whose header is at [index] or comes last before it. */
+/**
+ * monthAt() - the month whose header is at an index or comes last before it
+ * @param starts the index of the header of each month
+ * @param index an item of the list
+ *
+ * Return: the index of the month in [starts].
+ */
 internal fun monthAt(starts: IntArray, index: Int): Int {
     var lo = 0
     var hi = starts.size - 1

@@ -22,7 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * [main] is the colour of the theme (switches, progress, selection), [button] fills primary buttons with [onButton]
  * text on it, [hover] is the pressed shade, [text] is for links and labels on the dark ground, [soft] for tags,
  * [border] and [deep] for tinted outlines and grounds, [icon] for icons on the dark ground (launcher icon, widget),
- * [light] is the darker shade for coloured text on light grounds, where the pure colour does not reach AA. Viola and Rosso use white text on their buttons,
+ * [light] is the darker shade for coloured text on light grounds, where the pure colour does not reach AA. Viola and
+ * Rosso use white text on their buttons,
  * Rosso fills buttons with a darker red because pure red reads badly with any text colour.
  */
 enum class AccentTheme(
@@ -61,16 +62,35 @@ object AccentStore {
     private val current = MutableStateFlow(AccentTheme.Arancio)
     @Volatile private var loaded = false
 
+    /**
+     * state() - the main colour chosen, as a flow the screens follow
+     * @param context any context of the app
+     *
+     * Return: the flow.
+     */
     fun state(context: Context): StateFlow<AccentTheme> {
         load(context)
         return current.asStateFlow()
     }
 
+    /**
+     * get() - the main colour chosen
+     * @param context any context of the app
+     *
+     * Return: the colour.
+     */
     fun get(context: Context): AccentTheme {
         load(context)
         return current.value
     }
 
+    /**
+     * set() - chooses the main colour of app, widget and icon
+     * @param context any context of the app
+     * @param theme the colour
+     *
+     * Return: nothing.
+     */
     fun set(context: Context, theme: AccentTheme) {
         load(context)
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, theme.name).apply()
@@ -137,6 +157,14 @@ object ThemeStore {
  */
 object LauncherIcon {
 
+    /**
+     * sync() - shows the launcher icon in the main colour chosen
+     * @param context any context of the app
+     *
+     * The new entry is turned on first, so there is never a moment without any launcher icon.
+     *
+     * Return: nothing.
+     */
     fun sync(context: Context) {
         val wanted = AccentStore.get(context)
         val pm = context.packageManager

@@ -110,7 +110,16 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Only the photos of the backup folder, by month, newest first: as a grid, or as a list where a swipe deletes. */
+/**
+ * GalleryScreen() - the gallery: only the photos of the backup folder, by month, newest first
+ * @param appVm the app, for the deletion settings, the viewer and the way back
+ * @param vm the gallery's state and actions
+ *
+ * As a grid, a mosaic, or a list where a swipe deletes.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
@@ -706,5 +715,11 @@ private fun MonthHeader(group: MonthGroup, first: Boolean) {
 private fun Modifier.pressable(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
     combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
+/**
+ * monthName() - the Italian name of a month
+ * @param month 1 for January to 12 for December
+ *
+ * Return: the name, capitalised.
+ */
 internal fun monthName(month: Int): String =
     DateFormatSymbols(Locale.getDefault()).months[month - 1].replaceFirstChar { it.titlecase(Locale.getDefault()) }

@@ -54,11 +54,24 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     /** How many items are being shared: the text counts as one file. */
     val count: Int get() = uris.size + if (uris.isEmpty() && !text.isNullOrBlank()) 1 else 0
 
+    /**
+     * take() - takes what another app shared
+     * @param uris the files
+     * @param text a shared text, saved as a .txt file when no file came with it
+     *
+     * Return: nothing.
+     */
     fun take(uris: List<Uri>, text: String?) {
         this.uris = uris
         this.text = text
     }
 
+    /**
+     * open() - browses a folder for the destination
+     * @param folder the folder
+     *
+     * Return: nothing; its subfolders arrive in [state].
+     */
     fun open(folder: SavedFolder) {
         _state.value = ShareState(folder = folder, loading = true)
         viewModelScope.launch {
@@ -73,7 +86,11 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Goes up one folder; false when already at the list of saved folders. */
+    /**
+     * up() - goes up one folder
+     *
+     * Return: false when already at the list of saved folders.
+     */
     fun up(): Boolean {
         val folder = _state.value.folder ?: return false
         if (_state.value.progress != null) return true
@@ -87,7 +104,12 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    /** Uploads everything into the folder being browsed; [onDone] gets the message to show. */
+    /**
+     * saveHere() - uploads everything into the folder being browsed
+     * @param onDone gets the message to show
+     *
+     * Return: nothing.
+     */
     fun saveHere(onDone: (String) -> Unit) {
         val folder = _state.value.folder ?: return
         if (_state.value.progress != null) return

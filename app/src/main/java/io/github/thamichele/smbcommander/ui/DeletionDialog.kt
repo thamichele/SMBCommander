@@ -62,9 +62,16 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlinx.coroutines.delay
 
 /**
- * A deletion of several files, one at a time: the file being deleted slides in, the bar fills, and each file gets its
- * outcome in the list below (deleted, skipped because it was no longer on the NAS, or not deleted). It closes on its
+ * DeletionDialog() - the window of a deletion of several files, one at a time
+ * @param deletion how far the deletion is
+ * @param onStop stops it after the file being deleted now
+ * @param onClose closes the window
+ *
+ * The file being deleted slides in, the bar fills, and each file gets its outcome in the list below. It closes on its
  * own when everything went well; otherwise it stays open on the summary.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) {
