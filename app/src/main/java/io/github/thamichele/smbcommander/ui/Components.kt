@@ -2,6 +2,7 @@ package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -13,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -363,10 +365,12 @@ private const val TOOL_DISABLED_ALPHA = 0.5f
 private const val TOOL_PRESSED_SCALE = 0.97f
 private const val TOOL_PRESS_MS = 80
 
-/* Halo of the main action of a page: a ring of the main colour at 10%, 8 wide, and a glow of the same colour. */
+/* Halo of the main action of a page, shown at the touch: a ring of the main colour at 10%, 8 wide, and a glow. */
 private val FAB_HALO_WIDTH = 8.dp
 private const val FAB_HALO_ALPHA = 0.10f
 private val FAB_GLOW = 12.dp
+private const val FAB_HALO_IN_MS = 120
+private const val FAB_HALO_OUT_MS = 240
 
 /**
  * ToolButton() - the icon button of the whole app, in the style of the video player's bar
@@ -642,11 +646,32 @@ fun GhostButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boo
 fun DangerButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     ArancioButton(onClick, modifier, ButtonKind.Danger, enabled, content = content)
 
-/** Floating button of the kit: 56dp, main colour, corners of 6. */
+/**
+ * AccentFab() - the main action of a page: round, in the main colour
+ * @param icon what the button shows
+ * @param label what the button does, read aloud by TalkBack
+ * @param onClick the action
+ * @param modifier where the button goes
+ *
+ * At rest the button is flat. The halo of the kit (a ring of the main colour
+ * and a glow of the same colour) grows only at the touch and fades after it:
+ * a whole pulse even for a quick tap.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Arancio.colors
-    val halo = c.accent.copy(alpha = FAB_HALO_ALPHA)
+    val interaction = remember { MutableInteractionSource() }
+    val pulse = remember { Animatable(0f) }
+    LaunchedEffect(interaction) {
+        // one at a time: the halo finishes growing before it starts fading
+        interaction.interactions.collect { event ->
+            val target = if (event is PressInteraction.Press) 1f else 0f
+            pulse.animateTo(target, tween(if (target > 0f) FAB_HALO_IN_MS else FAB_HALO_OUT_MS))
+        }
+    }
     FloatingActionButton(
         onClick = onClick,
         containerColor = c.accentButton,
@@ -654,9 +679,18 @@ fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: M
         shape = ArancioShape.fab,
         // the depth comes from the tinted glow of the kit, not from the grey shadow of Material
         elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+        interactionSource = interaction,
         modifier = modifier
-            .drawBehind { drawCircle(halo, radius = size.minDimension / 2 + FAB_HALO_WIDTH.toPx()) }
-            .shadow(FAB_GLOW, ArancioShape.fab, ambientColor = c.accent, spotColor = c.accent),
+            .drawBehind {
+                val grown = pulse.value
+                drawCircle(c.accent.copy(alpha = FAB_HALO_ALPHA * grown), radius = size.minDimension / 2 + FAB_HALO_WIDTH.toPx() * grown)
+            }
+            .graphicsLayer {
+                shadowElevation = FAB_GLOW.toPx() * pulse.value
+                shape = ArancioShape.fab
+                ambientShadowColor = c.accent
+                spotShadowColor = c.accent
+            },
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
     }
