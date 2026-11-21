@@ -109,6 +109,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private var index = GalleryIndex()
     private var lastWalk = 0L
 
+    /* The backup folder changed while the app was in the background: looked at again when it comes back. */
+    private var changedWhileAway = false
+
     private val _notices = MutableSharedFlow<String>(extraBufferCapacity = NOTICE_BUFFER)
     /** Short messages about the albums (a name refused, nothing to move), for the screen to show. */
     val notices: SharedFlow<String> = _notices
@@ -138,8 +141,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             // thumbnails made in the background, whatever part of the gallery is on screen: started again (from the
             // newest photos) whenever the gallery changes, after a pause that leaves the NAS to the screen first
-            _state.map { it.months }.distinctUntilChanged().collectLatest { months ->
-                if (months.isEmpty()) return@collectLatest
+            // only while the app is on screen: in the background it would only use the battery and the Wi-Fi
+            combine(_state.map { it.months }.distinctUntilChanged(), app.inFront) { months, front -> months to front }
+                .collectLatest { (months, front) ->
+                if (months.isEmpty() || !front) return@collectLatest
                 delay(3_000)
                 runCatching { app.thumbnails.warmUp(months.flatMap { it.photos }) }
                     .onFailure { if (it is CancellationException) throw it }
@@ -148,9 +153,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             // the photos not sorted yet are looked at on the phone, newest first, in the background lane of the
             // thumbnails; started again when the gallery changes
-            combine(_state.map { it.months }.distinctUntilChanged(), sortWanted) { months, wanted -> months to wanted }
-                .collectLatest { (months, wanted) ->
-                    if (!wanted || months.isEmpty()) return@collectLatest
+            combine(_state.map { it.months }.distinctUntilChanged(), sortWanted, app.inFront) { months, wanted, front ->
+                Triple(months, wanted, front)
+            }
+                .collectLatest { (months, wanted, front) ->
+                    // looking at photos on the phone is heavy work: only while the app is on screen
+                    if (!wanted || !front || months.isEmpty()) return@collectLatest
                     sortPhotos(months.flatMap { it.photos })
                 }
         }
@@ -160,6 +168,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 val folder = _state.value.folder ?: return@collect
                 if (change == null || change.affects(folder)) {
                     delay(1_000)
+                    // a backup run in the background does not walk the NAS again: the walk waits for the app
+                    if (app.inFront.value) refresh() else changedWhileAway = true
+                }
+            }
+        }
+        viewModelScope.launch {
+            app.inFront.collect { front ->
+                if (front && changedWhileAway) {
+                    changedWhileAway = false
                     refresh()
                 }
             }
