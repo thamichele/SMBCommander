@@ -17,6 +17,12 @@ object FolderScan {
 
     /** What a folder holds, all levels included. */
     data class Totals(val files: Int = 0, val folders: Int = 0, val bytes: Long = 0) {
+        /**
+         * plus() - the totals with one more element
+         * @param e a file or a folder
+         *
+         * Return: new totals; this one is unchanged.
+         */
         operator fun plus(e: RemoteEntry) =
             if (e.isDirectory) copy(folders = folders + 1) else copy(files = files + 1, bytes = bytes + e.size)
     }

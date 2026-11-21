@@ -100,7 +100,12 @@ class ChunkCache(
         return chunk.takeIf { it.covers(position) }
     }
 
-    /** Bytes kept in all, for the tests. */
+    /**
+     * size() - the bytes kept in all, for the tests
+     *
+     * Context: synchronized.
+     * Return: the bytes of every chunk kept.
+     */
     @Synchronized
     fun size(): Long = total
 

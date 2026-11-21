@@ -92,6 +92,15 @@ object Transfers {
 
     /** Called with the file being copied, its bytes so far and its size. */
     fun interface Listener {
+        /**
+         * onProgress() - how far the copy of one file is
+         * @param name the file being copied
+         * @param done its bytes copied so far
+         * @param total its size
+         *
+         * Context: called on the copying thread.
+         * Return: nothing.
+         */
         fun onProgress(name: String, done: Long, total: Long)
     }
 
