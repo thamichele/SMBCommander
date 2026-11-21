@@ -35,6 +35,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,11 +66,18 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import io.github.thamichele.smbcommander.widget.BackupWidget
 
+/**
+ * SetupScreen() - address and user of the NAS: the first connection, and later the "NAS" page of the settings
+ * @param vm connects, forgets, searches the network
+ * @param onBack where the back button goes when a NAS is already saved
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
-fun SetupScreen(vm: AppViewModel) {
+fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     val saved = remember { vm.savedServer() }
     val connecting by vm.connecting.collectAsStateWithLifecycle()
-    val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
     var host by rememberSaveable { mutableStateOf(saved?.host.orEmpty()) }
     var user by rememberSaveable { mutableStateOf(saved?.username.orEmpty()) }
     // the saved password is never shown again: left empty, the saved one is kept
@@ -82,15 +93,14 @@ fun SetupScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
         if (saved != null) {
             PageHeader(
-                context = "SMBCommander",
-                title = "Impostazioni",
-                navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+                context = "Impostazioni",
+                title = "NAS",
+                navigation = { ToolButton(AppIcons.Back, "Indietro", onBack) },
             )
         } else {
             PageHeader(context = "SMBCommander", title = "Collega il NAS")
         }
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (saved != null) SectionLabel("NAS", Modifier.padding(top = 8.dp))
             Text(
                 "Indirizzo del NAS nella rete di casa e un utente che può accedere alle cartelle condivise. " +
                     "I dati restano cifrati su questo telefono.",
@@ -201,32 +211,7 @@ fun SetupScreen(vm: AppViewModel) {
                 ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS")
                 }
-                SectionLabel("Galleria", Modifier.padding(top = 20.dp))
-                Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
-                                    "dal NAS. Se è spento, prima chiede conferma.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Arancio.colors.textSecondary,
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = withoutConfirm,
-                            onCheckedChange = vm::setDeleteWithoutConfirm,
-                            colors = arancioSwitchColors(),
-                        )
-                    }
-                }
             }
-            if (saved != null) OptionalSection(vm)
-            AppearanceSection()
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -247,9 +232,38 @@ fun SetupScreen(vm: AppViewModel) {
     }
 }
 
+/** The one option of the Gallery: deleting with a swipe, with or without asking first. */
+@Composable
+internal fun GalleryOptions(vm: AppViewModel) {
+    val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
+    SectionLabel("Galleria", Modifier.padding(top = 20.dp))
+    Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
+                        "dal NAS. Se è spento, prima chiede conferma.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Arancio.colors.textSecondary,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = withoutConfirm,
+                onCheckedChange = vm::setDeleteWithoutConfirm,
+                colors = arancioSwitchColors(),
+            )
+        }
+    }
+}
+
 /** Functions that not everyone wants: all off until turned on here. */
 @Composable
-private fun OptionalSection(vm: AppViewModel) {
+internal fun OptionalSection(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()
     var mac by rememberSaveable { mutableStateOf(extras.wakeMac) }
     SectionLabel("Funzioni facoltative", Modifier.padding(top = 20.dp))
@@ -313,9 +327,15 @@ private fun OptionRow(title: String, detail: String, checked: Boolean, onChange:
     }
 }
 
+/** The choice of the main colour: at most three per row, fewer when the names would not fit. */
+private const val ACCENT_COLUMNS = 3
+private val ACCENT_GAP = 8.dp
+private val ACCENT_PADDING = 10.dp
+private val ACCENT_SWATCH = 22.dp
+
 /** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
 @Composable
-private fun AppearanceSection() {
+internal fun AppearanceSection() {
     val context = LocalContext.current
     val current by remember(context) { AccentStore.state(context) }.collectAsStateWithLifecycle()
     SectionLabel("Aspetto", Modifier.padding(top = 20.dp))
@@ -325,33 +345,46 @@ private fun AppearanceSection() {
         style = MaterialTheme.typography.bodySmall,
         color = Arancio.colors.textSecondary,
     )
-    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AccentTheme.entries.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { theme ->
-                    val selected = theme == current
-                    // as the radio buttons of the "Modalità colori" board: tinted ground and ring of the colour when chosen
-                    val shape = ArancioShape.control
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .clip(shape)
-                            .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
-                            .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)
-                            .selectable(selected = selected, role = Role.RadioButton) {
-                                AccentStore.set(context, theme)
-                                BackupWidget.updateAll(context)
-                            }
-                            .padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(theme.main))
-                        Text(theme.label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium), color = Arancio.colors.text)
+    val labelStyle = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // as many columns as hold the longest name on one line: a name is never broken in two
+        val widest = AccentTheme.entries.maxOf { measurer.measure(it.label, labelStyle, softWrap = false).size.width }
+        val cell = with(LocalDensity.current) { widest.toDp() } + ACCENT_SWATCH + ACCENT_PADDING * 3
+        val columns = (ACCENT_COLUMNS downTo 1).firstOrNull { cell * it + ACCENT_GAP * (it - 1) <= maxWidth } ?: 1
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(ACCENT_GAP)) {
+            AccentTheme.entries.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP)) {
+                    row.forEach { theme ->
+                        AccentChoice(theme, theme == current, labelStyle, Modifier.weight(1f)) {
+                            AccentStore.set(context, theme)
+                            BackupWidget.updateAll(context)
+                        }
                     }
+                    // an incomplete last row keeps the width of the others
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
+    }
+}
+
+/* Private: one colour to choose, as the radio buttons of the "Modalità colori" board: tinted ground and ring when chosen. */
+@Composable
+private fun AccentChoice(theme: AccentTheme, selected: Boolean, labelStyle: TextStyle, modifier: Modifier, onPick: () -> Unit) {
+    val shape = ArancioShape.control
+    Row(
+        modifier
+            .heightIn(min = 48.dp)
+            .clip(shape)
+            .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
+            .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onPick)
+            .padding(horizontal = ACCENT_PADDING),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ACCENT_PADDING),
+    ) {
+        Box(Modifier.size(ACCENT_SWATCH).clip(RoundedCornerShape(4.dp)).background(theme.main))
+        Text(theme.label, style = labelStyle, color = Arancio.colors.text, softWrap = false, maxLines = 1)
     }
 }

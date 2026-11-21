@@ -3,6 +3,20 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.25.0 — 2026-11-21
+- Nuovo: le Impostazioni sono divise in menu separati, uno per argomento: «Backup foto» (backup automatico, cartella
+  sul NAS, libera spazio, album da salvare), «Opzioni» (interruttori del backup e della Galleria, funzioni
+  facoltative), «Aspetto» (colore principale) e «NAS» (indirizzo e utente). Ogni menu apre la sua pagina
+- Modificato: il terzo pulsante della barra in basso si chiama «Impostazioni» e ha l'icona dell'ingranaggio; la
+  notifica del backup e i pulsanti «Vai al backup foto» aprono direttamente la pagina «Backup foto»
+- Nuovo: nella Galleria, tra le schede Foto e Album, c'è la scheda «Video» che mostra solo i video, per data
+- Modificato: con tre schede i quattro pulsanti della Galleria stanno accanto al titolo; scorrendo in giù titolo
+  e schede spariscono e restano solo i pulsanti
+- Modificato: i pulsanti con un'icona si adattano da soli allo spazio: da 56 dp sugli schermi larghi scendono fino
+  a 40 dp su schermi stretti, con lo zoom dello schermo alto o con il testo grande, e l'icona resta metà del pulsante
+- Corretto: in «Aspetto» i nomi dei colori non vengono più spezzati a metà parola: se tre caselle per riga non
+  bastano diventano due, o una
+
 ## 1.24.0 — 2026-11-21
 - Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
   rimpicciolisce: il titolo sparisce e resta solo la riga dei pulsanti; torna intera appena scorri in su

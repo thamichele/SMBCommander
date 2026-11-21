@@ -152,7 +152,7 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
     }
     val areBarsShown = isChromeVisible && !isFullscreen
     // a video keeps its own bar above the actions, never under them
-    val videoRoom by animateDpAsState(if (areBarsShown) BUTTON_BAR_HEIGHT else 0.dp, label = "video-room")
+    val videoRoom by animateDpAsState(if (areBarsShown) buttonBarHeight() else 0.dp, label = "video-room")
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(state = pager, beyondViewportPageCount = 1, modifier = Modifier.fillMaxSize()) { page ->
             val entry = screen.images[page]
