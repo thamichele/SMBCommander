@@ -178,7 +178,7 @@ class VideoFrames(
     private fun frameAt(retriever: MediaMetadataRetriever, atMs: Long): Bitmap? {
         val atUs = atMs * US_PER_MS
         val option = MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-        val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MP1) {
+        val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             retriever.getScaledFrameAtTime(atUs, option, SCALED_BOX_PX, SCALED_BOX_PX)
         } else {
             retriever.getFrameAtTime(atUs, option)
