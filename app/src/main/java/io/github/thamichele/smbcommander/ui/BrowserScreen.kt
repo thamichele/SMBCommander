@@ -90,41 +90,32 @@ private sealed interface Dialog {
     data class Info(val entry: RemoteEntry) : Dialog
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * BrowserScreen() - one folder of the NAS, its files and what can be done with them
+ * @param vm the folder, the selection, the clipboard and every action
+ * @param screen which folder
+ *
+ * The header changes with the mode: the selection, the search, or the folder with its sorting and actions.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     val state by vm.browser.collectAsStateWithLifecycle()
-    val folders by vm.folders.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val clipboard by vm.clipboard.collectAsStateWithLifecycle()
-    val extras by vm.extras.collectAsStateWithLifecycle()
-    val pinned = folders.any { it.share == screen.share && it.path == screen.path }
-    val c = Arancio.colors
     var dialog by remember { mutableStateOf<Dialog?>(null) }
-    var addMenu by remember { mutableStateOf(false) }
-    var moreMenu by remember { mutableStateOf(false) }
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
 
-    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.uploadFolder(it) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val entry = pendingDownload
         pendingDownload = null
         if (uri != null && entry != null) vm.downloadTo(entry, uri)
     }
-
     val actions = EntryActions(
         selected = selected,
-        open = {
-            when {
-                selected.isNotEmpty() -> vm.toggleSelected(it)
-                it.isDirectory -> vm.openFolder(it)
-                it.isMedia -> vm.openViewer(it)
-                it.isAudio -> vm.playMusic(it)
-                ZipArchive.isZip(it.name) -> vm.openArchive(it)
-                else -> vm.open(it, edit = false)
-            }
-        },
+        open = { openEntry(vm, it, selecting = selected.isNotEmpty()) },
         edit = { vm.open(it, edit = true) },
         download = { pendingDownload = it; saveFile.launch(it.name) },
         share = { vm.share(listOf(it)) },
@@ -133,12 +124,52 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         info = { dialog = Dialog.Info(it) },
         select = vm::toggleSelected,
     )
-    val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
-
-    // each folder keeps its own scroll: going back finds the list where it was left
     val listState = remember(screen) { vm.scrollOf(screen).let { (i, o) -> LazyListState(i, o) } }
     val gridState = remember(screen) { vm.scrollOf(screen).let { (i, o) -> LazyGridState(i, o) } }
-    val isGrid = state.grid
+    KeepScroll(vm, screen, state.grid, listState, gridState)
+
+    // while the files scroll down the header of the folder shrinks to its buttons, and grows back scrolling up
+    val collapse = rememberCollapsingHeaderState()
+    LaunchedEffect(screen.path, selected.isEmpty(), state.searching) { collapse.show() }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
+            when {
+                selected.isNotEmpty() -> SelectionHeader(vm, state, selected, actions) { dialog = Dialog.DeleteSelected }
+                state.searching -> SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) }, deep = state.deep)
+                else -> FolderHeader(vm, screen, state, collapse) { dialog = Dialog.Info(it) }
+            }
+            // while searching the row of the header is gone: the scope and the sorting are chosen here, in words
+            if (state.searching) SearchScope(vm, state)
+            if (state.showingDeep && state.deepBusy) DeepSearchStatus(screen, state)
+            FolderContent(vm, screen, state, actions, listState, gridState)
+        }
+
+        clipboard?.let { clip ->
+            ClipboardBar(clip, onPaste = vm::paste, onCancel = vm::clearClipboard, modifier = Modifier.align(Alignment.BottomCenter))
+        }
+        if (clipboard == null && selected.isEmpty()) {
+            AddButton(vm, Modifier.align(Alignment.BottomEnd).padding(16.dp)) { dialog = it }
+        }
+    }
+
+    dialog?.let { d -> BrowserDialog(vm, screen, d, selected.size) { dialog = null } }
+}
+
+/* Private: a tap on an entry: during a selection it toggles it, otherwise it opens it with what suits it. */
+private fun openEntry(vm: AppViewModel, entry: RemoteEntry, selecting: Boolean) {
+    when {
+        selecting -> vm.toggleSelected(entry)
+        entry.isDirectory -> vm.openFolder(entry)
+        entry.isMedia -> vm.openViewer(entry)
+        entry.isAudio -> vm.playMusic(entry)
+        ZipArchive.isZip(entry.name) -> vm.openArchive(entry)
+        else -> vm.open(entry, edit = false)
+    }
+}
+
+/* Each folder keeps its own scroll: going back finds the list where it was left. */
+@Composable
+private fun KeepScroll(vm: AppViewModel, screen: Screen.Browser, isGrid: Boolean, listState: LazyListState, gridState: LazyGridState) {
     DisposableEffect(screen, isGrid) {
         onDispose {
             if (isGrid) {
@@ -148,237 +179,305 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             }
         }
     }
+}
 
-    // while the files scroll down the header of the folder shrinks to its buttons, and grows back scrolling up
-    val collapse = rememberCollapsingHeaderState()
-    LaunchedEffect(screen.path, selected.isEmpty(), state.searching) { collapse.show() }
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
-            if (selected.isNotEmpty()) {
-                PageHeader(
-                    // only the number as title: four big buttons leave little room next to it
-                    context = if (selected.size == 1) "Selezionato" else "Selezionati",
-                    title = "${selected.size}",
-                    navigation = { ToolButton(AppIcons.Close, "Annulla selezione", vm::clearSelection) },
-                ) {
-                    ToolButton(AppIcons.Copy, "Copia", { vm.cut(move = false) })
-                    ToolButton(AppIcons.Move, "Sposta", { vm.cut(move = true) })
-                    ToolButton(AppIcons.Delete, "Elimina", { dialog = Dialog.DeleteSelected }, tint = c.danger)
-                    Box {
-                        ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
-                        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                            MenuItem(AppIcons.Check, "Seleziona tutto") { moreMenu = false; vm.selectAll() }
-                            val chosen = state.entries.filter { it.path in selected }
-                            if (chosen.any { !it.isDirectory }) {
-                                MenuItem(AppIcons.Share, "Condividi") { moreMenu = false; vm.clearSelection(); vm.share(chosen) }
-                            }
-                            single?.let { entry ->
-                                if (!entry.isDirectory) {
-                                    MenuItem(AppIcons.OpenWith, "Modifica con…") { moreMenu = false; vm.clearSelection(); actions.edit(entry) }
-                                    MenuItem(AppIcons.Download, "Salva sul telefono") { moreMenu = false; vm.clearSelection(); actions.download(entry) }
-                                }
-                                MenuItem(AppIcons.Rename, "Rinomina") { moreMenu = false; vm.clearSelection(); actions.rename(entry) }
-                                MenuItem(AppIcons.Info, "Info") { moreMenu = false; actions.info(entry) }
-                            }
-                        }
-                    }
+/* The header while some entries are selected: what can be done with all of them, and more in the menu. */
+@Composable
+private fun SelectionHeader(
+    vm: AppViewModel,
+    state: BrowserState,
+    selected: Set<String>,
+    actions: EntryActions,
+    onDelete: () -> Unit,
+) {
+    var moreMenu by remember { mutableStateOf(false) }
+    val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
+    PageHeader(
+        // only the number as title: four big buttons leave little room next to it
+        context = if (selected.size == 1) "Selezionato" else "Selezionati",
+        title = "${selected.size}",
+        navigation = { ToolButton(AppIcons.Close, "Annulla selezione", vm::clearSelection) },
+    ) {
+        ToolButton(AppIcons.Copy, "Copia", { vm.cut(move = false) })
+        ToolButton(AppIcons.Move, "Sposta", { vm.cut(move = true) })
+        ToolButton(AppIcons.Delete, "Elimina", onDelete, tint = Arancio.colors.danger)
+        Box {
+            ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
+            ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                MenuItem(AppIcons.Check, "Seleziona tutto") { moreMenu = false; vm.selectAll() }
+                val chosen = state.entries.filter { it.path in selected }
+                if (chosen.any { !it.isDirectory }) {
+                    MenuItem(AppIcons.Share, "Condividi") { moreMenu = false; vm.clearSelection(); vm.share(chosen) }
                 }
-            } else if (state.searching) {
-                SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) }, deep = state.deep)
-            } else {
-                val title = if (screen.path.isEmpty()) NasShares.shownName(screen.share) else RemotePath.name(screen.path)
-                val context = when {
-                    screen.path.isNotEmpty() -> NasShares.display(screen.share, RemotePath.parent(screen.path))
-                    NasShares.isRoot(screen.share) -> "Altro NAS"
-                    else -> NasShares.label(screen.share)?.let { "$it · cartella condivisa" } ?: "Cartella condivisa"
-                }
-                PageHeader(
-                    context = context,
-                    title = title,
-                    navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
-                    collapse = collapse,
-                    tabs = {
-                        ToolButton(AppIcons.SortName, "Ordina per nome", { vm.setSort(SortMode.Name) }, isPrimary = state.sort == SortMode.Name)
-                        ToolButton(AppIcons.Calendar, "Ordina per data", { vm.setSort(SortMode.Date) }, isPrimary = state.sort == SortMode.Date)
-                        ToolButton(AppIcons.SortSize, "Ordina per dimensione", { vm.setSort(SortMode.Size) }, isPrimary = state.sort == SortMode.Size)
-                    },
-                ) {
-                    ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
-                    ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
-                    Box {
-                        ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
-                        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                            MenuItem(AppIcons.Refresh, "Aggiorna") { moreMenu = false; vm.refresh() }
-                            MenuItem(
-                                if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
-                                if (state.showHidden) "Nascondi file di sistema" else "Mostra file di sistema",
-                            ) { moreMenu = false; vm.toggleHidden() }
-                            if (!pinned) {
-                                MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
-                            }
-                            MenuItem(AppIcons.Info, "Info su questa cartella") {
-                                moreMenu = false
-                                dialog = Dialog.Info(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
-                            }
-                            MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
-                            MenuItem(AppIcons.Settings, "Impostazioni") { moreMenu = false; vm.openSettings() }
-                        }
-                    }
-                }
-            }
-
-            // while searching the row of the header is gone: the scope and the sorting are chosen here, in words
-            if (state.searching) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {
-                    item { Pill("Questa cartella", !state.deep) { vm.setDeepSearch(false) } }
-                    item { Pill("Anche nelle sottocartelle", state.deep) { vm.setDeepSearch(true) } }
-                    item { Pill("Nome", state.sort == SortMode.Name) { vm.setSort(SortMode.Name) } }
-                    item { Pill("Data", state.sort == SortMode.Date) { vm.setSort(SortMode.Date) } }
-                    item { Pill("Dimensione", state.sort == SortMode.Size) { vm.setSort(SortMode.Size) } }
-                }
-            }
-
-            val visible = state.visible
-            if (state.showingDeep && state.deepBusy) {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(14.dp), color = c.accent, strokeWidth = 2.dp)
-                    Text(
-                        "Cerco in " + NasShares.display(screen.share, state.deepFolder) +
-                            " · trovati ${visible.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textSecondary,
-                    )
-                }
-            }
-            PullToRefreshBox(
-                isRefreshing = state.loading && state.entries.isNotEmpty(),
-                onRefresh = vm::refresh,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                when {
-                    state.error != null && state.entries.isEmpty() -> Column {
-                        ErrorCard(state.error.orEmpty(), "Riprova", vm::refresh)
-                        if (extras.wakeOnLan) {
-                            SecondaryButton(onClick = { vm.wakeNas() }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                                Icon(AppIcons.Power, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Accendi il NAS")
-                            }
-                        }
-                    }
-                    state.loading && state.entries.isEmpty() -> SkeletonList()
-                    visible.isEmpty() -> EmptyState(
-                        icon = if (state.query.isNotBlank()) AppIcons.Search else AppIcons.Folder,
-                        title = when {
-                            state.showingDeep && state.deepBusy -> "Cerco nelle sottocartelle…"
-                            state.query.isNotBlank() -> "Nessun risultato"
-                            else -> "Cartella vuota"
-                        },
-                        text = when {
-                        state.showingDeep && state.query.trim().length < 2 -> "Scrivi almeno due lettere per cercare nelle sottocartelle"
-                        state.showingDeep && state.deepBusy -> "Cerco «${state.query.trim()}» in tutte le sottocartelle…"
-                        state.showingDeep -> "Nessun elemento contiene «${state.query.trim()}», nemmeno nelle sottocartelle"
-                        state.query.isNotBlank() -> "Nessun elemento contiene «${state.query.trim()}»"
-                        else -> "Aggiungi file dal telefono o crea una cartella con il pulsante +."
-                                },
-                    )
-                    state.grid && !state.showingDeep -> LazyVerticalGrid(
-                        columns = GridCells.Adaptive(112.dp),
-                        state = gridState,
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(visible, key = ::entryKey) { GridTile(it, actions) }
-                    }
-                    else -> LazyColumn(
-                        state = listState,
-                        contentPadding = PaddingValues(bottom = 96.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(visible, key = ::entryKey) { entry ->
-                            // matches from the subfolders say where they are
-                            val location = if (state.showingDeep) {
-                                val parent = RemotePath.parent(entry.path)
-                                val base = RemotePath.normalize(screen.path)
-                                val rel = if (base.isEmpty()) parent else parent.removePrefix(base).trimStart('/')
-                                if (rel.isEmpty()) "In questa cartella" else "In " + rel.replace("/", " / ")
-                            } else null
-                            ListRow(entry, actions, location)
-                        }
-                    }
-                }
-            }
-        }
-
-        clipboard?.let { clip ->
-            ClipboardBar(clip, onPaste = vm::paste, onCancel = vm::clearClipboard, modifier = Modifier.align(Alignment.BottomCenter))
-        }
-
-        if (clipboard == null && selected.isEmpty()) Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-            AccentFab(AppIcons.Plus, "Aggiungi", onClick = { addMenu = true })
-            ArancioMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
-                MenuItem(AppIcons.Upload, "Carica file dal telefono") { addMenu = false; pickFiles.launch(arrayOf("*/*")) }
-                MenuItem(AppIcons.Folder, "Carica una cartella dal telefono") { addMenu = false; pickFolder.launch(null) }
-                MenuItem(AppIcons.FolderPlus, "Nuova cartella") { addMenu = false; dialog = Dialog.NewFolder }
-                MenuItem(AppIcons.Document, "Nuovo file di testo") { addMenu = false; dialog = Dialog.NewTextFile }
+                single?.let { entry -> SingleEntryItems(vm, entry, actions) { moreMenu = false } }
             }
         }
     }
+}
 
-    when (val d = dialog) {
-        Dialog.NewFolder -> NameDialog("Nuova cartella", "", "Crea", { dialog = null }) {
-            dialog = null
+/* The entries of the menu that only make sense for one selected entry. */
+@Composable
+private fun SingleEntryItems(vm: AppViewModel, entry: RemoteEntry, actions: EntryActions, close: () -> Unit) {
+    if (!entry.isDirectory) {
+        MenuItem(AppIcons.OpenWith, "Modifica con…") { close(); vm.clearSelection(); actions.edit(entry) }
+        MenuItem(AppIcons.Download, "Salva sul telefono") { close(); vm.clearSelection(); actions.download(entry) }
+    }
+    MenuItem(AppIcons.Rename, "Rinomina") { close(); vm.clearSelection(); actions.rename(entry) }
+    MenuItem(AppIcons.Info, "Info") { close(); actions.info(entry) }
+}
+
+/* The header of the folder: where it is, the sorting on the left, search, view and the menu on the right. */
+@Composable
+private fun FolderHeader(
+    vm: AppViewModel,
+    screen: Screen.Browser,
+    state: BrowserState,
+    collapse: CollapsingHeaderState,
+    onInfo: (RemoteEntry) -> Unit,
+) {
+    val title = if (screen.path.isEmpty()) NasShares.shownName(screen.share) else RemotePath.name(screen.path)
+    val context = when {
+        screen.path.isNotEmpty() -> NasShares.display(screen.share, RemotePath.parent(screen.path))
+        NasShares.isRoot(screen.share) -> "Altro NAS"
+        else -> NasShares.label(screen.share)?.let { "$it · cartella condivisa" } ?: "Cartella condivisa"
+    }
+    PageHeader(
+        context = context,
+        title = title,
+        navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+        collapse = collapse,
+        tabs = {
+            ToolButton(AppIcons.SortName, "Ordina per nome", { vm.setSort(SortMode.Name) }, isPrimary = state.sort == SortMode.Name)
+            ToolButton(AppIcons.Calendar, "Ordina per data", { vm.setSort(SortMode.Date) }, isPrimary = state.sort == SortMode.Date)
+            ToolButton(AppIcons.SortSize, "Ordina per dimensione", { vm.setSort(SortMode.Size) }, isPrimary = state.sort == SortMode.Size)
+        },
+    ) {
+        ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
+        ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
+        FolderMenu(vm, screen, state, onInfo)
+    }
+}
+
+/* The menu of the folder: refresh, system files, pin, info, the bin and the settings. */
+@Composable
+private fun FolderMenu(vm: AppViewModel, screen: Screen.Browser, state: BrowserState, onInfo: (RemoteEntry) -> Unit) {
+    val folders by vm.folders.collectAsStateWithLifecycle()
+    val pinned = folders.any { it.share == screen.share && it.path == screen.path }
+    var moreMenu by remember { mutableStateOf(false) }
+    Box {
+        ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
+        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+            MenuItem(AppIcons.Refresh, "Aggiorna") { moreMenu = false; vm.refresh() }
+            MenuItem(
+                if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
+                if (state.showHidden) "Nascondi file di sistema" else "Mostra file di sistema",
+            ) { moreMenu = false; vm.toggleHidden() }
+            if (!pinned) {
+                MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
+            }
+            MenuItem(AppIcons.Info, "Info su questa cartella") {
+                moreMenu = false
+                onInfo(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
+            }
+            MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
+            MenuItem(AppIcons.Settings, "Impostazioni") { moreMenu = false; vm.openSettings() }
+        }
+    }
+}
+
+/* While searching: this folder or also the subfolders, and the sorting, in words. */
+@Composable
+private fun SearchScope(vm: AppViewModel, state: BrowserState) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
+    ) {
+        item { Pill("Questa cartella", !state.deep) { vm.setDeepSearch(false) } }
+        item { Pill("Anche nelle sottocartelle", state.deep) { vm.setDeepSearch(true) } }
+        item { Pill("Nome", state.sort == SortMode.Name) { vm.setSort(SortMode.Name) } }
+        item { Pill("Data", state.sort == SortMode.Date) { vm.setSort(SortMode.Date) } }
+        item { Pill("Dimensione", state.sort == SortMode.Size) { vm.setSort(SortMode.Size) } }
+    }
+}
+
+/* The search in the subfolders is still walking: which folder it reads and how many it found. */
+@Composable
+private fun DeepSearchStatus(screen: Screen.Browser, state: BrowserState) {
+    val c = Arancio.colors
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CircularProgressIndicator(Modifier.size(14.dp), color = c.accent, strokeWidth = 2.dp)
+        Text(
+            "Cerco in " + NasShares.display(screen.share, state.deepFolder) +
+                " · trovati ${state.visible.size}",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+    }
+}
+
+/* The files of the folder, or what to show instead: the error, the loading, an empty folder or search. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FolderContent(
+    vm: AppViewModel,
+    screen: Screen.Browser,
+    state: BrowserState,
+    actions: EntryActions,
+    listState: LazyListState,
+    gridState: LazyGridState,
+) {
+    val visible = state.visible
+    PullToRefreshBox(
+        isRefreshing = state.loading && state.entries.isNotEmpty(),
+        onRefresh = vm::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        when {
+            state.error != null && state.entries.isEmpty() -> FolderError(vm, state.error)
+            state.loading && state.entries.isEmpty() -> SkeletonList()
+            visible.isEmpty() -> EmptyFolder(state)
+            state.grid && !state.showingDeep -> LazyVerticalGrid(
+                columns = GridCells.Adaptive(112.dp),
+                state = gridState,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(visible, key = ::entryKey) { GridTile(it, actions) }
+            }
+            else -> LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(bottom = 96.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(visible, key = ::entryKey) { entry ->
+                    ListRow(entry, actions, if (state.showingDeep) locationOf(entry, screen) else null)
+                }
+            }
+        }
+    }
+}
+
+/* A match from the subfolders says where it is, below the folder searched. */
+private fun locationOf(entry: RemoteEntry, screen: Screen.Browser): String {
+    val parent = RemotePath.parent(entry.path)
+    val base = RemotePath.normalize(screen.path)
+    val rel = if (base.isEmpty()) parent else parent.removePrefix(base).trimStart('/')
+    return if (rel.isEmpty()) "In questa cartella" else "In " + rel.replace("/", " / ")
+}
+
+/* The folder could not be read: try again, or wake the NAS when Wake-on-LAN is on. */
+@Composable
+private fun FolderError(vm: AppViewModel, error: String) {
+    val extras by vm.extras.collectAsStateWithLifecycle()
+    Column {
+        ErrorCard(error, "Riprova", vm::refresh)
+        if (extras.wakeOnLan) {
+            SecondaryButton(onClick = { vm.wakeNas() }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                Icon(AppIcons.Power, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Accendi il NAS")
+            }
+        }
+    }
+}
+
+/* Nothing to show: an empty folder, a search without matches, or one still walking the subfolders. */
+@Composable
+private fun EmptyFolder(state: BrowserState) {
+    val query = state.query.trim()
+    EmptyState(
+        icon = if (state.query.isNotBlank()) AppIcons.Search else AppIcons.Folder,
+        title = when {
+            state.showingDeep && state.deepBusy -> "Cerco nelle sottocartelle…"
+            state.query.isNotBlank() -> "Nessun risultato"
+            else -> "Cartella vuota"
+        },
+        text = when {
+            state.showingDeep && query.length < MIN_DEEP_QUERY -> "Scrivi almeno due lettere per cercare nelle sottocartelle"
+            state.showingDeep && state.deepBusy -> "Cerco «$query» in tutte le sottocartelle…"
+            state.showingDeep -> "Nessun elemento contiene «$query», nemmeno nelle sottocartelle"
+            state.query.isNotBlank() -> "Nessun elemento contiene «$query»"
+            else -> "Aggiungi file dal telefono o crea una cartella con il pulsante +."
+        },
+    )
+}
+
+/* The "+" of the folder: upload files or a folder from the phone, new folder, new text file. */
+@Composable
+private fun AddButton(vm: AppViewModel, modifier: Modifier, onDialog: (Dialog) -> Unit) {
+    var addMenu by remember { mutableStateOf(false) }
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.upload(it) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.uploadFolder(it) }
+    Box(modifier) {
+        AccentFab(AppIcons.Plus, "Aggiungi", onClick = { addMenu = true })
+        ArancioMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+            MenuItem(AppIcons.Upload, "Carica file dal telefono") { addMenu = false; pickFiles.launch(arrayOf("*/*")) }
+            MenuItem(AppIcons.Folder, "Carica una cartella dal telefono") { addMenu = false; pickFolder.launch(null) }
+            MenuItem(AppIcons.FolderPlus, "Nuova cartella") { addMenu = false; onDialog(Dialog.NewFolder) }
+            MenuItem(AppIcons.Document, "Nuovo file di testo") { addMenu = false; onDialog(Dialog.NewTextFile) }
+        }
+    }
+}
+
+/* The dialog open over the folder; [close] takes it away before its action runs. */
+@Composable
+private fun BrowserDialog(vm: AppViewModel, screen: Screen.Browser, dialog: Dialog, selectedCount: Int, close: () -> Unit) {
+    when (dialog) {
+        Dialog.NewFolder -> NameDialog("Nuova cartella", "", "Crea", close) {
+            close()
             vm.createFolder(it)
         }
-        Dialog.NewTextFile -> NameDialog("Nuovo file di testo", "Nuovo documento.txt", "Crea", { dialog = null }) {
-            dialog = null
+        Dialog.NewTextFile -> NameDialog("Nuovo file di testo", "Nuovo documento.txt", "Crea", close) {
+            close()
             vm.createTextFile(it)
         }
         Dialog.DeleteSelected -> ConfirmDialog(
-            title = if (selected.size == 1) "Eliminare l'elemento selezionato?" else "Eliminare ${selected.size} elementi?",
-            text = if (screen.path.let { FileTrash.isInside(it) }) "Verranno eliminati definitivamente dal NAS, cartelle comprese con tutto il loro contenuto."
+            title = if (selectedCount == 1) "Eliminare l'elemento selezionato?" else "Eliminare $selectedCount elementi?",
+            text = if (FileTrash.isInside(screen.path)) "Verranno eliminati definitivamente dal NAS, cartelle comprese con tutto il loro contenuto."
             else "Andranno nel cestino del NAS, cartelle comprese con tutto il loro contenuto: si possono ripristinare per ${FileTrash.KEEP_DAYS} giorni.",
             confirm = "Elimina",
             danger = true,
-            onDismiss = { dialog = null },
+            onDismiss = close,
             onConfirm = {
-                dialog = null
+                close()
                 vm.deleteSelected()
             },
         )
-        is Dialog.Rename -> NameDialog("Rinomina", d.entry.name, "Rinomina", { dialog = null }) {
-            dialog = null
-            vm.rename(d.entry, it)
+        is Dialog.Rename -> NameDialog("Rinomina", dialog.entry.name, "Rinomina", close) {
+            close()
+            vm.rename(dialog.entry, it)
         }
         is Dialog.Delete -> ConfirmDialog(
-            title = "Eliminare «${d.entry.name}»?",
-            text = when {
-                FileTrash.isInside(d.entry.path) -> "Verrà eliminato definitivamente dal NAS."
-                d.entry.isDirectory -> "La cartella e tutto il suo contenuto andranno nel cestino del NAS: si possono ripristinare per ${FileTrash.KEEP_DAYS} giorni."
-                else -> "Il file andrà nel cestino del NAS: si può ripristinare per ${FileTrash.KEEP_DAYS} giorni."
-            },
+            title = "Eliminare «${dialog.entry.name}»?",
+            text = deleteText(dialog.entry),
             confirm = "Elimina",
             danger = true,
-            onDismiss = { dialog = null },
+            onDismiss = close,
             onConfirm = {
-                dialog = null
-                vm.delete(d.entry)
+                close()
+                vm.delete(dialog.entry)
             },
         )
-        is Dialog.Info -> InfoDialog(d.entry, onDismiss = { dialog = null })
-        null -> Unit
+        is Dialog.Info -> InfoDialog(dialog.entry, onDismiss = close)
     }
 }
+
+/* What deleting one entry does: into the bin, or for good from inside the bin. */
+private fun deleteText(entry: RemoteEntry): String = when {
+    FileTrash.isInside(entry.path) -> "Verrà eliminato definitivamente dal NAS."
+    entry.isDirectory -> "La cartella e tutto il suo contenuto andranno nel cestino del NAS: si possono ripristinare per ${FileTrash.KEEP_DAYS} giorni."
+    else -> "Il file andrà nel cestino del NAS: si può ripristinare per ${FileTrash.KEEP_DAYS} giorni."
+}
+
+/* Letters needed before the search in the subfolders starts. */
+private const val MIN_DEEP_QUERY = 2
 
 /* Key of a row: the shares listed in the folder of another NAS all have the same empty path, so the share is part of it. */
 private fun entryKey(entry: RemoteEntry): String = entry.share + "/" + entry.path
