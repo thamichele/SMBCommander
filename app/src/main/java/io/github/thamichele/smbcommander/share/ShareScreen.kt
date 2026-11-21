@@ -55,7 +55,7 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
         val folder = state.folder
         val what = if (vm.count == 1) "1 file" else "${vm.count} file"
         PageHeader(
-            context = if (folder == null) "Salva sul NAS · $what" else folder.fullPath,
+            context = if (folder == null) "Salva sul NAS · $what" else folder.shown,
             title = folder?.name ?: "Dove salvare?",
             navigation = { ToolButton(AppIcons.Back, "Indietro", { if (!vm.up()) onCancel() }) },
         )
@@ -68,7 +68,7 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
                     Message("Aggiungi prima una cartella in «Le mie cartelle» dell'app.")
                 } else {
                     LazyColumn(Modifier.weight(1f)) {
-                        items(folders, key = { it.fullPath }) { f -> FolderRow(f.name, f.fullPath) { vm.open(f) } }
+                        items(folders, key = { it.fullPath }) { f -> FolderRow(f.name, f.shown) { vm.open(f) } }
                     }
                 }
             }

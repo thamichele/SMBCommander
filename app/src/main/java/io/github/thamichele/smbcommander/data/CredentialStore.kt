@@ -5,11 +5,22 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import io.github.thamichele.smbcommander.core.NasServer
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+/** Another NAS added by the user next to the main one: it shows as one more folder in File. */
+data class OtherNas(
+    /** Letters and digits, never reused while the NAS is in the list; see NasShares. */
+    val id: String,
+    /** The name shown for the folder of this NAS. */
+    val name: String,
+    val server: NasServer,
+)
 
 /**
  * Keeps the NAS connection settings on the device. The password is encrypted with an AES key that never leaves the
@@ -55,6 +66,90 @@ class CredentialStore(context: Context) {
 
     fun clear() {
         prefs.edit().clear().apply()
+        others.edit().clear().apply()
+    }
+
+    // --- the other NAS --------------------------------------------------------------------------------------------
+
+    private val others = context.getSharedPreferences("other_servers", Context.MODE_PRIVATE)
+
+    /**
+     * otherNas() - the other NAS, in the order they were added
+     *
+     * A NAS whose password cannot be decrypted any more (the Keystore key was reset) is left out: it has to be added
+     * again, as the main one would.
+     *
+     * Return: the list, possibly empty.
+     */
+    fun otherNas(): List<OtherNas> {
+        val json = others.getString(KEY_LIST, null) ?: return emptyList()
+        val array = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+        return (0 until array.length()).mapNotNull { i -> readOther(array.getJSONObject(i)) }
+    }
+
+    /** Names of the other NAS by id, without decrypting any password: what the screens need. */
+    fun otherNames(): Map<String, String> {
+        val json = others.getString(KEY_LIST, null) ?: return emptyMap()
+        val array = runCatching { JSONArray(json) }.getOrNull() ?: return emptyMap()
+        return (0 until array.length()).associate { i ->
+            array.getJSONObject(i).let { it.getString(KEY_ID) to it.optString(KEY_NAME) }
+        }
+    }
+
+    /**
+     * saveOther() - adds [nas], or replaces the one with the same id
+     * @param nas the NAS with its password in clear: it is encrypted here
+     *
+     * Return: nothing.
+     */
+    fun saveOther(nas: OtherNas) {
+        val list = otherNas().filterNot { it.id == nas.id } + nas
+        writeOthers(list)
+    }
+
+    /** Remembers the identity of another NAS, learnt at its first connection. */
+    fun saveOtherPairing(id: String, serverId: String) {
+        otherNas().find { it.id == id }?.let { saveOther(it.copy(server = it.server.copy(serverId = serverId))) }
+    }
+
+    fun removeOther(id: String) {
+        writeOthers(otherNas().filterNot { it.id == id })
+    }
+
+    /** A fresh id: one more than the highest ever given, so a removed NAS never hands its id to a new one. */
+    fun newOtherId(): String {
+        val next = others.getInt(KEY_NEXT_ID, FIRST_OTHER_ID)
+        others.edit().putInt(KEY_NEXT_ID, next + 1).apply()
+        return next.toString()
+    }
+
+    private fun readOther(o: JSONObject): OtherNas? {
+        val password = runCatching { decrypt(o.getString(KEY_PASSWORD)) }.getOrNull() ?: return null
+        val server = NasServer(
+            host = o.getString(KEY_HOST),
+            username = o.optString(KEY_USER),
+            password = password,
+            domain = o.optString(KEY_DOMAIN),
+            serverId = o.optString(KEY_SERVER_ID),
+        )
+        return OtherNas(o.getString(KEY_ID), o.optString(KEY_NAME), server)
+    }
+
+    private fun writeOthers(list: List<OtherNas>) {
+        val array = JSONArray()
+        list.forEach { nas ->
+            array.put(
+                JSONObject()
+                    .put(KEY_ID, nas.id)
+                    .put(KEY_NAME, nas.name)
+                    .put(KEY_HOST, nas.server.host)
+                    .put(KEY_USER, nas.server.username)
+                    .put(KEY_DOMAIN, nas.server.domain)
+                    .put(KEY_PASSWORD, encrypt(nas.server.password))
+                    .put(KEY_SERVER_ID, nas.server.serverId)
+            )
+        }
+        others.edit().putString(KEY_LIST, array.toString()).apply()
     }
 
     private fun key(): SecretKey {
@@ -95,5 +190,11 @@ class CredentialStore(context: Context) {
         const val KEY_DOMAIN = "domain"
         const val KEY_PASSWORD = "password"
         const val KEY_SERVER_ID = "server_id"
+        const val KEY_LIST = "list"
+        const val KEY_ID = "id"
+        const val KEY_NAME = "name"
+        const val KEY_NEXT_ID = "next_id"
+        /* The main NAS is number 1 in the user's mind: the others start from 2. */
+        const val FIRST_OTHER_ID = 2
     }
 }

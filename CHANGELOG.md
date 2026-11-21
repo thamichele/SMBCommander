@@ -14,6 +14,19 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   aperti restano in memoria, così riaprirli o tornare all'inizio è immediato. Nessun video viene salvato sul
   telefono
 
+## 1.26.0 — 2026-11-21
+- Nuovo: più NAS, ognuno con il suo utente e la sua password. Ogni NAS in più compare in File come una cartella
+  con il nome che gli dai; dentro ci sono le sue cartelle condivise e il resto funziona come sempre
+- Nuovo: copia e sposta funzionano anche da un NAS all'altro, con la stessa verifica SHA-256 di ogni trasferimento;
+  spostando, l'originale viene eliminato solo dopo che la copia è risultata identica
+- Nuovo: Impostazioni › NAS › Altri NAS per aggiungere, modificare o togliere un NAS; le password restano cifrate
+  sul telefono come quella del NAS principale, e ogni NAS viene riconosciuto prima di ricevere la password
+- Nuovo: «Aggiungi una cartella» permette di scegliere su quale NAS, anche per le cartelle condivise nascoste, e
+  ha il pulsante «Collega un altro NAS»
+- Nuovo: Impostazioni › Opzioni › «Mostra NAS e utente sotto le cartelle» scrive in piccolo, sotto
+  ogni cartella di File, l'indirizzo del NAS e l'utente con cui l'app vi accede (spenta di default)
+- Backup foto e Galleria restano sul NAS principale
+
 ## 1.25.0 — 2026-11-21
 - Nuovo: le Impostazioni sono divise in menu separati, uno per argomento: «Backup foto» (backup automatico, cartella
   sul NAS, libera spazio, album da salvare), «Opzioni» (interruttori del backup e della Galleria, funzioni

@@ -71,10 +71,11 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         val folder = _state.value.folder ?: return false
         if (_state.value.progress != null) return true
         val saved = folders.firstOrNull { it.share == folder.share && (folder.path == it.path) }
-        if (saved != null || folder.path.isEmpty()) {
+        val parent = folder.parent()?.takeIf { up -> folders.any { it.contains(up.share, up.path) } }
+        if (saved != null || parent == null) {
             _state.value = ShareState()
         } else {
-            open(SavedFolder(folder.share, RemotePath.parent(folder.path)))
+            open(parent)
         }
         return true
     }
