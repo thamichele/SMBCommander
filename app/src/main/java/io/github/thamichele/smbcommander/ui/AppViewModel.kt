@@ -875,41 +875,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private val _deletion = MutableStateFlow<Deletion?>(null)
+    private val deletions = DeletionProgress()
+
     /** A deletion of several files under way, or just finished: shown file by file in a window of its own. */
-    val deletion: StateFlow<Deletion?> = _deletion.asStateFlow()
-
-    @Volatile
-    private var stopDeletion = false
-
-    /** Stops the deletion after the file being deleted now; the others stay where they are. */
-    fun stopDeletion() {
-        stopDeletion = true
-        _deletion.update { it?.copy(stopping = true) }
-    }
-
-    fun closeDeletion() {
-        if (_deletion.value?.finished == true) _deletion.value = null
-    }
+    val deletion: StateFlow<Deletion?> = deletions.state
 
     /**
+     * stopDeletion() - stops the deletion after the file being deleted now; the others stay where they are
+     *
+     * Return: nothing.
+     */
+    fun stopDeletion() = deletions.stop()
+
+    /**
+     * closeDeletion() - closes the window of the deletion once it has finished
+     *
+     * Return: nothing.
+     */
+    fun closeDeletion() = deletions.close()
+
+    /** What the last deletion of the browser moved to the bin, for its "Annulla". */
+    private var lastTrashed: List<FileTrash.Item> = emptyList()
+
+    /*
      * Deletes [entries] from the NAS one by one; with more than one, each step is shown by [deletion]. One that is no
      * longer there (deleted or moved from another device in the meantime) is skipped, and one that fails does not stop
      * the others. Those of the backup folder are written to its list of deleted photos first, and taken off it again
      * if they were skipped or not deleted: a photo moved elsewhere must not stay remembered as deleted.
      */
-    /** What the last deletion of the browser moved to the bin, for its "Annulla". */
-    private var lastTrashed: List<FileTrash.Item> = emptyList()
-
     private suspend fun deleteFromNas(entries: List<RemoteEntry>, toTrash: Boolean = false): Deletion {
         lastTrashed = emptyList()
         val trashed = ArrayList<FileTrash.Item>()
         val many = entries.size > 1
-        stopDeletion = false
+        deletions.start()
         var state = Deletion(total = entries.size, preparing = 0)
         fun publish(next: Deletion) {
             state = next
-            if (many) _deletion.value = next
+            if (many) deletions.show(next)
         }
         publish(state)
         val remembered = try {
@@ -921,18 +923,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         publish(state.copy(preparing = null))
         try {
             for (entry in entries) {
-                if (stopDeletion) break
+                if (deletions.isStopRequested) break
                 publish(state.copy(current = entry))
-                val outcome = try {
+                val outcome = DeletionProgress.step(entry) {
                     val done = repo.io { fs ->
                         fs.unlessGone(entry.share, entry.path) {
                             if (toTrash) trashed.add(FileTrash.discard(fs, entry)) else fs.delete(entry.share, entry.path)
                         }
                     }
-                    if (done != null) DeletionStep(entry, DeletionStep.Outcome.Deleted) else DeletionStep(entry, DeletionStep.Outcome.Skipped)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    DeletionStep(entry, DeletionStep.Outcome.Failed, e.readable())
+                    done != null
                 }
                 publish(state.copy(steps = state.steps + outcome))
             }

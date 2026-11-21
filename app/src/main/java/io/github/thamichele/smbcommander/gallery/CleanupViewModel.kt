@@ -25,6 +25,7 @@ import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.Deletion
+import io.github.thamichele.smbcommander.ui.DeletionProgress
 import io.github.thamichele.smbcommander.ui.DeletionStep
 import io.github.thamichele.smbcommander.ui.readable
 import kotlinx.coroutines.CancellationException
@@ -429,31 +430,24 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
      */
     fun clearError() = _state.update { it.copy(error = null) }
 
-    private val _deletion = MutableStateFlow<Deletion?>(null)
-    /** The bin being emptied, file by file, or just emptied: shown in a window with the outcome of each file. */
-    val deletion: StateFlow<Deletion?> = _deletion.asStateFlow()
+    private val deletions = DeletionProgress()
 
-    @Volatile
-    private var stopDeletion = false
+    /** The bin being emptied, file by file, or just emptied: shown in a window with the outcome of each file. */
+    val deletion: StateFlow<Deletion?> = deletions.state
 
     /**
      * stopDeletion() - stops emptying the bin after the file being deleted now
      *
      * Return: nothing.
      */
-    fun stopDeletion() {
-        stopDeletion = true
-        _deletion.update { it?.copy(stopping = true) }
-    }
+    fun stopDeletion() = deletions.stop()
 
     /**
      * closeDeletion() - closes the window of the deletion once it has finished
      *
      * Return: nothing.
      */
-    fun closeDeletion() {
-        if (_deletion.value?.finished == true) _deletion.value = null
-    }
+    fun closeDeletion() = deletions.close()
 
     /**
      * emptyTrash() - deletes the bin for good, one file at a time, each step shown by [deletion]
@@ -464,29 +458,23 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
      */
     fun emptyTrash() {
         val folder = _state.value.folder ?: return
-        stopDeletion = false
-        _deletion.value = Deletion(total = 0, preparing = 0, preparingNote = "Leggo il contenuto del cestino")
+        deletions.start()
+        var d = Deletion(total = 0, preparing = 0, preparingNote = "Leggo il contenuto del cestino")
+        deletions.show(d)
         viewModelScope.launch(Dispatchers.IO) {
             nas.withLock {
-                var d = _deletion.value!!
                 fun publish(next: Deletion) {
                     d = next
-                    _deletion.value = next
+                    deletions.show(next)
                 }
                 try {
                     val fs = app.repository.fs()
                     val files = CleanupTrash.contents(fs, folder.share, folder.path)
                     publish(Deletion(total = files.size))
                     for (file in files) {
-                        if (stopDeletion) break
+                        if (deletions.isStopRequested) break
                         publish(d.copy(current = file))
-                        val step = try {
-                            val outcome = if (CleanupTrash.delete(fs, folder.share, file.path)) DeletionStep.Outcome.Deleted else DeletionStep.Outcome.Skipped
-                            DeletionStep(file, outcome)
-                        } catch (e: Exception) {
-                            if (e is CancellationException) throw e
-                            DeletionStep(file, DeletionStep.Outcome.Failed, e.readable())
-                        }
+                        val step = DeletionProgress.step(file) { CleanupTrash.delete(fs, folder.share, file.path) }
                         publish(d.copy(steps = d.steps + step))
                     }
                     CleanupTrash.removeFolders(fs, folder.share, folder.path)
