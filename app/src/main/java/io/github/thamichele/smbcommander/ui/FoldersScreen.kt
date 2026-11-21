@@ -69,7 +69,7 @@ fun FoldersScreen(vm: AppViewModel) {
             PageHeader(context = host, title = "Le mie cartelle") {
                 if (extras.wakeOnLan) ToolButton(AppIcons.Power, "Accendi il NAS", { vm.wakeNas() })
                 ToolButton(AppIcons.Delete, "Cestino", vm::openTrash)
-                ToolButton(AppIcons.Server, "Impostazioni", vm::openSettings)
+                ToolButton(AppIcons.Settings, "Impostazioni", vm::openSettings)
             }
             if (folders.isEmpty()) {
                 EmptyState(

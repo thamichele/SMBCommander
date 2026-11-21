@@ -4,7 +4,7 @@
  * Only draws what GalleryViewModel knows and passes the user's choices back to it: no NAS access here. The photos
  * of an album are shown by GalleryScreen, with the same grid, mosaic and list of the whole gallery.
  *
- * Version: 1.20.0
+ * Version: 1.25.0
  */
 package io.github.thamichele.smbcommander.gallery
 
@@ -81,6 +81,9 @@ private val PICKER_MAX_HEIGHT = 360.dp
 private const val NEW_ALBUM_TITLE = "Nuovo album"
 private const val NEW_ALBUM_CONFIRM = "Crea"
 
+/** The tabs under the header of the gallery, in the order they are drawn. */
+internal enum class GalleryTab { Photos, Videos, Albums }
+
 /**
  * albumTitle() - the name an album is shown with
  * @param state the gallery, for the backup folder the album lies in
@@ -95,16 +98,16 @@ internal fun albumTitle(state: GalleryState, path: String): String {
 }
 
 /**
- * GalleryTabs() - the two faces of the gallery: all the photos by date, or the albums
- * @param albumsOpen which of the two is on screen
+ * GalleryTabs() - the three faces of the gallery: all the photos by date, only the videos, or the albums
+ * @param tab which of the three is on screen
  * @param vm where the choice goes
  * @param actions the buttons of the page, on the right of the tabs
  *
- * Return: nothing; draws a row of two pills under the page header.
+ * Return: nothing; draws a row of three pills under the page header.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun GalleryTabs(albumsOpen: Boolean, vm: GalleryViewModel, actions: @Composable () -> Unit = {}) {
+internal fun GalleryTabs(tab: GalleryTab, vm: GalleryViewModel, actions: @Composable () -> Unit = {}) {
     // the buttons share the line of the tabs; on a screen too narrow for both they wrap under them, on the right
     FlowRow(
         Modifier.fillMaxWidth().padding(start = PAGE_MARGIN, end = 4.dp, bottom = 4.dp),
@@ -112,8 +115,9 @@ internal fun GalleryTabs(albumsOpen: Boolean, vm: GalleryViewModel, actions: @Co
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Foto", selected = !albumsOpen, onClick = { vm.leaveAlbums() })
-            Pill("Album", selected = albumsOpen, onClick = vm::openAlbums)
+            Pill("Foto", selected = tab == GalleryTab.Photos, onClick = vm::openPhotos)
+            Pill("Video", selected = tab == GalleryTab.Videos, onClick = vm::openVideos)
+            Pill("Album", selected = tab == GalleryTab.Albums, onClick = vm::openAlbums)
         }
         Row(verticalAlignment = Alignment.CenterVertically) { actions() }
     }
@@ -134,7 +138,7 @@ internal fun AlbumsPage(state: GalleryState, vm: GalleryViewModel) {
             ToolButton(AppIcons.FolderPlus, NEW_ALBUM_TITLE, { isNaming = true })
             ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
         }
-        GalleryTabs(albumsOpen = true, vm)
+        GalleryTabs(GalleryTab.Albums, vm)
         if (state.albums.isEmpty()) {
             EmptyState(
                 icon = AppIcons.Folder,

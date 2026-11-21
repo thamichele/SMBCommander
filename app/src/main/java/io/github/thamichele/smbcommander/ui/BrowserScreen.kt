@@ -192,7 +192,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                                 dialog = Dialog.Info(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
                             }
                             MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
-                            MenuItem(AppIcons.Server, "Impostazioni") { moreMenu = false; vm.openSettings() }
+                            MenuItem(AppIcons.Settings, "Impostazioni") { moreMenu = false; vm.openSettings() }
                         }
                     }
                 }

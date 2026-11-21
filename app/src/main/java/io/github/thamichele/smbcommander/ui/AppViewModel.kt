@@ -313,8 +313,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = Screen.Setup
     }
 
+    /** True while someone asked for the backup page itself (notification, "Vai al backup foto"), not the list. */
+    val backupWanted: StateFlow<Boolean> get() = _backupWanted
+    private val _backupWanted = MutableStateFlow(false)
+
+    /**
+     * openBackup() - opens the settings straight on the "Backup foto" page
+     *
+     * Return: nothing.
+     */
     fun openBackup() {
+        _backupWanted.value = true
         _screen.value = Screen.Backup
+    }
+
+    /**
+     * backupShown() - the settings have opened the backup page asked with [openBackup]
+     *
+     * Return: nothing.
+     */
+    fun backupShown() {
+        _backupWanted.value = false
     }
 
     fun openGallery() {
@@ -329,8 +348,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = Screen.Shares
     }
 
+    /**
+     * openSettings() - opens the settings on the list of their menus
+     *
+     * Return: nothing.
+     */
     fun openSettings() {
-        _screen.value = Screen.Setup
+        // the settings are the third section of the bottom bar; Screen.Setup is only the first connection
+        _backupWanted.value = false
+        _screen.value = Screen.Backup
     }
 
     // --- the user's folders ------------------------------------------------------------------------------------------

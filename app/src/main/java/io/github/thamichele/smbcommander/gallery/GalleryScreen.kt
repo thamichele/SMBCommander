@@ -180,12 +180,18 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                     actions = actions,
                 )
             } else {
-                // the title has a line of its own, so it is never cut; while scrolling it goes and the line of
-                // the tabs with the buttons stays
-                CollapsibleBox(collapse) {
-                    PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria")
+                // three tabs leave no room for the buttons on their line: the buttons stay next to the title,
+                // and while scrolling title and tabs go and the buttons alone stay
+                PageHeader(
+                    context = state.folder?.fullPath ?: "Foto salvate sul NAS",
+                    title = state.kind?.takeIf { it != PhotoKind.Video }?.label ?: "Galleria",
+                    collapse = collapse,
+                    actions = actions,
+                )
+                if (state.folder != null) {
+                    val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
+                    CollapsibleBox(collapse) { GalleryTabs(tab, vm) }
                 }
-                if (state.folder != null) GalleryTabs(albumsOpen = false, vm, actions)
             }
         } else {
             // only the number as title: four big buttons leave little room next to it
@@ -256,7 +262,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             )
             state.shown.isEmpty() -> EmptyState(
                 icon = state.kind?.icon ?: AppIcons.Categories,
-                title = "Nessuna foto in «${state.kind?.label}»",
+                title = if (state.kind == PhotoKind.Video) "Nessun video" else "Nessuna foto in «${state.kind?.label}»",
                 text = if (state.sorting > 0) "Le altre arrivano man mano che le divido." else null,
             ) {
                 SecondaryButton(onClick = { vm.setKind(null) }) { Text("Mostra tutte le foto") }

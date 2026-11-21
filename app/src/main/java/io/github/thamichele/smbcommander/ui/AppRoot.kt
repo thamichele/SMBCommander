@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.thamichele.smbcommander.backup.BackupScreen
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.gallery.CleanupScreen
 import io.github.thamichele.smbcommander.gallery.GalleryScreen
@@ -135,7 +134,7 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 Screen.Cleanup -> CleanupScreen(vm)
                 is Screen.Trash -> TrashScreen(vm)
                 is Screen.Archive -> ArchiveScreen(vm, s)
-                Screen.Backup -> BackupScreen()
+                Screen.Backup -> SettingsScreen(vm)
                 is Screen.Browser -> BrowserScreen(vm, s)
                 is Screen.Viewer -> ViewerScreen(vm, s)
             }
@@ -255,7 +254,7 @@ private fun BottomNav(screen: Screen, vm: AppViewModel) {
     val sections = listOf(
         NavSection(AppIcons.Folder, "File", Screen.Shares, vm::openFiles),
         NavSection(AppIcons.Image, "Galleria", Screen.Gallery, vm::openGallery),
-        NavSection(AppIcons.Upload, "Backup foto", Screen.Backup, vm::openBackup),
+        NavSection(AppIcons.Settings, "Impostazioni", Screen.Backup, vm::openSettings),
     )
     val active = sections.indexOfFirst { it.screen == screen }.coerceAtLeast(0)
     Column(Modifier.background(c.nav).navigationBarsPadding()) {

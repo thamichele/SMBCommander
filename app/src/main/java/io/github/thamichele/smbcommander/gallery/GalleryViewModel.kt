@@ -120,7 +120,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val kinds = ConcurrentHashMap<RemoteEntry, PhotoKind>()
 
     /** Sorting into categories starts the first time a category is chosen, and then follows the gallery. */
-    private val sortWanted = MutableStateFlow(app.galleryPrefs.kind != null)
+    private val sortWanted = MutableStateFlow(needsSorting(app.galleryPrefs.kind))
 
     init {
         viewModelScope.launch {
@@ -181,10 +181,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     /** Shows only the photos of [kind], or all of them with null. */
     fun setKind(kind: PhotoKind?) {
         app.galleryPrefs.kind = kind
-        if (kind != null) sortWanted.value = true
+        if (needsSorting(kind)) sortWanted.value = true
         _state.update { it.copy(kind = kind) }
         publish()
     }
+
+    /* Private: videos are known by their name alone; only the other categories need the photos looked at. */
+    private fun needsSorting(kind: PhotoKind?): Boolean = kind != null && kind != PhotoKind.Video
 
     private suspend fun sortPhotos(photos: List<RemoteEntry>) {
         val todo = photos.filter { kindOf(it) == null }
@@ -334,7 +337,41 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      *
      * Return: nothing.
      */
-    fun openAlbums() = _state.update { it.copy(albumsOpen = true) }
+    fun openAlbums() {
+        leaveVideos()
+        _state.update { it.copy(albumsOpen = true) }
+    }
+
+    /**
+     * openPhotos() - the "Foto" tab: the whole gallery by date, out of the albums and of the videos
+     *
+     * Return: nothing.
+     */
+    fun openPhotos() {
+        leaveVideos()
+        _state.update { it.copy(album = null, albumsOpen = false) }
+        publish()
+    }
+
+    /**
+     * openVideos() - the "Video" tab: only the videos of the whole gallery, by date
+     *
+     * It is the category [PhotoKind.Video] under another name, so the tab and the button of the categories
+     * always agree.
+     *
+     * Return: nothing.
+     */
+    fun openVideos() {
+        _state.update { it.copy(album = null, albumsOpen = false) }
+        setKind(PhotoKind.Video)
+    }
+
+    /* Private: the three tabs exclude each other: leaving "Video" for another one drops its filter. */
+    private fun leaveVideos() {
+        if (_state.value.kind != PhotoKind.Video) return
+        app.galleryPrefs.kind = null
+        _state.update { it.copy(kind = null) }
+    }
 
     /**
      * openAlbum() - shows only the photos of one album
