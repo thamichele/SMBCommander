@@ -35,6 +35,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -323,6 +327,12 @@ private fun OptionRow(title: String, detail: String, checked: Boolean, onChange:
     }
 }
 
+/** The choice of the main colour: at most three per row, fewer when the names would not fit. */
+private const val ACCENT_COLUMNS = 3
+private val ACCENT_GAP = 8.dp
+private val ACCENT_PADDING = 10.dp
+private val ACCENT_SWATCH = 22.dp
+
 /** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
 @Composable
 internal fun AppearanceSection() {
@@ -335,33 +345,46 @@ internal fun AppearanceSection() {
         style = MaterialTheme.typography.bodySmall,
         color = Arancio.colors.textSecondary,
     )
-    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AccentTheme.entries.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { theme ->
-                    val selected = theme == current
-                    // as the radio buttons of the "Modalità colori" board: tinted ground and ring of the colour when chosen
-                    val shape = ArancioShape.control
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .clip(shape)
-                            .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
-                            .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)
-                            .selectable(selected = selected, role = Role.RadioButton) {
-                                AccentStore.set(context, theme)
-                                BackupWidget.updateAll(context)
-                            }
-                            .padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(theme.main))
-                        Text(theme.label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium), color = Arancio.colors.text)
+    val labelStyle = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium)
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // as many columns as hold the longest name on one line: a name is never broken in two
+        val widest = AccentTheme.entries.maxOf { measurer.measure(it.label, labelStyle, softWrap = false).size.width }
+        val cell = with(LocalDensity.current) { widest.toDp() } + ACCENT_SWATCH + ACCENT_PADDING * 3
+        val columns = (ACCENT_COLUMNS downTo 1).firstOrNull { cell * it + ACCENT_GAP * (it - 1) <= maxWidth } ?: 1
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(ACCENT_GAP)) {
+            AccentTheme.entries.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP)) {
+                    row.forEach { theme ->
+                        AccentChoice(theme, theme == current, labelStyle, Modifier.weight(1f)) {
+                            AccentStore.set(context, theme)
+                            BackupWidget.updateAll(context)
+                        }
                     }
+                    // an incomplete last row keeps the width of the others
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
+    }
+}
+
+/* Private: one colour to choose, as the radio buttons of the "Modalità colori" board: tinted ground and ring when chosen. */
+@Composable
+private fun AccentChoice(theme: AccentTheme, selected: Boolean, labelStyle: TextStyle, modifier: Modifier, onPick: () -> Unit) {
+    val shape = ArancioShape.control
+    Row(
+        modifier
+            .heightIn(min = 48.dp)
+            .clip(shape)
+            .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
+            .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onPick)
+            .padding(horizontal = ACCENT_PADDING),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ACCENT_PADDING),
+    ) {
+        Box(Modifier.size(ACCENT_SWATCH).clip(RoundedCornerShape(4.dp)).background(theme.main))
+        Text(theme.label, style = labelStyle, color = Arancio.colors.text, softWrap = false, maxLines = 1)
     }
 }

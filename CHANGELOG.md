@@ -14,6 +14,8 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   e schede spariscono e restano solo i pulsanti
 - Modificato: i pulsanti con un'icona si adattano da soli allo spazio: da 56 dp sugli schermi larghi scendono fino
   a 40 dp su schermi stretti, con lo zoom dello schermo alto o con il testo grande, e l'icona resta metà del pulsante
+- Corretto: in «Aspetto» i nomi dei colori non vengono più spezzati a metà parola: se tre caselle per riga non
+  bastano diventano due, o una
 
 ## 1.24.0 — 2026-11-21
 - Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
