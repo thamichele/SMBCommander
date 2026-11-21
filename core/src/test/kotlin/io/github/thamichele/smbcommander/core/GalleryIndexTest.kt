@@ -58,4 +58,18 @@ class GalleryIndexTest {
         // "1234" is not a year, "2048x1536" not a date
         assertEquals(2015 to 6, GalleryDates.of(photo("1234/wallpaper_2048x1536.jpg", modified = cal.timeInMillis)).let { it.year to it.month })
     }
+
+    @Test
+    fun versionGrowsOnlyWhenTheContentChanges() {
+        val photo = RemoteEntry("Foto", "2026/10/a.jpg", false, 10, 1)
+        val index = GalleryIndex()
+        val start = index.version
+        assertTrue(index.replace("2026/10", listOf(photo)))
+        val afterAdd = index.version
+        assertTrue(afterAdd > start)
+        assertFalse(index.replace("2026/10", listOf(photo)))
+        assertEquals(afterAdd, index.version)
+        index.move(photo, "Vacanze/a.jpg")
+        assertTrue(index.version > afterAdd)
+    }
 }

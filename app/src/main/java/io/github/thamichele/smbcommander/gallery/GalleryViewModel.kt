@@ -93,7 +93,7 @@ data class GalleryState(
     val albumsOpen: Boolean = false,
 ) {
     /** All photos in display order, newest first. */
-    val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
+    val photos: List<RemoteEntry> by lazy { months.flatMap { it.photos } }
 
     /** The photos on screen in display order, as the viewer swipes through them. */
     val shownPhotos: List<RemoteEntry> by lazy { shown.flatMap { it.photos } }
@@ -355,14 +355,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun publish() {
-        dirty = false
-        val months = index.all()
+    /* The months worked out from one version of the index: a change of tab, album or category only filters them. */
+    private class Grouped(val index: GalleryIndex, val version: Long, val months: List<MonthGroup>)
+
+    @Volatile
+    private var grouped: Grouped? = null
+
+    /* The photos by month, newest first; sorted again only when the index changed since the last time. */
+    private fun months(): List<MonthGroup> {
+        val idx = index
+        val version = idx.version
+        grouped?.takeIf { it.index === idx && it.version == version }?.let { return it.months }
+        val months = idx.all()
             .groupBy { taken(it).let { t -> t.year to t.month } }
             .map { (ym, list) ->
                 MonthGroup(ym.first, ym.second, list.sortedWith(compareByDescending<RemoteEntry> { taken(it).sortKey }.thenByDescending { it.name }))
             }
             .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
+        grouped = Grouped(idx, version, months)
+        return months
+    }
+
+    private fun publish() {
+        dirty = false
+        val months = months()
         val counts = HashMap<PhotoKind, Int>()
         for (m in months) for (p in m.photos) kindOf(p)?.let { counts[it] = (counts[it] ?: 0) + 1 }
         val folders = index.folders()

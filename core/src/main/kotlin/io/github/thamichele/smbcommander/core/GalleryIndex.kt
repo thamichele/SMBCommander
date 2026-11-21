@@ -23,6 +23,14 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
     /** Folders with nothing inside: the albums still to be filled. */
     private val emptyDirs = HashSet<String>()
 
+    private var changes = 0L
+
+    /**
+     * Grows at every change of the content, so a caller can keep what it worked out from it (the months, the albums)
+     * until the next change.
+     */
+    val version: Long @Synchronized get() = changes
+
     init {
         val (dirs, media) = initial.partition { it.isDirectory }
         media.groupBy { RemotePath.parent(it.path) }.forEach { (dir, list) -> byDir[dir] = list }
@@ -41,10 +49,16 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
     fun replace(dir: String, media: List<RemoteEntry>, isEmptyAlbum: Boolean = false): Boolean {
         val emptyChanged = if (isEmptyAlbum && media.isEmpty()) emptyDirs.add(dir) else emptyDirs.remove(dir)
         val before = byDir[dir].orEmpty()
-        if (media.isEmpty()) return (byDir.remove(dir) != null) || emptyChanged
-        if (before.size == media.size && before.toSet() == media.toSet()) return emptyChanged
-        byDir[dir] = media
-        return true
+        val changed = when {
+            media.isEmpty() -> (byDir.remove(dir) != null) || emptyChanged
+            before.size == media.size && before.toSet() == media.toSet() -> emptyChanged
+            else -> {
+                byDir[dir] = media
+                true
+            }
+        }
+        if (changed) changes++
+        return changed
     }
 
     /**
@@ -59,7 +73,9 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
         val isGone = { dir: String -> dir !in seen && failed.none { dir == it || dir.startsWith("$it/") } }
         val gone = byDir.keys.filter(isGone)
         gone.forEach { byDir.remove(it) }
-        return emptyDirs.removeAll(isGone) || gone.isNotEmpty()
+        val changed = emptyDirs.removeAll(isGone) || gone.isNotEmpty()
+        if (changed) changes++
+        return changed
     }
 
     /**
@@ -70,6 +86,7 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
      */
     @Synchronized
     fun remove(predicate: (RemoteEntry) -> Boolean) {
+        changes++
         for (dir in byDir.keys.toList()) {
             val left = byDir.getValue(dir).filterNot(predicate)
             if (left.isEmpty()) byDir.remove(dir) else byDir[dir] = left
@@ -84,7 +101,7 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
      */
     @Synchronized
     fun addEmpty(dir: String) {
-        if (dir !in byDir) emptyDirs += dir
+        if (dir !in byDir && emptyDirs.add(dir)) changes++
     }
 
     /**
@@ -99,6 +116,7 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
      */
     @Synchronized
     fun move(entry: RemoteEntry, to: String) {
+        changes++
         val from = RemotePath.parent(entry.path)
         val left = byDir[from]?.filterNot { it.path == entry.path }
         if (left != null && left.isEmpty()) {

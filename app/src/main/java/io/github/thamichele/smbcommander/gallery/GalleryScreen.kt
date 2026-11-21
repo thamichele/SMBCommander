@@ -336,8 +336,8 @@ private fun PhotoGrid(
     onLongPress: (RemoteEntry) -> Unit,
 ) {
     val c = Arancio.colors
-    // index of each photo in the flat list, so a tap opens the viewer on the right one
-    val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+    // index of each photo in the flat list, so a tap opens the viewer on the right one; worked out once per change
+    val offsets = remember(months) { months.runningFold(0) { acc, m -> acc + m.photos.size } }
     val state = rememberLazyGridState()
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
@@ -550,7 +550,7 @@ private fun PhotoList(
     onSwipe: (RemoteEntry) -> Boolean,
 ) {
     val c = Arancio.colors
-    val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+    val offsets = remember(months) { months.runningFold(0) { acc, m -> acc + m.photos.size } }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = state, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
