@@ -4,6 +4,8 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
 ## 1.28.0 — 2026-11-21
+- Corretto: le icone di Copia, Rinomina, Elimina, Annulla, Salta, Persone, Data, Dimensione, Colori e Accendi non
+  erano al centro del proprio pulsante (spostate di mezzo punto o uno): ora ogni disegno è centrato
 - Modificato: intestazione molto più bassa e uguale in tutte le schermate, con qualsiasi zoom. Una riga sottile con
   il percorso in grigio e il nome della pagina, e sotto una riga sola di pulsanti: a sinistra Indietro e quelli che
   scelgono cosa vedere, a destra le azioni. Se non ci stanno si stringono tutti allo stesso modo, senza andare a
