@@ -3,7 +3,7 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
-## 1.28.3 — 2026-11-21
+## 1.28.5 — 2026-11-21
 - Sicurezza: con lo sblocco con impronta attivo, anche «Salva sul NAS» (Condividi da un'altra app) e la scelta della
   cartella del widget chiedono lo sblocco, se l'app non è stata sbloccata da poco; e l'elenco delle app recenti non
   mostra più l'anteprima di foto e cartelle
@@ -15,6 +15,8 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   commons-lang3) a versioni senza difetti noti
 - Sicurezza: «Scollega NAS» cancella anche le copie lasciate dalle altre app che salvavano sul NAS
 - Sicurezza: nella compilazione su GitHub la chiave di firma arriva solo ai passaggi che la usano
+
+## 1.28.3 — 2026-11-21
 - Corretto: tornando indietro verso la cartella di un altro NAS (quella che elenca le sue cartelle condivise) l'app
   si chiudeva di colpo. Ora l'elenco si apre, e lì non si possono più selezionare le cartelle condivise, che non si
   possono copiare né eliminare. Lo stesso valeva per «Salva sul NAS» scegliendo la cartella di un altro NAS
