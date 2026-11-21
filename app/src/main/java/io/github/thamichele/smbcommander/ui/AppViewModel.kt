@@ -118,7 +118,12 @@ data class Deletion(
     val skipped: List<RemoteEntry> get() = steps.filter { it.outcome == DeletionStep.Outcome.Skipped }.map { it.entry }
     val failed: List<DeletionStep> get() = steps.filter { it.outcome == DeletionStep.Outcome.Failed }
 
-    /** For a single file: [done] if it was deleted, otherwise why not. */
+    /**
+     * message() - the outcome of a deletion of a single file, for a short message
+     * @param done the text when the file was deleted
+     *
+     * Return: [done], or why the file was skipped or not deleted; without steps the error, or [done].
+     */
     fun message(done: String): String = steps.firstOrNull()?.let {
         when (it.outcome) {
             DeletionStep.Outcome.Deleted -> done
@@ -272,16 +277,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * savedServer() - the main NAS as saved on this phone
+     *
+     * Context: decrypts the password: not for lists or anything redrawn often.
+     * Return: the saved NAS, or null before the first connection.
+     */
     fun savedServer(): NasServer? = repo.server()
 
-    /** The user of the main NAS, for the lists: cheap, where [savedServer] decrypts the password. */
+    /**
+     * savedUser() - the user of the main NAS, for the lists
+     *
+     * Cheap, where [savedServer] decrypts the password.
+     *
+     * Return: the user name, empty when none is saved.
+     */
     fun savedUser(): String = repo.user()
 
+    /**
+     * savedHost() - the address of the main NAS, for the lists
+     *
+     * Return: the address, empty when none is saved.
+     */
     fun savedHost(): String = repo.host().orEmpty()
 
     // --- connection -------------------------------------------------------------------------------------------------
 
-    /** An empty password keeps the saved one, as long as address and user did not change. */
+    /**
+     * connect() - connects to a NAS and saves it once it answers
+     * @param server address, user, password and domain typed by the user
+     *
+     * An empty password keeps the saved one, as long as address and user did not change.
+     *
+     * Context: launches a coroutine; the outcome arrives as a message and a new screen.
+     * Return: the job of the connection.
+     */
     fun connect(server: NasServer) = viewModelScope.launch {
         _connecting.value = true
         try {
@@ -300,6 +330,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * disconnect() - forgets the NAS and everything of it on this phone
+     *
+     * The song playing, the transfers and the clipboard stop; folders, backup settings, edited copies, thumbnails and
+     * previews are deleted. Nothing changes on the NAS.
+     *
+     * Return: nothing.
+     */
     fun disconnect() {
         // nothing keeps reading or writing the NAS just forgotten: the song playing and the transfers stop
         app.music.stop()
@@ -353,14 +391,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _backupWanted.value = false
     }
 
+    /**
+     * openGallery() - opens the Gallery section
+     *
+     * Return: nothing.
+     */
     fun openGallery() {
         _screen.value = Screen.Gallery
     }
 
+    /**
+     * openCleanup() - opens the quick cleanup of the gallery
+     *
+     * Return: nothing.
+     */
     fun openCleanup() {
         _screen.value = Screen.Cleanup
     }
 
+    /**
+     * openFiles() - opens the File section, on the list of the user's folders
+     *
+     * Return: nothing.
+     */
     fun openFiles() {
         _screen.value = Screen.Shares
     }
@@ -378,7 +431,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- the user's folders ------------------------------------------------------------------------------------------
 
-    /** [nasId] null: the shares of the main NAS; otherwise those of that other NAS, by their own names. */
+    /**
+     * loadSuggestions() - lists the shares the user can add as folders
+     * @param nasId null for the shares of the main NAS, otherwise the other NAS whose shares are listed by their own names
+     *
+     * Context: launches a coroutine; the list arrives in [suggestions].
+     * Return: the job of the listing.
+     */
     fun loadSuggestions(nasId: String? = null) = viewModelScope.launch {
         _suggestions.value = emptyList()
         _suggestions.value = runCatching {
@@ -390,8 +449,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Adds a folder typed by the user ("Multimedia/Foto", "Backup$") after checking it really opens. [nasId] is the
-     * other NAS it is on, null for the main one.
+     * addFolder() - adds a folder typed by the user after checking it really opens
+     * @param input what the user typed ("Multimedia/Foto", "Backup$")
+     * @param nasId the other NAS it is on, null for the main one
+     * @param onAdded called once the folder is saved
+     *
+     * Context: the check runs in a coroutine; failures arrive as a message.
+     * Return: nothing.
      */
     fun addFolder(input: String, nasId: String? = null, onAdded: () -> Unit) {
         val typed = SavedFolder.parse(input) ?: return message("Scrivi il nome di una cartella condivisa")
@@ -415,6 +479,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * removeFolder() - takes a folder off the list of the user's folders
+     * @param folder the folder
+     *
+     * Nothing changes on the NAS.
+     *
+     * Return: nothing.
+     */
     fun removeFolder(folder: SavedFolder) {
         _folders.value = app.folders.remove(folder)
         message("«${folder.name}» tolta dall'elenco (sul NAS non cambia nulla)")
@@ -460,7 +532,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Forgets another NAS and all its folders on this phone; nothing changes on the NAS itself. */
+    /**
+     * removeOtherNas() - forgets another NAS and all its folders on this phone
+     * @param nas the other NAS
+     *
+     * Nothing changes on the NAS itself.
+     *
+     * Return: nothing.
+     */
     fun removeOtherNas(nas: OtherNas) {
         repo.removeOther(nas.id)
         _otherNas.value = repo.otherNas()
@@ -472,7 +551,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message("«${nas.name}» tolto da questo telefono (sul NAS non cambia nulla)")
     }
 
-    /** Adds the folder being browsed to the start screen. */
+    /**
+     * pinCurrent() - adds the folder being browsed to the user's folders
+     *
+     * Return: nothing.
+     */
     fun pinCurrent() {
         val s = _screen.value as? Screen.Browser ?: return
         val folder = SavedFolder(s.share, s.path)
@@ -480,11 +563,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message("«${folder.name}» aggiunta alle tue cartelle")
     }
 
+    /**
+     * openSaved() - opens one of the user's folders
+     * @param folder the folder
+     *
+     * Return: nothing.
+     */
     fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
 
     /**
-     * A folder opened from a widget. The intent can come from any app, so only one of the user's folders (or a folder
-     * inside one) is opened.
+     * openFromOutside() - opens a folder asked for from a widget
+     * @param share the share of the folder
+     * @param path its path in the share
+     *
+     * The intent can come from any app, so only one of the user's folders (or a folder inside one) is opened.
+     *
+     * Return: nothing.
      */
     fun openFromOutside(share: String, path: String) {
         if (!repo.isConfigured) return
@@ -498,6 +592,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /* Where each folder was scrolled to, so that going back finds the list as it was left. */
     private val scrollMemory = HashMap<Screen.Browser, Pair<Int, Int>>()
 
+    /**
+     * openFolder() - opens a folder of the listing
+     * @param entry the folder
+     *
+     * Return: nothing.
+     */
     fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
 
     /**
@@ -525,6 +625,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         scrollMemory[screen] = index to offset
     }
 
+    /**
+     * navigate() - shows a folder of the NAS and reads its content
+     * @param share the share
+     * @param path the folder in the share, empty for the share itself
+     *
+     * Return: nothing.
+     */
     fun navigate(share: String, path: String) {
         _selected.value = emptySet()
         _screen.value = Screen.Browser(share, RemotePath.normalize(path))
@@ -532,20 +639,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
-    /** Opens the viewer on [entry], with the other photos and videos of the folder as they are shown in the list. */
+    /**
+     * openViewer() - opens the viewer on a file of the folder being browsed
+     * @param entry the photo or video
+     *
+     * The other photos and videos of the folder follow, as they are shown in the list.
+     *
+     * Return: nothing.
+     */
     fun openViewer(entry: RemoteEntry) {
         val s = _screen.value as? Screen.Browser ?: return
         val images = _browser.value.visible.filter { it.isMedia }
         _screen.value = Screen.Viewer(s, images, images.indexOf(entry).coerceAtLeast(0))
     }
 
-    /** Opens the viewer from the gallery, on its own list of photos. */
+    /**
+     * openViewer() - opens the viewer on a list of its own, as the gallery does
+     * @param images the photos and videos, in their order
+     * @param index the one shown first
+     *
+     * Return: nothing.
+     */
     fun openViewer(images: List<RemoteEntry>, index: Int) {
         if (images.isEmpty()) return
         _screen.value = Screen.Viewer(_screen.value, images, index.coerceIn(0, images.lastIndex))
     }
 
-    /** Returns false when there is nothing left to go back to (the activity then closes). */
+    /**
+     * back() - goes back one step: a selection, a search, the folder above, the previous screen
+     *
+     * The way up follows the full path of the folder, one level at a time, up to the user's folders.
+     *
+     * Return: false when there is nothing left to go back to (the activity then closes).
+     */
     fun back(): Boolean {
         when (val s = _screen.value) {
             is Screen.Viewer -> {
@@ -602,6 +728,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return false
     }
 
+    /**
+     * refresh() - reads the folder being browsed again
+     *
+     * The copy already read stays on screen until the new one arrives.
+     *
+     * Return: nothing.
+     */
     fun refresh() {
         val s = _screen.value as? Screen.Browser ?: return
         val key = "${s.share}/${s.path}"
@@ -620,22 +753,47 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * setSort() - changes and saves the order of the listings
+     * @param sort the new order
+     *
+     * Return: nothing.
+     */
     fun setSort(sort: SortMode) {
         browserPrefs.sort = sort
         _browser.update { it.copy(sort = sort) }
     }
 
+    /**
+     * setQuery() - filters the listing by name
+     * @param query what the user typed
+     *
+     * A search of the subfolders starts again with it.
+     *
+     * Return: nothing.
+     */
     fun setQuery(query: String) {
         _browser.update { it.copy(query = query) }
         if (_browser.value.deep) startDeepSearch()
     }
 
+    /**
+     * setSearching() - opens or closes the search field
+     * @param on true opens it; closing it forgets the query and stops a search of the subfolders
+     *
+     * Return: nothing.
+     */
     fun setSearching(on: Boolean) {
         if (!on) deepJob?.cancel()
         _browser.update { it.copy(searching = on, query = if (on) it.query else "", deepResults = if (on) it.deepResults else emptyList(), deepBusy = false) }
     }
 
-    /** Switches the search between this folder only and every subfolder too. */
+    /**
+     * setDeepSearch() - switches the search between this folder only and every subfolder too
+     * @param on true searches the subfolders
+     *
+     * Return: nothing.
+     */
     fun setDeepSearch(on: Boolean) {
         _browser.update { it.copy(deep = on) }
         if (on) startDeepSearch() else {
@@ -689,11 +847,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    /**
+     * toggleHidden() - shows or hides the hidden files, and saves the choice
+     *
+     * Return: nothing.
+     */
     fun toggleHidden() = _browser.update { it.copy(showHidden = !it.showHidden).also { s -> browserPrefs.showHidden = s.showHidden } }
+    /**
+     * toggleGrid() - switches the listing between list and grid, and saves the choice
+     *
+     * Return: nothing.
+     */
     fun toggleGrid() = _browser.update { it.copy(grid = !it.grid).also { s -> browserPrefs.grid = s.grid } }
 
     // --- file operations --------------------------------------------------------------------------------------------
 
+    /**
+     * createFolder() - creates a folder in the folder being browsed
+     * @param name its name
+     *
+     * Context: launches a coroutine; the outcome arrives as a message.
+     * Return: nothing.
+     */
     fun createFolder(name: String) = folderOperation("Cartella creata") { share, dir ->
         val path = RemotePath.child(dir, checkName(name))
         repo.io {
@@ -702,6 +877,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * rename() - renames a file or folder in place
+     * @param entry the file or folder
+     * @param newName the new name
+     *
+     * Context: launches a coroutine; the outcome arrives as a message.
+     * Return: nothing.
+     */
     fun rename(entry: RemoteEntry, newName: String) = folderOperation("Rinominato in «${newName.trim()}»") { share, _ ->
         val target = RemotePath.child(RemotePath.parent(entry.path), checkName(newName))
         if (target == entry.path) return@folderOperation
@@ -713,7 +896,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** An empty text file, nothing more: editing it is left to the apps on the phone. */
+    /**
+     * createTextFile() - creates an empty text file in the folder being browsed
+     * @param name its name
+     *
+     * Editing it is left to the apps on the phone.
+     *
+     * Context: launches a coroutine; the outcome arrives as a message.
+     * Return: nothing.
+     */
     fun createTextFile(name: String) = folderOperation("File creato") { share, dir ->
         val clean = checkName(name).let { if (RemotePath.extension(it).isEmpty()) "$it.txt" else it }
         val path = RemotePath.child(dir, clean)
@@ -725,6 +916,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- selection, copy and move -----------------------------------------------------------------------------------
 
+    /**
+     * toggleSelected() - adds a file to the selection, or takes it out
+     * @param entry the file or folder
+     *
+     * Nothing can be selected in the folder of a whole NAS.
+     *
+     * Return: nothing.
+     */
     fun toggleSelected(entry: RemoteEntry) {
         if (inNasRoot()) return
         _selected.update { if (entry.path in it) it - entry.path else it + entry.path }
@@ -733,10 +932,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /* The folder of another NAS lists its shares, all with the same empty path: nothing there can be selected. */
     private fun inNasRoot(): Boolean = (_screen.value as? Screen.Browser)?.let { NasShares.isRoot(it.share) } == true
 
+    /**
+     * clearSelection() - empties the selection
+     *
+     * Return: nothing.
+     */
     fun clearSelection() {
         _selected.value = emptySet()
     }
 
+    /**
+     * selectAll() - selects everything the listing shows
+     *
+     * Return: nothing.
+     */
     fun selectAll() {
         if (inNasRoot()) return
         _selected.value = _browser.value.visible.mapTo(HashSet()) { it.path }
@@ -748,7 +957,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return (if (b.showingDeep) b.deepResults else b.entries).filter { it.path in paths }
     }
 
-    /** Puts the selection on the clipboard; it is pasted in whichever folder the user opens next. */
+    /**
+     * cut() - puts the selection on the clipboard
+     * @param move true moves the files, false copies them
+     *
+     * It is pasted in whichever folder the user opens next.
+     *
+     * Return: nothing.
+     */
     fun cut(move: Boolean) {
         val entries = selectedEntries()
         if (entries.isEmpty() || refusedAtNasRoot()) return
@@ -757,6 +973,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message("Apri la cartella di destinazione e premi «Incolla qui»")
     }
 
+    /**
+     * clearClipboard() - forgets what was cut or copied
+     *
+     * Return: nothing.
+     */
     fun clearClipboard() {
         _clipboard.value = null
     }
@@ -765,7 +986,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Names already in the destination: the user chooses whether to replace, skip or keep both. */
     val conflictAsk: StateFlow<ConflictAsk?> = _conflictAsk.asStateFlow()
 
-    /** The choice for [conflictAsk]; null closes it without doing anything. */
+    /**
+     * answerConflict() - answers the question about names already in the destination
+     * @param choice replace, skip or keep both; null closes it without doing anything
+     *
+     * Return: nothing.
+     */
     fun answerConflict(choice: Conflict?) {
         val ask = _conflictAsk.value ?: return
         _conflictAsk.value = null
@@ -782,7 +1008,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (clashes.isEmpty()) go(Conflict.KeepBoth) else _conflictAsk.value = ConflictAsk(clashes, names.size, go)
     }
 
-    /** Queues one job per clipboard entry, into the folder being browsed. */
+    /**
+     * paste() - queues one transfer per clipboard entry, into the folder being browsed
+     *
+     * Names already there are asked about first.
+     *
+     * Return: nothing.
+     */
     fun paste() {
         val s = _screen.value as? Screen.Browser ?: return
         val clip = _clipboard.value ?: return
@@ -809,24 +1041,61 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * cancelTransfers() - stops every transfer, the running one and those waiting
+     *
+     * Return: nothing.
+     */
     fun cancelTransfers() = app.transfers.cancelAll()
 
+    /**
+     * pauseTransfers() - pauses the transfers; each one resumes where it stopped
+     *
+     * Return: nothing.
+     */
     fun pauseTransfers() = app.transfers.pause()
 
+    /**
+     * resumeTransfers() - lets the paused transfers run again
+     *
+     * Return: nothing.
+     */
     fun resumeTransfers() = app.transfers.resume()
 
+    /**
+     * retryTransfer() - runs a failed transfer again
+     * @param id the transfer
+     *
+     * Return: nothing.
+     */
     fun retryTransfer(id: Long) = app.transfers.retry(id)
 
     val transfersPaused: StateFlow<Boolean> = app.transfers.paused
 
+    /**
+     * clearTransfers() - forgets the transfers that ended
+     *
+     * Return: nothing.
+     */
     fun clearTransfers() = app.transfers.clearFinished()
 
+    /**
+     * deleteSelected() - deletes the selected files and folders, into the bin of the share
+     *
+     * Return: nothing.
+     */
     fun deleteSelected() {
         val entries = selectedEntries()
         _selected.value = emptySet()
         deleteInBrowser(entries)
     }
 
+    /**
+     * delete() - deletes one file or folder, into the bin of the share
+     * @param entry the file or folder
+     *
+     * Return: nothing.
+     */
     fun delete(entry: RemoteEntry) = deleteInBrowser(listOf(entry))
 
     private fun deleteInBrowser(entries: List<RemoteEntry>) {
@@ -854,8 +1123,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Deletes photos from the NAS, from the gallery or the viewer. Those in the backup folder are first written to its
-     * list of deleted photos (size and hash), so the backup does not upload them again, even after a reinstall.
+     * deletePhotos() - deletes photos from the NAS, from the gallery or the viewer
+     * @param photos the photos and videos
+     *
+     * Those in the backup folder are first written to its list of deleted photos (size and hash), so the backup does not
+     * upload them again, even after a reinstall.
+     *
+     * Context: launches a coroutine; the progress shows in [deletion].
+     * Return: the job of the deletion.
      */
     fun deletePhotos(photos: List<RemoteEntry>) = viewModelScope.launch {
         try {
@@ -988,6 +1263,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Swiping a photo away in the gallery list deletes it at once, without asking. */
     val deleteWithoutConfirm: StateFlow<Boolean> = _deleteWithoutConfirm.asStateFlow()
 
+    /**
+     * setDeleteWithoutConfirm() - saves whether a swipe in the gallery list deletes at once
+     * @param on true deletes without asking
+     *
+     * Return: nothing.
+     */
     fun setDeleteWithoutConfirm(on: Boolean) {
         app.galleryPrefs.deleteWithoutConfirm = on
         _deleteWithoutConfirm.value = on
@@ -1004,7 +1285,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _screen.value = if (left.isEmpty()) s.returnTo else s.copy(images = left, index = s.index.coerceAtMost(left.lastIndex))
     }
 
-    /** Queues the documents picked on the phone for the current folder; names already taken are asked about. */
+    /**
+     * upload() - queues documents picked on the phone for the folder being browsed
+     * @param uris the documents
+     *
+     * Names already taken are asked about.
+     *
+     * Return: nothing.
+     */
     fun upload(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
@@ -1014,7 +1302,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Queues a whole folder of the phone, with its subfolders, for the current folder. */
+    /**
+     * uploadFolder() - queues a whole folder of the phone, with its subfolders, for the folder being browsed
+     * @param tree the folder picked, null when the user gave up
+     *
+     * Return: nothing.
+     */
     fun uploadFolder(tree: Uri?) {
         tree ?: return
         viewModelScope.launch {
@@ -1042,7 +1335,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Saves a NAS file into a document the user created with the system picker. */
+    /**
+     * downloadTo() - saves a file of the NAS into a document the user created with the system picker
+     * @param entry the file
+     * @param uri the document
+     *
+     * The copy is checked against the NAS like every download.
+     *
+     * Context: launches a coroutine; the outcome arrives as a message.
+     * Return: the job of the download.
+     */
     fun downloadTo(entry: RemoteEntry, uri: Uri) = viewModelScope.launch {
         val resolver = getApplication<Application>().contentResolver
         try {
@@ -1077,6 +1379,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo, it.showNasOnFolders)
     }
 
+    /**
+     * setLock() - turns the unlock with fingerprint, face or screen lock on or off
+     * @param on the new value of the setting
+     *
+     * It is refused when the phone has no such lock set.
+     *
+     * Return: nothing.
+     */
     fun setLock(on: Boolean) {
         if (on && !AppLock.available(app)) {
             message("Imposta prima un'impronta, il volto o un blocco schermo nelle impostazioni del telefono")
@@ -1087,16 +1397,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _extras.value = readExtras()
     }
 
+    /**
+     * setWakeOnLan() - turns the Wake-on-LAN button on or off
+     * @param on the new value of the setting
+     *
+     * Return: nothing.
+     */
     fun setWakeOnLan(on: Boolean) {
         app.extras.wakeOnLan = on
         _extras.value = readExtras()
     }
 
+    /**
+     * setWakeMac() - saves the MAC address the Wake-on-LAN packet goes to
+     * @param mac the address as typed
+     *
+     * Return: nothing.
+     */
     fun setWakeMac(mac: String) {
         app.extras.wakeMac = mac
         _extras.value = readExtras()
     }
 
+    /**
+     * setFollowNas() - turns on or off the address followed when the NAS changes it
+     * @param on the new value of the setting
+     *
+     * Return: nothing.
+     */
     fun setFollowNas(on: Boolean) {
         app.extras.followNas = on
         _extras.value = readExtras()
@@ -1124,7 +1452,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _extras.value = readExtras()
     }
 
-    /** Sends the Wake-on-LAN packet to the NAS. */
+    /**
+     * wakeNas() - sends the Wake-on-LAN packet to the NAS
+     *
+     * Context: launches a coroutine; the outcome arrives as a message.
+     * Return: the job.
+     */
     fun wakeNas() = viewModelScope.launch {
         try {
             WakeOnLan.wake(app.extras.wakeMac, repo.host())
@@ -1141,6 +1474,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _finding = MutableStateFlow(false)
     val finding: StateFlow<Boolean> = _finding.asStateFlow()
 
+    /**
+     * findNas() - looks for NAS announced on the Wi-Fi (Bonjour)
+     *
+     * Context: launches a coroutine; the results arrive in [found].
+     * Return: the job of the search.
+     */
     fun findNas() = viewModelScope.launch {
         _finding.value = true
         try {
@@ -1178,16 +1517,47 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val music: StateFlow<MusicState> = app.music.state
 
-    /** Plays [entry] and, after it, the other songs of the folder as the list shows them. */
+    /**
+     * playMusic() - plays a song and, after it, the other songs of the folder as the list shows them
+     * @param entry the song
+     *
+     * Return: nothing.
+     */
     fun playMusic(entry: RemoteEntry) {
         val songs = _browser.value.visible.filter { it.isAudio }.ifEmpty { listOf(entry) }
         app.music.play(songs, songs.indexOf(entry).coerceAtLeast(0))
     }
 
+    /**
+     * musicToggle() - pauses the song playing, or plays it again
+     *
+     * Return: nothing.
+     */
     fun musicToggle() = app.music.toggle()
+    /**
+     * musicNext() - skips to the next song
+     *
+     * Return: nothing.
+     */
     fun musicNext() = app.music.next()
+    /**
+     * musicPrevious() - goes back to the previous song, or to the start of this one
+     *
+     * Return: nothing.
+     */
     fun musicPrevious() = app.music.previous()
+    /**
+     * musicSeek() - moves within the song playing
+     * @param position the time to go to, in milliseconds
+     *
+     * Return: nothing.
+     */
     fun musicSeek(position: Long) = app.music.seek(position)
+    /**
+     * musicStop() - stops the music and closes the player
+     *
+     * Return: nothing.
+     */
     fun musicStop() = app.music.stop()
 
     // --- ZIP archives ---------------------------------------------------------------------------------------------
@@ -1197,7 +1567,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var openArchive: Pair<ZipArchive, RandomReader>? = null
 
-    /** Opens a ZIP of the NAS like a folder: only its index is read, not the whole file. */
+    /**
+     * openArchive() - opens a ZIP of the NAS like a folder
+     * @param entry the archive
+     *
+     * Only its index is read, not the whole file.
+     *
+     * Return: nothing.
+     */
     fun openArchive(entry: RemoteEntry) {
         val s = _screen.value as? Screen.Browser ?: return
         closeArchive()
@@ -1222,6 +1599,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * openArchiveFolder() - opens a folder inside the archive being browsed
+     * @param item the folder of the archive
+     *
+     * Return: nothing.
+     */
     fun openArchiveFolder(item: ZipArchive.Entry) {
         val s = _screen.value as? Screen.Archive ?: return
         _screen.value = s.copy(dir = item.path)
@@ -1240,7 +1623,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         openArchive = null
     }
 
-    /** Extracts one file of the archive to the phone and opens it with another app; nothing is written to the NAS. */
+    /**
+     * openFromArchive() - extracts one file of the archive to the phone and opens it with another app
+     * @param item the file of the archive
+     *
+     * Nothing is written to the NAS.
+     *
+     * Context: launches a coroutine.
+     * Return: the job.
+     */
     fun openFromArchive(item: ZipArchive.Entry) = viewModelScope.launch {
         val (zip, _) = openArchive ?: return@launch
         val dir = app.shareCache.newFolder()
@@ -1273,8 +1664,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Extracts [item] (a file or a folder of the archive), or everything when null, into the NAS folder of the
-     * archive: everything goes into a new folder named after the archive. It runs in the transfer queue.
+     * extractFromArchive() - extracts part of the archive, or all of it, next to the archive on the NAS
+     * @param item a file or folder of the archive, or null for everything
+     *
+     * Everything goes into a new folder named after the archive. It runs in the transfer queue.
+     *
+     * Return: nothing.
      */
     fun extractFromArchive(item: ZipArchive.Entry?) {
         val s = _screen.value as? Screen.Archive ?: return
@@ -1309,13 +1704,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _trash = MutableStateFlow(TrashState())
     val trash: StateFlow<TrashState> = _trash.asStateFlow()
 
+    /**
+     * openTrash() - opens the bin of the File section and reads it
+     *
+     * Return: nothing.
+     */
     fun openTrash() {
         val here = _screen.value
         _screen.value = Screen.Trash(if (here is Screen.Trash) here.returnTo else here)
         loadTrash()
     }
 
-    /** Reads the bin of every share with a saved folder, after deleting for good what is older than 30 days. */
+    /**
+     * loadTrash() - reads the bin of every share with a saved folder
+     *
+     * What is older than 30 days is deleted for good first.
+     *
+     * Context: launches a coroutine; the content arrives in [trash].
+     * Return: nothing.
+     */
     fun loadTrash() {
         _trash.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
@@ -1341,7 +1748,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Puts elements of the bin back where they were. */
+    /**
+     * restoreFromTrash() - puts elements of the bin back where they were
+     * @param items the elements
+     *
+     * Context: launches a coroutine.
+     * Return: the job.
+     */
     fun restoreFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
         try {
             val places = repo.io { fs -> items.map { FileTrash.restore(fs, it) } }
@@ -1356,7 +1769,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (_screen.value is Screen.Trash) loadTrash() else refresh()
     }
 
-    /** Deletes elements of the bin for good. */
+    /**
+     * deleteFromTrash() - deletes elements of the bin for good
+     * @param items the elements
+     *
+     * Context: launches a coroutine; the progress shows in [deletion].
+     * Return: the job.
+     */
     fun deleteFromTrash(items: List<FileTrash.Item>) = viewModelScope.launch {
         _trash.update { it.copy(working = true) }
         try {
@@ -1378,8 +1797,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // --- open and edit ----------------------------------------------------------------------------------------------
 
     /**
-     * Downloads [entry] into a private cache folder and asks the UI to open it in another app. The copy is tracked:
-     * when the user comes back and it changed, [syncEdits] puts it back on the NAS.
+     * open() - downloads a file into a private folder and asks the UI to open it in another app
+     * @param entry the file
+     * @param edit true when the other app may change it
+     *
+     * The copy is tracked: when the user comes back and it changed, [syncEdits] puts it back on the NAS.
+     *
+     * Context: launches a coroutine.
+     * Return: the job of the download.
      */
     fun open(entry: RemoteEntry, edit: Boolean) = viewModelScope.launch {
         val id = UUID.randomUUID().toString()
@@ -1421,9 +1846,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // --- share ------------------------------------------------------------------------------------------------------
 
     /**
-     * Downloads [entries] into a private, temporary folder (checked against the NAS like every download) and hands
-     * them to the share sheet. Nothing is written to the phone's public folders, so the backup never sees them; the
-     * copies are deleted once the user is back in the app, or a few minutes later anyway.
+     * share() - hands files of the NAS to the share sheet of Android
+     * @param entries the files
+     *
+     * They are downloaded into a private, temporary folder (checked against the NAS like every download). Nothing is
+     * written to the phone's public folders, so the backup never sees them; the copies are deleted once the user is back
+     * in the app, or a few minutes later anyway.
+     *
+     * Context: launches a coroutine.
+     * Return: the job of the downloads.
      */
     fun share(entries: List<RemoteEntry>) = viewModelScope.launch {
         val files = entries.filter { !it.isDirectory }
@@ -1457,7 +1888,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Back in the app after a share: the receiving app has read the copies, they can go. */
+    /**
+     * cleanShared() - deletes the copies made for a share, once the user is back in the app
+     *
+     * The receiving app has read them by then; copies younger than a short grace time stay.
+     *
+     * Return: nothing.
+     */
     fun cleanShared() {
         viewModelScope.launch(Dispatchers.IO) { app.shareCache.clean(ShareCache.GRACE_MS) }
     }
@@ -1473,13 +1910,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The UI could not find an app for the file: nothing will be edited, drop the copy. */
+    /**
+     * openFailed() - drops the copy of a file no app could open
+     * @param file the copy
+     *
+     * Return: nothing.
+     */
     fun openFailed(file: File) {
         sessions.all().firstOrNull { it.localFile == file }?.let { sessions.remove(it) }
         message("Nessuna app installata può aprire questo file")
     }
 
-    /** Called whenever the app comes back to the foreground, typically after the editor closed. */
+    /**
+     * syncEdits() - puts back on the NAS the files edited in other apps
+     *
+     * Called whenever the app comes back to the foreground, typically after the editor closed. A file that also changed
+     * on the NAS meanwhile is asked about in [syncPrompt].
+     *
+     * Return: nothing.
+     */
     fun syncEdits() {
         if (!repo.isConfigured || _syncPrompt.value != null) return
         viewModelScope.launch {
@@ -1517,20 +1966,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Conflict answer: replace the NAS version with the phone's. */
+    /**
+     * resolveOverwrite() - conflict answer: replaces the NAS version with the phone's
+     *
+     * Return: nothing.
+     */
     fun resolveOverwrite() = resolve { session ->
         uploadEdit(session, session.path, null)
         message("«${RemotePath.name(session.path)}» sovrascritto sul NAS")
     }
 
-    /** Conflict answer: keep both, the phone's version goes next to the original as a copy. */
+    /**
+     * resolveKeepBoth() - conflict answer: keeps both, the phone's version goes next to the original as a copy
+     *
+     * Return: nothing.
+     */
     fun resolveKeepBoth() = resolve { session ->
         val copy = repo.io { EditSync.freeCopyPath(it, session.share, session.path, "dal telefono") }
         uploadEdit(session, copy, null)
         message("Salvato come «${RemotePath.name(copy)}»")
     }
 
-    /** Conflict answer: throw the phone's changes away. */
+    /**
+     * resolveDiscard() - conflict answer: throws the phone's changes away
+     *
+     * Return: nothing.
+     */
     fun resolveDiscard() = resolve { session ->
         sessions.remove(session)
         message("Modifiche del telefono scartate")
