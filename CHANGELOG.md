@@ -15,6 +15,7 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   commons-lang3) a versioni senza difetti noti
 - Sicurezza: «Scollega NAS» cancella anche le copie lasciate dalle altre app che salvavano sul NAS
 - Sicurezza: nella compilazione su GitHub la chiave di firma arriva solo ai passaggi che la usano
+
 ## 1.28.4 — 2026-11-21
 - Modificato: Indietro sale sempre alla cartella che contiene quella aperta, secondo il percorso completo, un livello
   alla volta fino alla cartella condivisa (o al NAS) e poi a «Le mie cartelle», come nei gestori SMB. La 1.28.3
