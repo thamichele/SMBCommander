@@ -72,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -361,6 +362,11 @@ private const val TOOL_DISABLED_ALPHA = 0.5f
 private const val TOOL_PRESSED_SCALE = 0.97f
 private const val TOOL_PRESS_MS = 80
 
+/* Halo of the main action of a page: a ring of the main colour at 10%, 8 wide, and a glow of the same colour. */
+private val FAB_HALO_WIDTH = 8.dp
+private const val FAB_HALO_ALPHA = 0.10f
+private val FAB_GLOW = 12.dp
+
 /**
  * ToolButton() - the icon button of the whole app, in the style of the video player's bar
  * @param icon what the button shows
@@ -384,7 +390,7 @@ fun ToolButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = Arancio.colors.accentText,
+    tint: Color = Arancio.colors.accentIcon,
     enabled: Boolean = true,
     isPrimary: Boolean = false,
     caption: String? = null,
@@ -393,7 +399,8 @@ fun ToolButton(
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) TOOL_PRESSED_SCALE else 1f, tween(TOOL_PRESS_MS), label = "press")
-    val shape = if (isPrimary) ArancioShape.fab else ArancioShape.control
+    // icon-only buttons are round in the kit
+    val shape = ArancioShape.fab
     // dark background always: the tinted one of the kit for the primary, the raised surface while pressed
     val background = when {
         isPrimary -> colors.accentDeep
@@ -451,11 +458,11 @@ fun FieldButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(FIELD_BUTTON_SIZE)
-            .clip(ArancioShape.control)
+            .clip(ArancioShape.fab)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = Arancio.colors.accentText, modifier = Modifier.size(FIELD_ICON_SIZE))
+        Icon(icon, contentDescription = label, tint = Arancio.colors.accentIcon, modifier = Modifier.size(FIELD_ICON_SIZE))
     }
 }
 
@@ -480,7 +487,7 @@ fun ButtonBar(modifier: Modifier = Modifier, content: @Composable RowScope.() ->
     )
 }
 
-/** Filter chip of the kit: filled light when selected, outlined panel otherwise, corners of 4. */
+/** Filter chip of the kit: filled with the text colour when selected, outlined panel otherwise, corners of 14. */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
@@ -631,13 +638,17 @@ fun DangerButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bo
 @Composable
 fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Arancio.colors
+    val halo = c.accent.copy(alpha = FAB_HALO_ALPHA)
     FloatingActionButton(
         onClick = onClick,
         containerColor = c.accentButton,
         contentColor = c.onAccent,
         shape = ArancioShape.fab,
-        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp, pressedElevation = 8.dp),
-        modifier = modifier,
+        // the depth comes from the tinted glow of the kit, not from the grey shadow of Material
+        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+        modifier = modifier
+            .drawBehind { drawCircle(halo, radius = size.minDimension / 2 + FAB_HALO_WIDTH.toPx()) }
+            .shadow(FAB_GLOW, ArancioShape.fab, ambientColor = c.accent, spotColor = c.accent),
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
     }

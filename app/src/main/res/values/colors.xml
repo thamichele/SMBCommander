@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="background">#1C1B1A</color>
+    <!-- ground of the window before the app draws: the light theme, the default one -->
+    <color name="window">#F6F4EF</color>
     <color name="accent">#FE4C10</color>
     <!-- launcher icon of each main colour (Impostazioni > Aspetto) -->
     <color name="launcher_viola">#A875FF</color>

@@ -280,7 +280,7 @@ private fun PickerRow(title: String, detail: String, album: Album? = null, icon:
             AlbumCover(album, Modifier.size(PICKER_COVER_SIZE), iconSize = 20.dp)
         } else if (icon != null) {
             Box(Modifier.size(PICKER_COVER_SIZE), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = c.accentText, modifier = Modifier.size(22.dp))
+                Icon(icon, contentDescription = null, tint = c.accentIcon, modifier = Modifier.size(22.dp))
             }
         }
         Column(Modifier.weight(1f)) {

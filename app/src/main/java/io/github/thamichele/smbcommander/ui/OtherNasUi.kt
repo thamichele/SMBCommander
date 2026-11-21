@@ -104,7 +104,7 @@ fun OtherNasSection(vm: AppViewModel) {
 private fun OtherNasRow(nas: OtherNas, onEdit: () -> Unit, onForget: () -> Unit) {
     Panel(padding = ROW_PADDING) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentText, modifier = Modifier.size(ICON_SIZE))
+            Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentIcon, modifier = Modifier.size(ICON_SIZE))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(nas.name, style = MaterialTheme.typography.titleSmall)

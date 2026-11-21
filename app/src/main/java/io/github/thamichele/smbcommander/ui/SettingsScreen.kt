@@ -130,7 +130,7 @@ private fun MenuRow(menu: SettingsMenu, detail: String, onClick: () -> Unit) {
     val colors = Arancio.colors
     Panel(Modifier.clip(ArancioShape.card).clickable(role = Role.Button, onClickLabel = "Apri ${menu.title}", onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PAGE_MARGIN)) {
-            Icon(menu.icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(MENU_ICON_SIZE))
+            Icon(menu.icon, contentDescription = null, tint = colors.accentIcon, modifier = Modifier.size(MENU_ICON_SIZE))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(menu.title, style = MaterialTheme.typography.titleMedium)
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)

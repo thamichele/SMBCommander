@@ -259,7 +259,7 @@ private fun ViewerActionBar(vm: AppViewModel, entry: RemoteEntry) {
         if (uri != null && wanted != null) vm.downloadTo(wanted, uri)
     }
     // dark tokens whatever the theme, like the bar of the video: the viewer is always black
-    ArancioTheme(dark = true) {
+    ArancioTheme(forceDark = true) {
         ButtonBar {
             ToolButton(AppIcons.Info, "Informazioni", { info = entry })
             ToolButton(AppIcons.Share, "Condividi", { vm.share(listOf(entry)) })

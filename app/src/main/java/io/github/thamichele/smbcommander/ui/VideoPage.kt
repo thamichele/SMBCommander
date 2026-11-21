@@ -206,7 +206,7 @@ fun VideoPage(entry: RemoteEntry, player: VideoPlayerState, state: VideoPageStat
     val isActive = player.entry == entry
     val isRunning = isActive && player.isPlaying && player.error == null
     // dark tokens whatever the theme: the viewer is always black
-    ArancioTheme(dark = true) {
+    ArancioTheme(forceDark = true) {
         Column(Modifier.fillMaxSize()) {
             VideoStage(entry, player, isActive, state, actions, Modifier.weight(1f).fillMaxWidth())
             AnimatedVisibility(

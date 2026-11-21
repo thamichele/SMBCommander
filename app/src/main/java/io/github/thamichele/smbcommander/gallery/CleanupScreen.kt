@@ -143,7 +143,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             navigation = { ToolButton(AppIcons.Back, "Indietro", { appVm.back() }) },
         ) {
             if (top != null) ToolButton(AppIcons.Info, "Informazioni", { info = top.entry })
-            ToolButton(AppIcons.Delete, "Cestino (${state.trashCount})", { trashDialog = true }, tint = if (state.trashCount > 0) c.danger else c.accentText)
+            ToolButton(AppIcons.Delete, "Cestino (${state.trashCount})", { trashDialog = true }, tint = if (state.trashCount > 0) c.danger else c.accentIcon)
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),

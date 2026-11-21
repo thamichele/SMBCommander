@@ -4,6 +4,11 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
 ## 1.28.0 — 2026-11-21
+- Modificato: aspetto secondo la nuova Specifica «Arancio Mix». Il tema chiaro è quello normale e quello scuro si
+  accende da Impostazioni › Aspetto › Tema, senza più seguire il telefono. Angoli più morbidi (pulsanti e campi 14,
+  riquadri 20), pulsanti a icona tondi, il «+» tondo con l'alone del colore principale. Nel tema chiaro il colore
+  principale è quello puro per pulsanti e icone, con la variante scura solo per le scritte. Colori di stato della
+  specifica. Foto e video restano sempre su fondo scuro
 - Corretto: le icone di Copia, Rinomina, Elimina, Annulla, Salta, Persone, Data, Dimensione, Colori e Accendi non
   erano al centro del proprio pulsante (spostate di mezzo punto o uno): ora ogni disegno è centrato
 - Modificato: intestazione molto più bassa e uguale in tutte le schermate, con qualsiasi zoom. Una riga sottile con
