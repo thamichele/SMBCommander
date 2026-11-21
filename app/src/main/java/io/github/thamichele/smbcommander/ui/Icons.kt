@@ -61,6 +61,9 @@ object AppIcons {
     val TextLines = icon("M4 6h16M4 10h16M4 14h10M4 18h12")
     val EyeOff = icon("M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2")
 
+    val SortName = icon("M3 18l4-12l4 12M4.5 14h5M18 6v12M15 15l3 3l3-3")
+    val Calendar = icon("M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4")
+    val SortSize = icon("M5 20v-4M10 20v-8M15 20v-12M20 20V4")
     val Sliders = icon("M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4")
     val Palette = icon(
         "M12 3C7 3 3 7 3 12s4 9 9 9c1.1 0 2-.9 2-2c0-.5-.2-1-.5-1.3c-.3-.4-.5-.8-.5-1.3c0-1.1.9-2 2-2h2.3" +

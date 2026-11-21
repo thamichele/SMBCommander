@@ -118,17 +118,18 @@ private val HEADER_MARGIN = 16.dp
 private val HEADER_NAV_MARGIN = 4.dp
 
 /**
- * PageHeader() - the header of a page: grey context line over a big title, actions on the right
+ * PageHeader() - the header of every page: context and title on top, the row of the buttons under them
  * @param context the small grey line over the title (a path, "Album"); empty for none
  * @param title the big title in JetBrains Mono
- * @param navigation the back or close button on the left, or null
- * @param collapse when not null, context and title shrink and fade with the scroll and only the buttons stay
- * @param actions the buttons of the page
+ * @param navigation the back or close button on the left of the title, or null
+ * @param collapse when not null, context and title slide away with the scroll and only the row of the buttons stays
+ * @param tabs the buttons that choose what the page shows (Foto/Video/Album, the sorting), on the left of the row
+ * @param actions the buttons of the page, on the right of the row
  *
- * No text is ever cut, and the header stays short: the title wraps beside the
- * buttons. Only when even its longest word does not fit there (big display
- * size, big font, narrow phone) the title takes the whole width and the
- * buttons move to a line of their own under it, on the right.
+ * The buttons are in the same place on every page and at every screen size:
+ * one row under the title, the choices on the left and the actions on the
+ * right, all icons; see [ToolRow]. The title has the whole width beside the
+ * back button and wraps, never cut.
  *
  * The context is always one line. Short, it sits over the title; too long for
  * that (a deep path) it takes a line of its own across the whole page, and if
@@ -137,13 +138,13 @@ private val HEADER_NAV_MARGIN = 4.dp
  * Context: composable.
  * Return: nothing.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PageHeader(
     context: String,
     title: String,
     navigation: (@Composable () -> Unit)? = null,
     collapse: CollapsingHeaderState? = null,
+    tabs: @Composable () -> Unit = {},
     actions: @Composable () -> Unit = {},
 ) {
     val part = rememberCollapsingPart(collapse)
@@ -153,11 +154,7 @@ fun PageHeader(
             { navigation?.invoke() },
             { if (context.isNotEmpty()) HeaderContext(context, fade) },
             { Text(title, style = MaterialTheme.typography.headlineMedium, modifier = fade) },
-            {
-                FlowRow(horizontalArrangement = Arrangement.End, itemVerticalAlignment = Alignment.CenterVertically) {
-                    actions()
-                }
-            },
+            { ToolRow(tabs, actions) },
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -168,33 +165,32 @@ fun PageHeader(
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val nav = navMeasurables.firstOrNull()?.measure(loose)
         val navWidth = nav?.let { it.width + HEADER_GAP.roundToPx() } ?: 0
-        val actions = actionMeasurables.first().measure(loose)
-        val titleMeasurable = titleMeasurables.first()
-        val titleRoom = (width - navWidth).coerceAtLeast(0)
-        // one line while even the longest word of the title fits beside the buttons: the title wraps there
-        val isOneLine = titleMeasurable.minIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
-        val titleWidth = if (isOneLine) titleRoom - actions.width else titleRoom
-        val titlePlaced = titleMeasurable.measure(loose.copy(maxWidth = titleWidth))
+        val textWidth = (width - navWidth).coerceAtLeast(0)
+        val titlePlaced = titleMeasurables.first().measure(loose.copy(maxWidth = textWidth))
         // the context stays over the title while it fits there on one line; longer, it gets the whole page
         val contextMeasurable = contextMeasurables.firstOrNull()
-        val isContextInline = contextMeasurable == null || contextMeasurable.maxIntrinsicWidth(Constraints.Infinity) <= titleWidth
+        val isContextInline = contextMeasurable == null || contextMeasurable.maxIntrinsicWidth(Constraints.Infinity) <= textWidth
         val contextInset = if (nav == null || isContextInline) 0 else (HEADER_MARGIN - HEADER_NAV_MARGIN).roundToPx()
-        val contextPlaced = contextMeasurable?.measure(loose.copy(maxWidth = if (isContextInline) titleWidth else width - contextInset))
+        val contextPlaced = contextMeasurable?.measure(loose.copy(maxWidth = if (isContextInline) textWidth else width - contextInset))
         val contextHeight = contextPlaced?.let { it.height + HEADER_CONTEXT_GAP.roundToPx() } ?: 0
         val textHeight = titlePlaced.height + if (isContextInline) contextHeight else 0
-        val navHeight = nav?.height ?: 0
-        val fullTop = maxOf(navHeight, textHeight, if (isOneLine) actions.height else 0)
-        // shrunk by the scroll, context and title go and the row of the buttons stays
-        val shrunkTop = maxOf(navHeight, if (isOneLine) actions.height else 0)
+        // a page without buttons has an empty row, of no height
+        val actions = actionMeasurables.first().measure(loose)
+        val hasActions = actions.height > 0
+        val fullTop = maxOf(nav?.height ?: 0, textHeight)
         val fullAbove = if (isContextInline) 0 else contextHeight
-        collapse?.report(part, fullTop - shrunkTop + fullAbove)
+        // shrunk by the scroll, everything over the buttons goes; with no buttons the back button must stay
+        val shrunkTop = if (hasActions) 0 else nav?.height ?: 0
+        val shrunkAbove = 0
+        collapse?.report(part, fullTop - shrunkTop + fullAbove - shrunkAbove)
         val fraction = collapse?.fraction ?: 0f
         val topHeight = fullTop - ((fullTop - shrunkTop) * fraction).roundToInt()
         val above = fullAbove - (fullAbove * fraction).roundToInt()
-        val height = above + if (isOneLine) topHeight else topHeight + actions.height
-        layout(width, height) {
-            nav?.placeRelative(0, above + (topHeight - nav.height) / 2)
-            val textY = above + if (isOneLine) (topHeight - textHeight) / 2 else topHeight - textHeight
+        layout(width, above + topHeight + actions.height) {
+            // what goes slides up under the top edge, it is not squeezed
+            val rowY = above + topHeight - fullTop
+            nav?.placeRelative(0, rowY + (fullTop - nav.height) / 2)
+            val textY = rowY + (fullTop - textHeight) / 2
             if (isContextInline) {
                 contextPlaced?.placeRelative(navWidth, textY)
                 titlePlaced.placeRelative(navWidth, textY + contextHeight)
@@ -202,8 +198,47 @@ fun PageHeader(
                 contextPlaced?.placeRelative(contextInset, above - fullAbove)
                 titlePlaced.placeRelative(navWidth, textY)
             }
-            val actionsY = above + if (isOneLine) (topHeight - actions.height) / 2 else topHeight
-            actions.placeRelative(width - actions.width, actionsY)
+            actions.placeRelative(0, above + topHeight)
+        }
+    }
+}
+
+/** Room between the choices on the left and the actions on the right of a [ToolRow], when they have to shrink. */
+private val TOOL_ROW_GAP = 8.dp
+
+/**
+ * ToolRow() - one row of icon buttons: choices on the left, actions on the right
+ * @param tabs the buttons on the left; each direct child is one button
+ * @param actions the buttons on the right; each direct child is one button
+ *
+ * The row never wraps and never cuts a button: when the buttons do not fit
+ * at their size they all get the same narrower share of the width.
+ *
+ * Context: composable.
+ * Return: nothing; a row with no button has no height.
+ */
+@Composable
+fun ToolRow(tabs: @Composable () -> Unit, actions: @Composable () -> Unit) {
+    Layout(contents = listOf(tabs, actions), modifier = Modifier.fillMaxWidth()) { (tabMeasurables, actionMeasurables), constraints ->
+        val count = tabMeasurables.size + actionMeasurables.size
+        if (count == 0) return@Layout layout(constraints.maxWidth, 0) {}
+        val gap = if (tabMeasurables.isEmpty() || actionMeasurables.isEmpty()) 0 else TOOL_ROW_GAP.roundToPx()
+        val share = ((constraints.maxWidth - gap) / count).coerceAtLeast(0)
+        val each = Constraints(maxWidth = share)
+        val left = tabMeasurables.map { it.measure(each) }
+        val right = actionMeasurables.map { it.measure(each) }
+        val height = (left + right).maxOf { it.height }
+        layout(constraints.maxWidth, height) {
+            var x = 0
+            for (button in left) {
+                button.placeRelative(x, (height - button.height) / 2)
+                x += button.width
+            }
+            x = constraints.maxWidth - right.sumOf { it.width }
+            for (button in right) {
+                button.placeRelative(x, (height - button.height) / 2)
+                x += button.width
+            }
         }
     }
 }

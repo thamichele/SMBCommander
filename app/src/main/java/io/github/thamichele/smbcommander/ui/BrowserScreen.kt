@@ -173,6 +173,11 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     title = title,
                     navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
                     collapse = collapse,
+                    tabs = {
+                        ToolButton(AppIcons.SortName, "Ordina per nome", { vm.setSort(SortMode.Name) }, isPrimary = state.sort == SortMode.Name)
+                        ToolButton(AppIcons.Calendar, "Ordina per data", { vm.setSort(SortMode.Date) }, isPrimary = state.sort == SortMode.Date)
+                        ToolButton(AppIcons.SortSize, "Ordina per dimensione", { vm.setSort(SortMode.Size) }, isPrimary = state.sort == SortMode.Size)
+                    },
                 ) {
                     ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
                     ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
@@ -198,18 +203,19 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 }
             }
 
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 12.dp),
-            ) {
-                if (state.searching) {
+            // while searching the row of the header is gone: the scope and the sorting are chosen here, in words
+            if (state.searching) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
                     item { Pill("Questa cartella", !state.deep) { vm.setDeepSearch(false) } }
                     item { Pill("Anche nelle sottocartelle", state.deep) { vm.setDeepSearch(true) } }
+                    item { Pill("Nome", state.sort == SortMode.Name) { vm.setSort(SortMode.Name) } }
+                    item { Pill("Data", state.sort == SortMode.Date) { vm.setSort(SortMode.Date) } }
+                    item { Pill("Dimensione", state.sort == SortMode.Size) { vm.setSort(SortMode.Size) } }
                 }
-                item { Pill("Nome", state.sort == SortMode.Name) { vm.setSort(SortMode.Name) } }
-                item { Pill("Data", state.sort == SortMode.Date) { vm.setSort(SortMode.Date) } }
-                item { Pill("Dimensione", state.sort == SortMode.Size) { vm.setSort(SortMode.Size) } }
             }
 
             val visible = state.visible
