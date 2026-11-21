@@ -8,6 +8,7 @@ import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.TransferLog
+import io.github.thamichele.smbcommander.core.Transfers
 
 /**
  * Files and folders of the phone going to the NAS, as jobs of the transfer queue. Each file goes through
@@ -74,15 +75,7 @@ object PhoneUploads {
         val key = item.uri.toString()
         if (log.has(key)) return
         // chosen once: a job run again writes to the same name, it does not number a second copy
-        val target = log.remember(key) {
-            val existing = fs.stat(share, path)
-            when {
-                existing == null -> path
-                conflict == Conflict.Skip && !existing.isDirectory -> ""
-                conflict == Conflict.Replace && !existing.isDirectory -> path
-                else -> EditSync.freePath(fs, share, path)
-            }
-        }
+        val target = log.remember(key) { Transfers.fileTarget(fs, share, path, conflict).orEmpty() }
         if (target.isEmpty()) {
             log.skip(key)
             return

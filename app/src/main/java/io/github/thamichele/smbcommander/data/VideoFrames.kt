@@ -17,7 +17,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Build
-import android.os.Process
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.VideoFramePlan
 import kotlinx.coroutines.CancellationException
@@ -137,7 +136,7 @@ class VideoFrames(
     private suspend fun make(video: RemoteEntry, key: String) {
         val job = currentCoroutineContext()[Job]
         val frames = try {
-            inBackground { read(video) { job?.isActive != false } }
+            atBackgroundPriority { read(video) { job?.isActive != false } }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -233,18 +232,6 @@ class VideoFrames(
     }
 
     private fun file(key: String, index: Int) = File(dir, "$key-$index.jpg")
-
-    /* Private: runs [block] at background priority, so the screen keeps scrolling smoothly. */
-    private inline fun <T> inBackground(block: () -> T): T {
-        val tid = Process.myTid()
-        val before = Process.getThreadPriority(tid)
-        Process.setThreadPriority(tid, Process.THREAD_PRIORITY_BACKGROUND)
-        try {
-            return block()
-        } finally {
-            Process.setThreadPriority(tid, before)
-        }
-    }
 
     companion object {
         /** Folder of the frames inside the image cache. */

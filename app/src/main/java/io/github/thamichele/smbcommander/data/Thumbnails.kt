@@ -1,3 +1,12 @@
+/*
+ * Thumbnails.kt - the reduced copies of the NAS photos kept on the phone, and the Coil fetcher that loads them
+ *
+ * Each copy is made once: the photo is read over SMB, scaled down, turned upright and saved as a JPEG in the cache;
+ * every later view loads it from the phone. Video frames, song covers and the first page of a PDF become pictures the
+ * same way. The originals stay on the NAS and are never changed. Animated video previews are VideoFrames' job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.graphics.Bitmap
@@ -7,7 +16,6 @@ import android.graphics.pdf.PdfRenderer
 import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
 import android.media.ExifInterface
-import android.os.Process
 import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.decode.ImageSource
@@ -31,7 +39,6 @@ import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
@@ -84,10 +91,10 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
 
     // a few at a time, so the NAS serves the visible ones quickly; previews get their own lane and never queue
     // behind a grid full of thumbnails
-    private val thumbPermits = Semaphore(4)
-    private val previewPermits = Semaphore(2)
+    private val thumbPermits = Semaphore(THUMBS_AT_ONCE)
+    private val previewPermits = Semaphore(PREVIEWS_AT_ONCE)
     /** The background fill of [warmUp]: two downloads at most, besides those of the screen. */
-    private val warmPermits = Semaphore(2)
+    private val warmPermits = Semaphore(WARM_UPS_AT_ONCE)
 
     /** One lock per copy being made: a photo asked twice at once (ahead of the screen, then on it) is read once. */
     private val making = ConcurrentHashMap<String, Mutex>()
@@ -95,17 +102,25 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     /** Files found without a picture during this run. */
     private val noPicture: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    /**
+     * get() - the copy of a photo, made now when it is not on the phone yet
+     * @param thumb the photo and the size wanted
+     *
+     * Context: suspends while the photo is read from the NAS; cancelling stops the download.
+     * Return: the JPEG file in the cache.
+     */
     suspend fun get(thumb: Thumb): File {
-        val target = file(thumb, thumb.variant)
+        val name = key(thumb)
+        val target = file(name, thumb.variant)
         // songs without a cover and unreadable PDFs are asked once per run, not at every scroll
-        if (key(thumb) in noPicture) throw IllegalStateException("Nessuna immagine")
+        if (name in noPicture) throw IllegalStateException("Nessuna immagine")
         if (target.exists()) {
             target.setLastModified(System.currentTimeMillis())
-            learnRatio(thumb, target)
+            learnRatio(thumb, name, target)
             return target
         }
         make(thumb, target, if (thumb.variant == ImageSize.Thumb) thumbPermits else previewPermits)
-        learnRatio(thumb, target)
+        learnRatio(thumb, name, target)
         return target
     }
 
@@ -122,7 +137,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                             val wanted = { job?.isActive != false }
                             // thumbnails are made at low priority: the CPU goes first to the screen, which keeps
                             // scrolling smoothly while dozens of them are being made
-                            if (thumb.variant == ImageSize.Thumb) inBackground { create(thumb, wanted) } else create(thumb, wanted)
+                            if (thumb.variant == ImageSize.Thumb) atBackgroundPriority { create(thumb, wanted) } else create(thumb, wanted)
                             // the cache keeps itself small while photos are browsed, not only at the next start
                             if (created.incrementAndGet() % TRIM_EVERY == 0) runCatching { trim() }
                         }
@@ -136,13 +151,18 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     }
 
     /**
-     * Fills the thumbnail cache in the background, newest photos first, independently of what is on screen: when
-     * the gallery scrolls or jumps somewhere, its thumbnails are already on the phone. It stops before the thumbnail
-     * limit of the cache, so it never pushes out what it has just made, and it works in its own lane with fewer
-     * downloads at once, so what is on screen always comes first.
+     * warmUp() - fills the thumbnail cache in the background, newest photos first
+     * @param photos the photos, in the order they should be made
+     *
+     * Independent of what is on screen: when the gallery scrolls or jumps somewhere, its thumbnails are already on
+     * the phone. It stops before the thumbnail limit of the cache, so it never pushes out what it has just made, and
+     * it works in its own lane with fewer downloads at once, so what is on screen always comes first.
+     *
+     * Context: suspends until done or cancelled.
+     * Return: nothing.
      */
     suspend fun warmUp(photos: List<RemoteEntry>) = withContext(Dispatchers.IO) {
-        val budget = ImageSize.Thumb.maxBytes * 8 / 10
+        val budget = ImageSize.Thumb.maxBytes * WARM_UP_SHARE_PERCENT / PERCENT
         val used = AtomicLong()
         val learnt = AtomicInteger()
         try {
@@ -150,7 +170,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 for (photo in photos) {
                     if (used.get() > budget) break
                     val thumb = Thumb(photo)
-                    val target = file(thumb, ImageSize.Thumb)
+                    val name = key(thumb)
+                    val target = file(name, ImageSize.Thumb)
                     if (target.exists()) {
                         used.addAndGet(target.length())
                         continue
@@ -162,7 +183,8 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                             if (target.exists()) {
                                 used.addAndGet(target.length())
                                 // the shapes reach the mosaic in batches, not one rearrangement per photo
-                                if (learnRatio(thumb, target, publish = false) && learnt.incrementAndGet() % 100 == 0) ratios.publish()
+                                val isNew = learnRatio(thumb, name, target, publish = false)
+                                if (isNew && learnt.incrementAndGet() % RATIO_BATCH == 0) ratios.publish()
                             }
                         } finally {
                             warmPermits.release()
@@ -171,31 +193,41 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 }
             }
         } finally {
-            if (learnt.get() % 100 != 0) ratios.publish()
+            if (learnt.get() % RATIO_BATCH != 0) ratios.publish()
         }
     }
 
     /**
-     * The thumbnail of [photo] for work done in the background (sorting the quick cleanup): from the phone when it is
-     * there, else made in the lane of [warmUp], so it never slows down what is on screen.
+     * background() - the thumbnail of a photo for work done in the background (sorting the quick cleanup)
+     * @param photo the photo
+     *
+     * From the phone when it is there, else made in the lane of [warmUp], so it never slows down what is on screen.
+     *
+     * Context: suspends while the photo is read from the NAS.
+     * Return: the JPEG file in the cache.
      */
     suspend fun background(photo: RemoteEntry): File {
         val thumb = Thumb(photo)
-        val target = file(thumb, ImageSize.Thumb)
+        val name = key(thumb)
+        val target = file(name, ImageSize.Thumb)
         if (!target.exists()) make(thumb, target, warmPermits)
         if (!target.exists()) throw IllegalStateException("Miniatura non disponibile")
         // the mosaic hears of new shapes with the next batch of [warmUp], not one rearrangement per photo
-        learnRatio(thumb, target, publish = false)
+        learnRatio(thumb, name, target, publish = false)
         return target
     }
 
-    /** Width / height of the photo as shown, once one of its thumbnails has been loaded; null before. */
+    /**
+     * ratio() - width / height of a photo as shown
+     * @param entry the photo
+     *
+     * Return: the shape, once one of its thumbnails has been loaded; null before.
+     */
     fun ratio(entry: RemoteEntry): Float? = ratios[key(Thumb(entry))]
 
-    /** The thumbnail is upright already: its own size gives the shape, read from the file on the phone. */
-    private fun learnRatio(thumb: Thumb, file: File, publish: Boolean = true): Boolean {
+    /* The thumbnail is upright already: its own size gives the shape, read from the file on the phone. */
+    private fun learnRatio(thumb: Thumb, key: String, file: File, publish: Boolean = true): Boolean {
         if (thumb.variant != ImageSize.Thumb) return false
-        val key = key(thumb)
         if (ratios[key] != null) return false
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
@@ -207,8 +239,12 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     private val created = AtomicInteger()
 
     /**
-     * Keeps each kind of copy under its own limit, dropping the least recently viewed first: thumbnails come back
-     * quickly from the NAS, full-resolution copies are kept only for the photos opened last.
+     * trim() - keeps each kind of copy under its own limit, dropping the least recently viewed first
+     *
+     * Thumbnails come back quickly from the NAS, full-resolution copies are kept only for the photos opened last.
+     *
+     * Context: blocking, walks the cache folders.
+     * Return: nothing.
      */
     @Synchronized
     fun trim() {
@@ -224,12 +260,13 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         }
     }
 
-    private fun file(thumb: Thumb, variant: ImageSize): File = File(File(dir, variant.folder), key(thumb) + ".jpg")
+    private fun file(key: String, variant: ImageSize): File = File(File(dir, variant.folder), "$key.jpg")
 
     /** Downloads the original once and writes the requested copy; a preview also leaves its thumbnail behind. */
     private fun create(thumb: Thumb, wanted: () -> Boolean) {
         val variants = if (thumb.variant == ImageSize.Thumb) listOf(ImageSize.Thumb) else listOf(thumb.variant, ImageSize.Thumb)
-        val missing = variants.filter { !file(thumb, it).exists() }
+        val name = key(thumb)
+        val missing = variants.filter { !file(name, it).exists() }
         if (missing.isEmpty()) return
         dir.mkdirs()
         val ext = RemotePath.extension(RemotePath.name(thumb.path)).lowercase()
@@ -241,33 +278,21 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 null
             }
             if (picture == null) {
-                noPicture += key(thumb)
+                noPicture += name
                 throw IllegalStateException("Nessuna immagine")
             }
             return writeBitmap(thumb, missing, picture)
         }
         val source = File.createTempFile("src", null, dir)
         try {
-            repository.fs().openRead(thumb.share, thumb.path).use { input ->
-                source.outputStream().use { out ->
-                    val buffer = ByteArray(1 shl 16)
-                    while (true) {
-                        if (!wanted()) throw CancellationException("Non serve più")
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        out.write(buffer, 0, n)
-                    }
-                }
-            }
+            download(thumb, source, wanted)
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(source.path, bounds)
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalStateException("Immagine non leggibile")
             val exif = runCatching { ExifInterface(source.path) }.getOrNull()
             for (variant in missing) {
-                val target = file(thumb, variant)
-                target.parentFile?.mkdirs()
-                // a name of its own: the same photo may be asked twice at once (on screen and ahead of it)
-                val temp = File.createTempFile(target.name, ".part", target.parentFile)
+                val target = file(name, variant)
+                val temp = tempFor(target)
                 write(source, bounds.outWidth, bounds.outHeight, variant, exif, temp)
                 // a JPEG already lighter than our copy stays as it is: same pixels, fewer bytes, nothing lost
                 if (variant == ImageSize.Preview && bounds.outMimeType == "image/jpeg" && source.length() <= temp.length()) {
@@ -278,6 +303,27 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         } finally {
             source.delete()
         }
+    }
+
+    /* Copies the original to [target] on the phone, stopping as soon as nobody wants it any more. */
+    private fun download(thumb: Thumb, target: File, wanted: () -> Boolean) {
+        repository.fs().openRead(thumb.share, thumb.path).use { input ->
+            target.outputStream().use { out ->
+                val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                while (true) {
+                    if (!wanted()) throw CancellationException("Non serve più")
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                }
+            }
+        }
+    }
+
+    /* A name of its own next to [target]: the same photo may be asked twice at once (on screen and ahead of it). */
+    private fun tempFor(target: File): File {
+        target.parentFile?.mkdirs()
+        return File.createTempFile(target.name, PART_SUFFIX, target.parentFile)
     }
 
     /** The cover inside a song (ID3, FLAC, MP4 tags), read straight from the NAS: only the tags travel. */
@@ -329,7 +375,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(ReaderDataSource(reader))
-                retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: retriever.frameAtTime
+                retriever.getFrameAtTime(VIDEO_FRAME_US, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: retriever.frameAtTime
             } finally {
                 retriever.release()
             }
@@ -340,15 +386,14 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
     /** Saves [frame] as each copy in [missing], scaled as each one wants, then frees it. */
     private fun writeBitmap(thumb: Thumb, missing: List<ImageSize>, frame: Bitmap) {
         try {
+            val name = key(thumb)
             for (variant in missing) {
                 val scale = scaleFor(variant, frame.width, frame.height)
                 val w = (frame.width * scale).roundToInt().coerceAtLeast(1)
                 val h = (frame.height * scale).roundToInt().coerceAtLeast(1)
                 val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(frame, w, h, true) else frame
-                val target = file(thumb, variant)
-                target.parentFile?.mkdirs()
-                // a name of its own: the same photo may be asked twice at once (on screen and ahead of it)
-                val temp = File.createTempFile(target.name, ".part", target.parentFile)
+                val target = file(name, variant)
+                val temp = tempFor(target)
                 temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, variant.quality, it) }
                 if (!temp.renameTo(target)) temp.delete()
                 if (bitmap !== frame) bitmap.recycle()
@@ -373,7 +418,7 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
                 }
                 return
             } catch (e: OutOfMemoryError) {
-                if (reduce >= 8) throw IllegalStateException("Immagine troppo grande")
+                if (reduce >= MAX_REDUCE) throw IllegalStateException("Immagine troppo grande")
                 reduce *= 2
             }
         }
@@ -397,17 +442,6 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         return Bitmap.createScaledBitmap(decoded, w, h, true).also { if (it !== decoded) decoded.recycle() }
     }
 
-    private inline fun inBackground(block: () -> Unit) {
-        val tid = Process.myTid()
-        val before = Process.getThreadPriority(tid)
-        Process.setThreadPriority(tid, Process.THREAD_PRIORITY_BACKGROUND)
-        try {
-            block()
-        } finally {
-            Process.setThreadPriority(tid, before)
-        }
-    }
-
     private fun scaleFor(variant: ImageSize, width: Int, height: Int): Float = when (variant) {
         ImageSize.Thumb -> min(1f, THUMB_PX.toFloat() / min(width, height))
         ImageSize.Card -> min(1f, CARD_PX.toFloat() / max(width, height))
@@ -427,11 +461,13 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    /** The name of the copies of [thumb] in the cache: a hash of where the photo is and of its size and date. */
-    fun key(thumb: Thumb): String =
-        MessageDigest.getInstance("SHA-1")
-            .digest("${thumb.share}/${thumb.path}:${thumb.size}:${thumb.modified}".toByteArray())
-            .joinToString("") { "%02x".format(it) }
+    /**
+     * key() - the name of the copies of a photo in the cache
+     * @param thumb the photo
+     *
+     * Return: a hash of where the photo is and of its size and date, so an edited photo gets new copies.
+     */
+    fun key(thumb: Thumb): String = cacheKey("${thumb.share}/${thumb.path}:${thumb.size}:${thumb.modified}")
 
     class Fetcher(private val thumb: Thumb, private val cache: ThumbnailCache) : coil3.fetch.Fetcher {
         override suspend fun fetch(): FetchResult {
@@ -461,5 +497,24 @@ class ThumbnailCache(private val dir: File, private val repository: NasRepositor
         val AUDIO_EXTENSIONS = setOf("mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma")
         /** Bigger PDFs get no picture: the whole file would have to come to the phone for it. */
         const val MAX_PDF_BYTES = 30L * 1024 * 1024
+
+        private const val THUMBS_AT_ONCE = 4
+        private const val PREVIEWS_AT_ONCE = 2
+        private const val WARM_UPS_AT_ONCE = 2
+
+        /* The warm-up stops at 80% of the thumbnail limit, so it never pushes out what it has just made. */
+        private const val WARM_UP_SHARE_PERCENT = 80
+        private const val PERCENT = 100
+
+        /* Shapes learnt by the warm-up reach the mosaic in batches of this many. */
+        private const val RATIO_BATCH = 100
+        private const val DOWNLOAD_BUFFER_BYTES = 1 shl 16
+
+        /* The frame of a video thumbnail: one second in, past the black of the very first frames. */
+        private const val VIDEO_FRAME_US = 1_000_000L
+
+        /* A photo too big for memory is halved up to three times before giving up. */
+        private const val MAX_REDUCE = 8
+        private const val PART_SUFFIX = ".part"
     }
 }

@@ -24,6 +24,7 @@ import io.github.thamichele.smbcommander.core.Integrity
 import io.github.thamichele.smbcommander.core.NasException
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemotePath
+import io.github.thamichele.smbcommander.core.makeDirs
 import io.github.thamichele.smbcommander.widget.BackupWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -110,7 +111,7 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
     }
 
     private fun upload(fs: NasFileSystem, share: String, folder: String, item: MediaItem, createdDirs: MutableSet<String>) {
-        ensureFolder(fs, share, folder, createdDirs)
+        fs.makeDirs(share, folder, createdDirs)
         val open = { openOriginal(applicationContext, item) }
         // after a reinstall the ledger is empty: photos already on the NAS are recognised by size and hash
         val placement = BackupPlacement.find(fs, share, RemotePath.child(folder, remoteName(item)), item.size) {
@@ -122,16 +123,6 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
     private fun wasDeleted(item: MediaItem, deleted: Set<String>): Boolean {
         val hash = openOriginal(applicationContext, item).use { Integrity.sha256(it) }
         return DeletedPhotos.entry(item.size, hash) in deleted
-    }
-
-    private fun ensureFolder(fs: NasFileSystem, share: String, folder: String, createdDirs: MutableSet<String>) {
-        var current = ""
-        for (part in folder.split('/').filter { it.isNotEmpty() }) {
-            current = RemotePath.child(current, part)
-            if (current in createdDirs) continue
-            if (fs.stat(share, current) == null) fs.createDirectory(share, current)
-            createdDirs += current
-        }
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(0, 0)

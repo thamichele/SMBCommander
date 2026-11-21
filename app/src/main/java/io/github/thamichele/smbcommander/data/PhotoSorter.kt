@@ -3,7 +3,6 @@ package io.github.thamichele.smbcommander.data
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.FaceDetector
-import android.os.Process
 import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.PhotoKinds
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -42,7 +41,7 @@ class PhotoSorter(private val file: File, private val thumbnails: ThumbnailCache
     suspend fun sort(photo: RemoteEntry): PhotoKind {
         known(photo)?.let { return it }
         val thumb = thumbnails.background(photo)
-        val kind = withContext(Dispatchers.Default) { lowPriority { look(thumb) } }
+        val kind = withContext(Dispatchers.Default) { atBackgroundPriority { look(thumb) } }
         val key = thumbnails.key(Thumb(photo))
         if (kinds.put(key, kind) == null) synchronized(this) { runCatching { file.appendText("$key\t${kind.name}\n") } }
         return kind
@@ -77,17 +76,6 @@ class PhotoSorter(private val file: File, private val thumbnails: ThumbnailCache
         val count = runCatching { FaceDetector(bitmap.width, bitmap.height, MAX_FACES).findFaces(bitmap, found) }.getOrDefault(0)
         val minEyes = minOf(bitmap.width, bitmap.height) * MIN_EYES
         return found.take(count).count { it != null && it.confidence() >= MIN_CONFIDENCE && it.eyesDistance() >= minEyes }
-    }
-
-    private inline fun <T> lowPriority(block: () -> T): T {
-        val tid = Process.myTid()
-        val before = Process.getThreadPriority(tid)
-        Process.setThreadPriority(tid, Process.THREAD_PRIORITY_BACKGROUND)
-        try {
-            return block()
-        } finally {
-            Process.setThreadPriority(tid, before)
-        }
     }
 
     companion object {
