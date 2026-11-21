@@ -122,19 +122,114 @@ fun PageHeader(
     }
 }
 
-/** Icon-only button of the kit: 44dp touch target, square corners of 4. */
+/** Size of every button with an icon only, the same as the bar of the video player: easy to hit at arm's length. */
+val TOOL_BUTTON_SIZE = 56.dp
+val TOOL_ICON_SIZE = 28.dp
+
+/** Room around the buttons of a [ButtonBar], and the bar's whole height. */
+private val BUTTON_BAR_PADDING = 4.dp
+val BUTTON_BAR_HEIGHT = TOOL_BUTTON_SIZE + BUTTON_BAR_PADDING * 2
+
+/** Inside a text field the button fits the field's own slot instead. */
+private val FIELD_BUTTON_SIZE = 48.dp
+private val FIELD_ICON_SIZE = 24.dp
+
+/** A button that does nothing right now stays visible, faded. */
+private const val TOOL_DISABLED_ALPHA = 0.4f
+
+/**
+ * ToolButton() - the icon button of the whole app, in the style of the video player's bar
+ * @param icon what the button shows
+ * @param label what the button does, read aloud by TalkBack
+ * @param onClick the action
+ * @param tint colour of the icon; ignored when [isPrimary]
+ * @param enabled false fades the button and ignores touches
+ * @param isPrimary filled with the main colour: the one action that matters most on that bar (Play)
+ * @param caption a short word under the icon ("10 s"), or null
+ *
+ * 56dp with a 28dp icon and corners of 4 everywhere: in the headers, in the
+ * viewer of photos and videos, in the rows of the lists and in the mini player.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
-fun ToolButton(icon: ImageVector, label: String, onClick: () -> Unit, tint: Color = Arancio.colors.text, enabled: Boolean = true) {
+fun ToolButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = Arancio.colors.text,
+    enabled: Boolean = true,
+    isPrimary: Boolean = false,
+    caption: String? = null,
+) {
+    val colors = Arancio.colors
+    Column(
+        Modifier
+            .size(TOOL_BUTTON_SIZE)
+            .clip(if (isPrimary) ArancioShape.fab else ArancioShape.control)
+            .background(if (isPrimary) colors.accentButton else Color.Transparent)
+            .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+            .alpha(if (enabled) 1f else TOOL_DISABLED_ALPHA),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = if (isPrimary) colors.onAccent else tint,
+            modifier = Modifier.size(TOOL_ICON_SIZE),
+        )
+        if (caption != null) {
+            Text(caption, style = ArancioType.data, color = colors.textSecondary, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * FieldButton() - the icon button inside a text field (clear, show password)
+ * @param icon what the button shows
+ * @param label what the button does, read aloud by TalkBack
+ * @param onClick the action
+ *
+ * Same look as [ToolButton] but sized to the field's own slot, so the field
+ * keeps the height of the others.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
+@Composable
+fun FieldButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(FIELD_BUTTON_SIZE)
             .clip(ArancioShape.control)
-            .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.5f),
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, tint = Arancio.colors.textSecondary, modifier = Modifier.size(FIELD_ICON_SIZE))
     }
+}
+
+/**
+ * ButtonBar() - a bar of [ToolButton]s on the colour of the bars, like the one under a video
+ * @param modifier where the bar goes
+ * @param content the buttons, spread evenly over the width
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
+@Composable
+fun ButtonBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(Arancio.colors.nav)
+            .padding(horizontal = 8.dp, vertical = BUTTON_BAR_PADDING),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
 }
 
 /** Filter chip of the kit: filled light when selected, outlined panel otherwise, corners of 4. */

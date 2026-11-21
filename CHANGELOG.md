@@ -3,6 +3,17 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.22.0 — 2026-11-21
+- Modificato: tutti i pulsanti con un'icona hanno lo stile e la misura di quelli del lettore video (56 dp, icona di
+  28 dp): intestazioni di File, Galleria, Album, Cestino, Pulizia rapida e Archivi, righe degli elenchi e mini
+  lettore musicale
+- Modificato: nel visualizzatore le azioni sulla foto o sul video (Informazioni, Condividi, Apri l'originale, Salva sul
+  telefono, Elimina) stanno in una barra in basso, come quella del video; in alto restano Indietro e il nome del file
+- Modificato: con dei file o delle foto selezionati il titolo è solo il numero, per fare posto ai pulsanti più grandi
+- Modificato: nel mini lettore musicale Riproduci/Pausa è pieno del colore principale come nel lettore video, e da
+  aperto i pulsanti hanno una riga tutta loro
+- Modificato: icone della barra di navigazione in basso più grandi
+
 ## 1.21.0 — 2026-11-20
 - Aggiunto: opzione «Avvia subito i video» in Impostazioni › Funzioni facoltative (spenta finché non la accendi)
 - Aggiunto: si scorre da un video all'altro anche durante la riproduzione, e il video successivo parte da solo

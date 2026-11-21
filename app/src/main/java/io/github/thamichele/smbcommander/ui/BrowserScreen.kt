@@ -128,8 +128,9 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         Column(Modifier.fillMaxSize()) {
             if (selected.isNotEmpty()) {
                 PageHeader(
-                    context = "Selezione",
-                    title = if (selected.size == 1) "1 selezionato" else "${selected.size} selezionati",
+                    // only the number as title: four big buttons leave little room next to it
+                    context = if (selected.size == 1) "Selezionato" else "Selezionati",
+                    title = "${selected.size}",
                     navigation = { ToolButton(AppIcons.Close, "Annulla selezione", vm::clearSelection) },
                 ) {
                     ToolButton(AppIcons.Copy, "Copia", { vm.cut(move = false) })
@@ -518,7 +519,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onClose: () -> U
             placeholder = { Text(if (deep) "Cerca anche nelle sottocartelle" else "Cerca in questa cartella") },
             leadingIcon = { Icon(AppIcons.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
             trailingIcon = if (query.isNotEmpty()) {
-                { ToolButton(AppIcons.Close, "Cancella", { onQuery("") }, tint = Arancio.colors.textSecondary) }
+                { FieldButton(AppIcons.Close, "Cancella", { onQuery("") }) }
             } else null,
             shape = ArancioShape.control,
             colors = arancioFieldColors(),

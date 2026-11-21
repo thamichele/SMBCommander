@@ -8,7 +8,7 @@
  * drawn over the video. The player itself lives in VideoPlayerState.kt; the
  * pages, the top bar and the rules for turning the page are in ViewerScreen.kt.
  *
- * Version: 1.21.0
+ * Version: 1.22.0
  */
 package io.github.thamichele.smbcommander.ui
 
@@ -21,7 +21,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,10 +32,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -54,15 +51,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -100,8 +94,6 @@ private const val CLOCK_TICK_MS = 250L
 /** From this width on (a phone held sideways) the bar is one row instead of two. */
 private val WIDE_BAR_MIN_WIDTH = 560.dp
 
-private val BAR_BUTTON_SIZE = 56.dp
-private val BAR_ICON_SIZE = 28.dp
 private val CENTER_BUTTON_SIZE = 88.dp
 private val CENTER_ICON_SIZE = 44.dp
 private val SPINNER_SIZE = 48.dp
@@ -109,7 +101,6 @@ private val SPINNER_STROKE = 3.dp
 
 /** Black veil behind the things drawn over the picture, so they read on any video. */
 private const val SCRIM_ALPHA = 0.55f
-private const val DISABLED_ALPHA = 0.4f
 
 /** Part of the width, on each side, where a double tap jumps instead of pausing. */
 private const val SEEK_ZONE_FRACTION = 1f / 3f
@@ -533,24 +524,24 @@ private fun TransportButtons(entry: RemoteEntry, player: VideoPlayerState, actio
         action()
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        BarButton(
+        ToolButton(
             icon = if (isRunning) AppIcons.Pause else AppIcons.Play,
             label = if (isRunning) "Pausa" else "Riproduci",
             onClick = { used { if (isActive) player.togglePlay() else actions.onStart(entry) } },
             isPrimary = true,
         )
-        BarButton(
+        ToolButton(
             icon = AppIcons.Rewind,
             label = "Indietro di 10 secondi",
             onClick = { used { player.seekBy(-SEEK_STEP_MS) } },
-            isEnabled = isActive,
+            enabled = isActive,
             caption = SEEK_STEP_LABEL,
         )
-        BarButton(
+        ToolButton(
             icon = AppIcons.FastForward,
             label = "Avanti di 10 secondi",
             onClick = { used { player.seekBy(SEEK_STEP_MS) } },
-            isEnabled = isActive,
+            enabled = isActive,
             caption = SEEK_STEP_LABEL,
         )
     }
@@ -561,7 +552,7 @@ private fun TransportButtons(entry: RemoteEntry, player: VideoPlayerState, actio
 private fun ViewButtons(state: VideoPageState, actions: VideoPageActions) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (state.isFullscreen) {
-            BarButton(
+            ToolButton(
                 icon = AppIcons.AspectRatio,
                 label = "Adattamento allo schermo: ${state.fit.label}",
                 onClick = {
@@ -571,7 +562,7 @@ private fun ViewButtons(state: VideoPageState, actions: VideoPageActions) {
                 caption = state.fit.label,
             )
         }
-        BarButton(
+        ToolButton(
             icon = if (state.isFullscreen) AppIcons.FullscreenExit else AppIcons.Fullscreen,
             label = if (state.isFullscreen) "Esci dallo schermo intero" else "Schermo intero",
             onClick = {
@@ -625,40 +616,6 @@ private fun SeekLine(player: VideoPlayerState, isActive: Boolean, onInteraction:
 @Composable
 private fun ClockLabel(text: String) {
     Text(text, style = ArancioType.data, color = Arancio.colors.textSecondary, maxLines = 1)
-}
-
-/*
- * Private: a button of the bar, bigger than the kit's ToolButton (56dp, icon
- * 28dp) because it is used at arm's length while watching. isPrimary fills it
- * with the main colour; caption is a short word under the icon ("10 s").
- */
-@Composable
-private fun BarButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    isEnabled: Boolean = true,
-    isPrimary: Boolean = false,
-    caption: String? = null,
-) {
-    val colors = Arancio.colors
-    val tint = if (isPrimary) colors.onAccent else colors.text
-    Column(
-        Modifier
-            .height(BAR_BUTTON_SIZE)
-            .width(BAR_BUTTON_SIZE)
-            .clip(if (isPrimary) ArancioShape.fab else ArancioShape.control)
-            .background(if (isPrimary) colors.accentButton else Color.Transparent)
-            .clickable(enabled = isEnabled, role = Role.Button, onClickLabel = label, onClick = onClick)
-            .alpha(if (isEnabled) 1f else DISABLED_ALPHA),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(BAR_ICON_SIZE))
-        if (caption != null) {
-            Text(caption, style = ArancioType.data, color = colors.textSecondary, maxLines = 1)
-        }
-    }
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
