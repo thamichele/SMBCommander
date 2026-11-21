@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import io.github.thamichele.smbcommander.core.FileTrash
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.NasShares
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.ZipArchive
 import io.github.thamichele.smbcommander.data.Thumb
@@ -161,9 +162,12 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
             } else if (state.searching) {
                 SearchBar(state.query, vm::setQuery, onClose = { vm.setSearching(false) }, deep = state.deep)
             } else {
-                val title = if (screen.path.isEmpty()) screen.share else RemotePath.name(screen.path)
-                val context = if (screen.path.isEmpty()) "Cartella condivisa" else
-                    (listOf(screen.share) + RemotePath.parent(screen.path).split('/').filter { it.isNotEmpty() }).joinToString(" / ")
+                val title = if (screen.path.isEmpty()) NasShares.shownName(screen.share) else RemotePath.name(screen.path)
+                val context = when {
+                    screen.path.isNotEmpty() -> NasShares.display(screen.share, RemotePath.parent(screen.path))
+                    NasShares.isRoot(screen.share) -> "Altro NAS"
+                    else -> NasShares.label(screen.share)?.let { "$it · cartella condivisa" } ?: "Cartella condivisa"
+                }
                 PageHeader(
                     context = context,
                     title = title,
@@ -217,7 +221,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 ) {
                     CircularProgressIndicator(Modifier.size(14.dp), color = c.accent, strokeWidth = 2.dp)
                     Text(
-                        "Cerco in " + (listOf(screen.share) + state.deepFolder.split('/').filter { it.isNotEmpty() }).joinToString(" / ") +
+                        "Cerco in " + NasShares.display(screen.share, state.deepFolder) +
                             " · trovati ${visible.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,

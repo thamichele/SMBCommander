@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.FileTrash
+import io.github.thamichele.smbcommander.core.NasShares
+import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /**
@@ -76,7 +78,7 @@ fun TrashScreen(vm: AppViewModel) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(item.entry.name, style = MaterialTheme.typography.titleSmall)
                             Text(
-                                "Era in " + (listOf(item.share) + item.original.split('/').dropLast(1)).joinToString(" / "),
+                                "Era in " + NasShares.display(item.share, RemotePath.parent(item.original)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.text,
                             )

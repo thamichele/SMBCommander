@@ -56,7 +56,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 Column(Modifier.fillMaxSize().background(c.background).statusBarsPadding().navigationBarsPadding()) {
                     PageHeader(context = "Widget", title = "Quale cartella apre?")
                     LazyColumn {
-                        items(folders, key = { it.fullPath }) { folder -> Choice(folder.name, folder.fullPath) { choose(folder) } }
+                        items(folders, key = { it.fullPath }) { folder -> Choice(folder.name, folder.shown) { choose(folder) } }
                         item { Choice("Nessuna", "Apre SMBCommander") { choose(null) } }
                     }
                 }

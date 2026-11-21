@@ -201,6 +201,7 @@ fun SetupScreen(vm: AppViewModel) {
                 ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS")
                 }
+                OtherNasSection(vm)
                 SectionLabel("Galleria", Modifier.padding(top = 20.dp))
                 Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
                     Row(
@@ -234,7 +235,7 @@ fun SetupScreen(vm: AppViewModel) {
     if (confirmForget) {
         ConfirmDialog(
             title = "Dimenticare il NAS?",
-            text = "Indirizzo, utente, password e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
+            text = "Indirizzo, utente, password, gli altri NAS e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
             confirm = "Dimentica",
             danger = true,
             onDismiss = { confirmForget = false },

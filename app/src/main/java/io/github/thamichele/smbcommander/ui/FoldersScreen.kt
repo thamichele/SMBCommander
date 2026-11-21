@@ -44,6 +44,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.thamichele.smbcommander.core.NasShares
+import io.github.thamichele.smbcommander.data.OtherNas
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
@@ -54,9 +56,12 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioType
 fun FoldersScreen(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
+    val otherNas by vm.otherNas.collectAsStateWithLifecycle()
     val host = remember { vm.savedHost() }
     val c = Arancio.colors
     var adding by remember { mutableStateOf(false) }
+    var addingNas by remember { mutableStateOf(false) }
+    var editingNas by remember { mutableStateOf<OtherNas?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -85,7 +90,16 @@ fun FoldersScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(folders, key = { it.fullPath }) { folder ->
-                        FolderCard(folder, onOpen = { vm.openSaved(folder) }, onRemove = { vm.removeFolder(folder) })
+                        // reading the list of NAS here draws the card again when a NAS is renamed
+                        val nas = otherNas.find { NasShares.nasOf(folder.share) == it.id }
+                        FolderCard(
+                            folder,
+                            title = folder.name,
+                            detail = folderDetail(folder, nas),
+                            onOpen = { vm.openSaved(folder) },
+                            onRemove = { vm.removeFolder(folder) },
+                            onEditNas = nas?.takeIf { folder.isNas }?.let { { editingNas = it } },
+                        )
                     }
                 }
             }
@@ -96,13 +110,30 @@ fun FoldersScreen(vm: AppViewModel) {
     }
 
     if (adding) {
-        AddFolderDialog(vm, onDismiss = { adding = false })
+        AddFolderDialog(vm, onDismiss = { adding = false }, onAddNas = { adding = false; addingNas = true })
     }
+    if (addingNas || editingNas != null) {
+        NasDialog(vm, editingNas, onDismiss = { addingNas = false; editingNas = null })
+    }
+}
+
+/* Second line of a card: where the folder is, or the address of a whole other NAS; null when the name says it all. */
+private fun folderDetail(folder: SavedFolder, nas: OtherNas?): String? = when {
+    folder.isNas -> nas?.server?.host?.let { "NAS · $it" } ?: "NAS"
+    folder.shown != folder.name -> folder.shown
+    else -> null
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderCard(folder: SavedFolder, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun FolderCard(
+    folder: SavedFolder,
+    title: String,
+    detail: String?,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+    onEditNas: (() -> Unit)?,
+) {
     val c = Arancio.colors
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -119,22 +150,25 @@ private fun FolderCard(folder: SavedFolder, onOpen: () -> Unit, onRemove: () -> 
             Modifier.size(40.dp).background(c.folder.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(22.dp))
+            Icon(if (folder.isNas) AppIcons.Server else AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(folder.name, style = MaterialTheme.typography.titleSmall)
-            if (folder.fullPath != folder.name) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            if (detail != null) {
                 Text(
-                    folder.fullPath,
+                    detail,
                     style = ArancioType.data,
                     color = c.textSecondary,
                 )
             }
         }
         Box {
-            ToolButton(AppIcons.More, "Azioni per ${folder.name}", { menu = true })
+            ToolButton(AppIcons.More, "Azioni per $title", { menu = true })
             ArancioMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (onEditNas != null) {
+                    ArancioMenuItem(AppIcons.Rename, "Modifica il collegamento") { menu = false; onEditNas() }
+                }
                 ArancioMenuItem(AppIcons.Close, "Togli dall'elenco", danger = true) { menu = false; onRemove() }
             }
         }
@@ -143,17 +177,19 @@ private fun FolderCard(folder: SavedFolder, onOpen: () -> Unit, onRemove: () -> 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddFolderDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+private fun AddFolderDialog(vm: AppViewModel, onDismiss: () -> Unit, onAddNas: () -> Unit) {
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
     val checking by vm.checkingFolder.collectAsStateWithLifecycle()
+    val otherNas by vm.otherNas.collectAsStateWithLifecycle()
     var text by remember { mutableStateOf("") }
+    // null: the main NAS
+    var nasId by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        vm.loadSuggestions()
-        focus.requestFocus()
-    }
-    val available = suggestions.filter { s -> folders.none { it.path.isEmpty() && it.share.equals(s, ignoreCase = true) } }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(nasId) { vm.loadSuggestions(nasId) }
+    val shareOf = { s: String -> if (nasId == null) s else NasShares.of(nasId!!, s) }
+    val available = suggestions.filter { s -> folders.none { it.path.isEmpty() && it.share.equals(shareOf(s), ignoreCase = true) } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -161,6 +197,13 @@ private fun AddFolderDialog(vm: AppViewModel, onDismiss: () -> Unit) {
         title = { Text("Aggiungi una cartella", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (otherNas.isNotEmpty()) {
+                    Text("Su quale NAS", style = MaterialTheme.typography.labelMedium, color = Arancio.colors.textSecondary)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Principale", nasId == null) { nasId = null }
+                        otherNas.forEach { nas -> Pill(nas.name, nasId == nas.id) { nasId = nas.id } }
+                    }
+                }
                 Text(
                     "Nome della cartella condivisa, anche nascosta, eventualmente seguito da una sottocartella.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -185,11 +228,16 @@ private fun AddFolderDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                         available.forEach { share -> Pill(share, text.trim() == share) { text = share } }
                     }
                 }
+                GhostButton(onClick = onAddNas) {
+                    Icon(AppIcons.Server, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Collega un altro NAS")
+                }
             }
         },
         confirmButton = {
             PrimaryButton(
-                onClick = { vm.addFolder(text, onAdded = onDismiss) },
+                onClick = { vm.addFolder(text, nasId, onAdded = onDismiss) },
                 enabled = text.isNotBlank() && !checking,
             ) {
                 if (checking) {

@@ -3,6 +3,17 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.26.0 — 2026-11-21
+- Nuovo: più NAS, ognuno con il suo utente e la sua password. Ogni NAS in più compare in File come una cartella
+  con il nome che gli dai; dentro ci sono le sue cartelle condivise e il resto funziona come sempre
+- Nuovo: copia e sposta funzionano anche da un NAS all'altro, con la stessa verifica SHA-256 di ogni trasferimento;
+  spostando, l'originale viene eliminato solo dopo che la copia è risultata identica
+- Nuovo: Impostazioni › NAS › Altri NAS per aggiungere, modificare o togliere un NAS; le password restano cifrate
+  sul telefono come quella del NAS principale, e ogni NAS viene riconosciuto prima di ricevere la password
+- Nuovo: «Aggiungi una cartella» permette di scegliere su quale NAS, anche per le cartelle condivise nascoste, e
+  ha il pulsante «Collega un altro NAS»
+- Backup foto e Galleria restano sul NAS principale
+
 ## 1.24.0 — 2026-11-21
 - Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
   rimpicciolisce: il titolo sparisce e resta solo la riga dei pulsanti; torna intera appena scorri in su

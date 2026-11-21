@@ -261,7 +261,7 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
 
     if (choosingFolder) {
         FolderChooser(
-            folders = vm.folders,
+            folders = vm.folders.filter { it.onMainNas },
             selected = settings.destination,
             onDismiss = { choosingFolder = false },
             onChoose = {
@@ -432,7 +432,7 @@ private fun FolderChooser(
                                 colors = RadioButtonDefaults.colors(selectedColor = c.accent, unselectedColor = c.borderStrong),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(f.fullPath, style = ArancioType.code)
+                            Text(f.shown, style = ArancioType.code)
                         }
                     }
                 }
