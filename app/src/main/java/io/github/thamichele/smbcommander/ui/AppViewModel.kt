@@ -293,6 +293,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun disconnect() {
+        // nothing keeps reading or writing the NAS just forgotten: the song playing and the transfers stop
+        app.music.stop()
+        app.transfers.cancelAll()
+        _clipboard.value = null
         repo.forget()
         app.folders.clear()
         // a different NAS starts from scratch: no backup towards a folder that may not exist there
@@ -468,10 +472,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message("«${folder.name}» aggiunta alle tue cartelle")
     }
 
-    fun openSaved(folder: SavedFolder) {
-        history.clear()
-        navigate(folder.share, folder.path)
-    }
+    fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
 
     /**
      * A folder opened from a widget. The intent can come from any app, so only one of the user's folders (or a folder
@@ -481,26 +482,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (!repo.isConfigured) return
         val dir = RemotePath.normalize(path)
         val allowed = app.folders.all().any { it.contains(share, dir) }
-        if (!allowed) return
-        history.clear()
-        navigate(share, dir)
+        if (allowed) navigate(share, dir)
     }
 
     // --- navigation -------------------------------------------------------------------------------------------------
 
-    /*
-     * The folders opened one inside the other since the start screen, the newest last: back retraces them in order,
-     * whatever their place on the NAS (a result of the search in the subfolders goes back to the search).
-     */
-    private val history = ArrayDeque<Screen.Browser>()
-
     /* Where each folder was scrolled to, so that going back finds the list as it was left. */
     private val scrollMemory = HashMap<Screen.Browser, Pair<Int, Int>>()
 
-    fun openFolder(entry: RemoteEntry) {
-        (_screen.value as? Screen.Browser)?.let { history.addLast(it) }
-        navigate(entry.share, entry.path)
-    }
+    fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
 
     /**
      * scrollOf() - where the list of a folder was left
@@ -560,10 +550,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else if (_browser.value.searching) {
                     setSearching(false)
                 } else {
-                    // the way the user came, one folder at a time; at the first one, back to "Le mie cartelle"
-                    val previous = history.removeLastOrNull()
-                    if (previous != null) {
-                        navigate(previous.share, previous.path)
+                    // always the folder above in the absolute path, up to the share (or the other NAS), then home
+                    val up = SavedFolder(s.share, s.path).parent()
+                    if (up != null) {
+                        navigate(up.share, up.path)
                     } else {
                         listJob?.cancel()
                         _screen.value = Screen.Shares
@@ -1324,10 +1314,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val browsing = ((_screen.value as? Screen.Trash)?.returnTo as? Screen.Browser)?.share
-                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing))
-                    .filterNot { NasShares.isRoot(it) }
-                    .distinctBy { it.lowercase() }
+                val saved = app.folders.all().map { it.share } + listOfNotNull(browsing)
                 val items = repo.io { fs ->
+                    // the folder of a whole other NAS stands for all its shares: their bins are shown too
+                    val shares = saved.flatMap { share ->
+                        if (!NasShares.isRoot(share)) listOf(share)
+                        else runCatching { fs.list(share, "").map { it.share } }.getOrDefault(emptyList())
+                    }.distinctBy { it.lowercase() }
                     shares.flatMap { share ->
                         runCatching { FileTrash.purge(fs, share) }
                         runCatching { FileTrash.contents(fs, share) }.getOrDefault(emptyList())

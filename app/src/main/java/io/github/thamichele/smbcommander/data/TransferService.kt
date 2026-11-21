@@ -23,8 +23,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 
 /**
@@ -44,8 +45,13 @@ class TransferService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // promised to Android when the service was started: foreground first, whatever comes next
-        goForeground(build(queue.jobs.value, queue.paused.value))
+        // promised to Android when the service was started: foreground first, whatever comes next. Android 12 and
+        // later refuse it to an app started in the background: the queue then goes on only while the app is open,
+        // instead of the whole app closing on the refusal
+        if (runCatching { goForeground(build(queue.jobs.value, queue.paused.value)) }.isFailure) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_PAUSE -> queue.pause()
             ACTION_RESUME -> queue.resume()
@@ -55,11 +61,14 @@ class TransferService : Service() {
             started = true
             acquireLocks()
             scope.launch {
-                combine(queue.jobs, queue.paused) { jobs, paused -> jobs to paused }.collectLatest { (jobs, paused) ->
+                // the progress changes at every block copied, hundreds of times a second: the notification follows
+                // at most once a second (the latest state, never a stale one), or Android counts it as a battery drain
+                combine(queue.jobs, queue.paused) { jobs, paused -> jobs to paused }.conflate().collect { (jobs, paused) ->
                     if (jobs.none { it.busy }) {
                         stop()
                     } else {
                         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, build(jobs, paused))
+                        delay(NOTIFY_EVERY_MS)
                     }
                 }
             }
@@ -151,6 +160,8 @@ class TransferService : Service() {
     companion object {
         private const val CHANNEL = "transfers"
         private const val NOTIFICATION_ID = 44
+        /** The notification shows the progress again at most this often. */
+        private const val NOTIFY_EVERY_MS = 1_000L
         private const val ACTION_PAUSE = "pause"
         private const val ACTION_RESUME = "resume"
         private const val ACTION_CANCEL = "cancel"

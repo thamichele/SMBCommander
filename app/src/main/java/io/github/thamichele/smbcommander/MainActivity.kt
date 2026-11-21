@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
+import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.ui.AppLock
 import io.github.thamichele.smbcommander.ui.LockScreen
 import androidx.activity.compose.setContent
@@ -32,7 +33,14 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) handle(intent)
+        if (savedInstanceState == null) {
+            handle(intent)
+            // catch up on photos taken while the app was closed (still waits for Wi-Fi). Only when the user opens
+            // the app: the process also starts for the hourly backup, the widget or the music, and a run queued at
+            // each of those starts would mean a second scan of the phone's photos every time
+            val app = application as SmbCommanderApp
+            BackupScheduler.runNow(this, app.backupSettings.load(), respectCharging = true)
+        }
         setContent {
             ArancioTheme {
                 Box(Modifier.fillMaxSize()) {

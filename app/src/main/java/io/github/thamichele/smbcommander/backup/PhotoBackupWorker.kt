@@ -66,9 +66,10 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         val fs = try {
             app.repository.fs().also { it.list(destination.share, destination.path) }
         } catch (e: Exception) {
-            // most likely away from home: try again at the next run
+            // most likely on a Wi-Fi away from home: the next hourly run tries again. Not a retry, which Android
+            // would schedule again within seconds and then minutes, each time reading the whole gallery of the phone
             finish(0, "NAS non raggiungibile: ${e.message ?: e.javaClass.simpleName}", pending.size)
-            return Result.retry()
+            return Result.success()
         }
 
         // photos deleted from the gallery on purpose: never uploaded again, even after a reinstall
