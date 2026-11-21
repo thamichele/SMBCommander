@@ -88,6 +88,7 @@ import io.github.thamichele.smbcommander.ui.SkeletonGrid
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.rememberCollapsingHeaderState
 import io.github.thamichele.smbcommander.ui.VideoBadge
+import io.github.thamichele.smbcommander.ui.VideoFrameCycle
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
@@ -351,6 +352,15 @@ private fun PhotoGrid(
                                 .padding(if (isSelected) 8.dp else 0.dp)
                                 .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
                         )
+                        if (photo.isVideo) {
+                            VideoFrameCycle(
+                                photo,
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(if (isSelected) 8.dp else 0.dp)
+                                    .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
+                            )
+                        }
                         if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
                         if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
                     }
@@ -515,6 +525,15 @@ private fun PhotoMosaic(
                                         .padding(if (isSelected) 8.dp else 0.dp)
                                         .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
                                 )
+                                if (photo.isVideo) {
+                                    VideoFrameCycle(
+                                        photo,
+                                        Modifier
+                                            .fillMaxSize()
+                                            .padding(if (isSelected) 8.dp else 0.dp)
+                                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
+                                    )
+                                }
                                 if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
                                 if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
                             }
@@ -581,6 +600,7 @@ private fun PhotoList(
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(c.surface),
                                 )
+                                if (photo.isVideo) VideoFrameCycle(photo, Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)))
                                 if (photo.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 20.dp)
                                 if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(2.dp))
                             }

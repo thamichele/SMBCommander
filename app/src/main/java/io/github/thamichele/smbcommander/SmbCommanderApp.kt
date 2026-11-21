@@ -21,6 +21,9 @@ import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.ShareCache
 import io.github.thamichele.smbcommander.data.PhotoSorter
 import io.github.thamichele.smbcommander.data.ThumbnailCache
+import io.github.thamichele.smbcommander.data.Thumb
+import io.github.thamichele.smbcommander.data.VideoFramePrefs
+import io.github.thamichele.smbcommander.data.VideoFrames
 import io.github.thamichele.smbcommander.data.TransferQueue
 import io.github.thamichele.smbcommander.data.TransferService
 import io.github.thamichele.smbcommander.ui.isConnectionLost
@@ -57,6 +60,11 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var extras: Extras
         private set
+    /** Frames of the animated previews of videos, and the switch that turns them on. */
+    lateinit var videoFrames: VideoFrames
+        private set
+    lateinit var videoFramePrefs: VideoFramePrefs
+        private set
     /** The music player, connected to its service the first time a song is played. */
     val music: MusicController by lazy { MusicController(this) }
 
@@ -85,10 +93,13 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
         // catch up on photos taken while the app was closed (still waits for Wi-Fi)
         BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
+        videoFrames = VideoFrames(File(cacheDir, "images/" + VideoFrames.FOLDER), repository) { thumbnails.key(Thumb(it)) }
+        videoFramePrefs = VideoFramePrefs(this)
         photoSorter = PhotoSorter(File(filesDir, PhotoSorter.FILE_NAME), thumbnails)
         shareCache = ShareCache(this)
         Thread {
             runCatching { thumbnails.trim() }
+            runCatching { videoFrames.trim() }
             // copies of an earlier share that nothing deleted (the phone restarted, say)
             runCatching { shareCache.clean(olderThanMs = 10 * 60_000L) }
         }.start()

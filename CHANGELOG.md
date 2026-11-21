@@ -3,6 +3,17 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.27.0 — 2026-11-21
+- Nuovo: nella Galleria (anche nella scheda Video) e in File le anteprime dei video sono animate: mostrano a turno
+  due o tre momenti del video (dopo 2 secondi, dopo 10, a metà) con una breve dissolvenza. Si animano solo quelle
+  sullo schermo; i fotogrammi si leggono dal NAS una volta sola, quando l'anteprima resta ferma per un attimo, e
+  restano nella cache delle miniature con un tetto loro di 100 MB. Mentre guardi un video la lettura aspetta
+- Nuovo: interruttore «Anteprime animate dei video» in Impostazioni › Opzioni (acceso di partenza)
+- Modificato: i video lunghi partono prima. Il lettore legge il NAS a blocchi che crescono da 256 KB fino a 2 MB e
+  chiede il blocco seguente prima che serva; l'inizio e l'indice (la parte in fondo agli MP4) degli ultimi video
+  aperti restano in memoria, così riaprirli o tornare all'inizio è immediato. Nessun video viene salvato sul
+  telefono
+
 ## 1.26.0 — 2026-11-21
 - Nuovo: più NAS, ognuno con il suo utente e la sua password. Ogni NAS in più compare in File come una cartella
   con il nome che gli dai; dentro ci sono le sue cartelle condivise e il resto funziona come sempre
