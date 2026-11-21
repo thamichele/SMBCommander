@@ -107,33 +107,25 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlin.math.roundToInt
 
-/** Room between the back button, the title and the actions of a [PageHeader]. */
-private val HEADER_GAP = 4.dp
-
-/** Room between the grey context line of a [PageHeader] and the title under it. */
-private val HEADER_CONTEXT_GAP = 2.dp
-
-/** Left margin of every page: a context line on a row of its own starts there, not after the back button. */
+/** Left margin of every page: the line of the title starts there. */
 private val HEADER_MARGIN = 16.dp
-private val HEADER_NAV_MARGIN = 4.dp
+
+/** The buttons reach closer to the edge than the texts: their own padding does the rest. */
+private val HEADER_ROW_MARGIN = 4.dp
 
 /**
- * PageHeader() - the header of every page: context and title on top, the row of the buttons under them
- * @param context the small grey line over the title (a path, "Album"); empty for none
- * @param title the big title in JetBrains Mono
- * @param navigation the back or close button on the left of the title, or null
- * @param collapse when not null, context and title slide away with the scroll and only the row of the buttons stays
+ * PageHeader() - the header of every page: one thin line of title, one row of buttons
+ * @param context the grey words before the title on its line (a path, "Album"); empty for none
+ * @param title the name of the page, at the end of the line
+ * @param navigation the back or close button, first on the left of the row of the buttons, or null
+ * @param collapse when not null, the line of the title slides away with the scroll and only the row of the buttons stays
  * @param tabs the buttons that choose what the page shows (Foto/Video/Album, the sorting), on the left of the row
  * @param actions the buttons of the page, on the right of the row
  *
- * The buttons are in the same place on every page and at every screen size:
- * one row under the title, the choices on the left and the actions on the
- * right, all icons; see [ToolRow]. The title has the whole width beside the
- * back button and wraps, never cut.
- *
- * The context is always one line. Short, it sits over the title; too long for
- * that (a deep path) it takes a line of its own across the whole page, and if
- * even that is not enough it shows its end and scrolls sideways to the rest.
+ * The header is as low as it can be and the same on every page and at every
+ * screen size: context and title share one line, the buttons one row under
+ * it; see [ToolRow]. A line too long for the page (a deep path) shows its end,
+ * where the title is, and scrolls sideways to the rest: nothing is cut.
  *
  * Context: composable.
  * Return: nothing.
@@ -147,59 +139,43 @@ fun PageHeader(
     tabs: @Composable () -> Unit = {},
     actions: @Composable () -> Unit = {},
 ) {
-    val part = rememberCollapsingPart(collapse)
-    val fade = Modifier.graphicsLayer { alpha = 1f - (collapse?.fraction ?: 0f) }
-    Layout(
-        contents = listOf(
-            { navigation?.invoke() },
-            { if (context.isNotEmpty()) HeaderContext(context, fade) },
-            { Text(title, style = MaterialTheme.typography.headlineMedium, modifier = fade) },
-            { ToolRow(tabs, actions) },
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clipToBounds()
-            .padding(start = if (navigation == null) HEADER_MARGIN else HEADER_NAV_MARGIN, end = 4.dp, top = 8.dp, bottom = 4.dp),
-    ) { (navMeasurables, contextMeasurables, titleMeasurables, actionMeasurables), constraints ->
-        val width = constraints.maxWidth
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val nav = navMeasurables.firstOrNull()?.measure(loose)
-        val navWidth = nav?.let { it.width + HEADER_GAP.roundToPx() } ?: 0
-        val textWidth = (width - navWidth).coerceAtLeast(0)
-        val titlePlaced = titleMeasurables.first().measure(loose.copy(maxWidth = textWidth))
-        // the context stays over the title while it fits there on one line; longer, it gets the whole page
-        val contextMeasurable = contextMeasurables.firstOrNull()
-        val isContextInline = contextMeasurable == null || contextMeasurable.maxIntrinsicWidth(Constraints.Infinity) <= textWidth
-        val contextInset = if (nav == null || isContextInline) 0 else (HEADER_MARGIN - HEADER_NAV_MARGIN).roundToPx()
-        val contextPlaced = contextMeasurable?.measure(loose.copy(maxWidth = if (isContextInline) textWidth else width - contextInset))
-        val contextHeight = contextPlaced?.let { it.height + HEADER_CONTEXT_GAP.roundToPx() } ?: 0
-        val textHeight = titlePlaced.height + if (isContextInline) contextHeight else 0
-        // a page without buttons has an empty row, of no height
-        val actions = actionMeasurables.first().measure(loose)
-        val hasActions = actions.height > 0
-        val fullTop = maxOf(nav?.height ?: 0, textHeight)
-        val fullAbove = if (isContextInline) 0 else contextHeight
-        // shrunk by the scroll, everything over the buttons goes; with no buttons the back button must stay
-        val shrunkTop = if (hasActions) 0 else nav?.height ?: 0
-        val shrunkAbove = 0
-        collapse?.report(part, fullTop - shrunkTop + fullAbove - shrunkAbove)
-        val fraction = collapse?.fraction ?: 0f
-        val topHeight = fullTop - ((fullTop - shrunkTop) * fraction).roundToInt()
-        val above = fullAbove - (fullAbove * fraction).roundToInt()
-        layout(width, above + topHeight + actions.height) {
-            // what goes slides up under the top edge, it is not squeezed
-            val rowY = above + topHeight - fullTop
-            nav?.placeRelative(0, rowY + (fullTop - nav.height) / 2)
-            val textY = rowY + (fullTop - textHeight) / 2
-            if (isContextInline) {
-                contextPlaced?.placeRelative(navWidth, textY)
-                titlePlaced.placeRelative(navWidth, textY + contextHeight)
-            } else {
-                contextPlaced?.placeRelative(contextInset, above - fullAbove)
-                titlePlaced.placeRelative(navWidth, textY)
-            }
-            actions.placeRelative(0, above + topHeight)
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
+        if (collapse != null) {
+            CollapsibleBox(collapse) { HeaderLine(context, title) }
+        } else {
+            HeaderLine(context, title)
         }
+        Box(Modifier.padding(horizontal = HEADER_ROW_MARGIN)) {
+            ToolRow(
+                tabs = {
+                    navigation?.invoke()
+                    tabs()
+                },
+                actions = actions,
+            )
+        }
+    }
+}
+
+/* Private: context in grey and title after it, on one line opened on its end and scrolling to the rest. */
+@Composable
+private fun HeaderLine(context: String, title: String) {
+    // a new page starts again from the end of its line; the largest value is brought back to the real end at layout
+    val scroll = key(context, title) { rememberScrollState(Int.MAX_VALUE) }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = HEADER_MARGIN, vertical = 2.dp),
+    ) {
+        if (context.isNotEmpty()) {
+            Text(
+                "$context / ",
+                style = MaterialTheme.typography.bodySmall,
+                color = Arancio.colors.textSecondary,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+        Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, softWrap = false, modifier = Modifier.alignByBaseline())
     }
 }
 
@@ -241,21 +217,6 @@ fun ToolRow(tabs: @Composable () -> Unit, actions: @Composable () -> Unit) {
             }
         }
     }
-}
-
-/* Private: the grey line of a PageHeader: one line, opened on its end (the nearest folders), scrolling to the rest. */
-@Composable
-private fun HeaderContext(context: String, modifier: Modifier) {
-    // a new path starts again from its end; the largest value is brought back to the real end at the first layout
-    val scroll = key(context) { rememberScrollState(Int.MAX_VALUE) }
-    Text(
-        context,
-        style = MaterialTheme.typography.bodySmall,
-        color = Arancio.colors.textSecondary,
-        maxLines = 1,
-        softWrap = false,
-        modifier = modifier.horizontalScroll(scroll),
-    )
 }
 
 /**

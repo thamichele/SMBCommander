@@ -4,15 +4,15 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
 ## 1.28.0 — 2026-11-21
-- Modificato: i pulsanti sono nello stesso posto in tutte le schermate, con qualsiasi zoom: una riga sola sotto il
-  titolo, a sinistra quelli che scelgono cosa vedere e a destra le azioni. Se non ci stanno si stringono tutti allo
-  stesso modo, senza andare a capo. Scorrendo resta solo quella riga
+- Modificato: intestazione molto più bassa e uguale in tutte le schermate, con qualsiasi zoom. Una riga sottile con
+  il percorso in grigio e il nome della pagina, e sotto una riga sola di pulsanti: a sinistra Indietro e quelli che
+  scelgono cosa vedere, a destra le azioni. Se non ci stanno si stringono tutti allo stesso modo, senza andare a
+  capo. Scorrendo resta solo la riga dei pulsanti, con Indietro sempre a portata
 - Modificato: le schede Foto / Video / Album della Galleria e l'ordinamento per nome, data e dimensione delle
   cartelle sono pulsanti con un'icona sulla stessa riga delle azioni, non più scritte su una riga a parte; quello
   attivo ha il fondo colorato scuro
-- Corretto: il percorso grigio sopra il titolo di una cartella sta sempre su una riga sola. Se è corto resta sopra
-  il titolo; se è lungo prende tutta la larghezza della pagina, e se non basta mostra la fine (le cartelle più
-  vicine) e si scorre di lato per leggere l'inizio
+- Corretto: percorso e nome della cartella stanno sempre su una riga sola; se sono più lunghi dello schermo si vede
+  la fine (le cartelle più vicine) e si scorre di lato per leggere l'inizio
 - Corretto: una cartella condivisa che si chiama come il suo NAS non viene più scritta due volte nel percorso
 
 ## 1.27.1 — 2026-11-21
