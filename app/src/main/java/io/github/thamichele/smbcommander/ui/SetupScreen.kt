@@ -296,6 +296,13 @@ private fun OptionalSection(vm: AppViewModel) {
         extras.autoplayVideo,
         vm::setAutoplayVideo,
     )
+    OptionRow(
+        "Mostra NAS e utente sotto le cartelle",
+        "In File, sotto ogni cartella, in piccolo: l'indirizzo del NAS su cui si trova e l'utente con cui " +
+            "l'app vi accede. Utile con più NAS o più utenti.",
+        extras.showNasOnFolders,
+        vm::setShowNasOnFolders,
+    )
 }
 
 @Composable

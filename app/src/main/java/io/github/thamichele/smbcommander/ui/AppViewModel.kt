@@ -169,6 +169,8 @@ data class ExtrasState(
     val followNas: Boolean,
     /** A video opened from a list starts by itself. */
     val autoplayVideo: Boolean,
+    /** Each folder of File shows in small the NAS it is on and the user. */
+    val showNasOnFolders: Boolean = false,
 )
 
 /** The folder of a ZIP archive being shown. */
@@ -994,7 +996,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val extras: StateFlow<ExtrasState> = _extras.asStateFlow()
 
     private fun readExtras() = app.extras.let {
-        ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo)
+        ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo, it.showNasOnFolders)
     }
 
     fun setLock(on: Boolean) {
@@ -1030,6 +1032,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setAutoplayVideo(on: Boolean) {
         app.extras.autoplayVideo = on
+        _extras.value = readExtras()
+    }
+
+    /**
+     * setShowNasOnFolders() - turns on or off the NAS and user shown under each folder of File
+     * @param on the new value of the setting
+     *
+     * Return: nothing.
+     */
+    fun setShowNasOnFolders(on: Boolean) {
+        app.extras.showNasOnFolders = on
         _extras.value = readExtras()
     }
 

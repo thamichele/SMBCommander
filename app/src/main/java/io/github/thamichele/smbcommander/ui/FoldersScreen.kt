@@ -58,6 +58,7 @@ fun FoldersScreen(vm: AppViewModel) {
     val folders by vm.folders.collectAsStateWithLifecycle()
     val otherNas by vm.otherNas.collectAsStateWithLifecycle()
     val host = remember { vm.savedHost() }
+    val mainUser = remember { vm.savedServer()?.username.orEmpty() }
     val c = Arancio.colors
     var adding by remember { mutableStateOf(false) }
     var addingNas by remember { mutableStateOf(false) }
@@ -96,6 +97,7 @@ fun FoldersScreen(vm: AppViewModel) {
                             folder,
                             title = folder.name,
                             detail = folderDetail(folder, nas),
+                            access = if (extras.showNasOnFolders) accessLine(folder, nas, host, mainUser) else null,
                             onOpen = { vm.openSaved(folder) },
                             onRemove = { vm.removeFolder(folder) },
                             onEditNas = nas?.takeIf { folder.isNas }?.let { { editingNas = it } },
@@ -117,6 +119,16 @@ fun FoldersScreen(vm: AppViewModel) {
     }
 }
 
+/* The NAS a folder is on and the user the app logs in with, for the option of the settings. */
+private fun accessLine(folder: SavedFolder, nas: OtherNas?, mainHost: String, mainUser: String): String {
+    val host = if (folder.onMainNas) mainHost else nas?.server?.host.orEmpty()
+    val user = if (folder.onMainNas) mainUser else nas?.server?.username.orEmpty()
+    return listOfNotNull(
+        host.ifEmpty { null }?.let { "NAS $it" },
+        user.ifEmpty { null }?.let { "utente $it" },
+    ).joinToString(" · ")
+}
+
 /* Second line of a card: where the folder is, or the address of a whole other NAS; null when the name says it all. */
 private fun folderDetail(folder: SavedFolder, nas: OtherNas?): String? = when {
     folder.isNas -> nas?.server?.host?.let { "NAS · $it" } ?: "NAS"
@@ -130,6 +142,7 @@ private fun FolderCard(
     folder: SavedFolder,
     title: String,
     detail: String?,
+    access: String?,
     onOpen: () -> Unit,
     onRemove: () -> Unit,
     onEditNas: (() -> Unit)?,
@@ -161,6 +174,9 @@ private fun FolderCard(
                     style = ArancioType.data,
                     color = c.textSecondary,
                 )
+            }
+            if (!access.isNullOrEmpty()) {
+                Text(access, style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
             }
         }
         Box {

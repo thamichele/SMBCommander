@@ -12,6 +12,8 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   sul telefono come quella del NAS principale, e ogni NAS viene riconosciuto prima di ricevere la password
 - Nuovo: «Aggiungi una cartella» permette di scegliere su quale NAS, anche per le cartelle condivise nascoste, e
   ha il pulsante «Collega un altro NAS»
+- Nuovo: Impostazioni › Funzioni facoltative › «Mostra NAS e utente sotto le cartelle» scrive in piccolo, sotto
+  ogni cartella di File, l'indirizzo del NAS e l'utente con cui l'app vi accede (spenta di default)
 - Backup foto e Galleria restano sul NAS principale
 
 ## 1.24.0 — 2026-11-21
