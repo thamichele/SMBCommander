@@ -78,6 +78,12 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -472,6 +478,38 @@ fun ToolButton(
             )
         }
     }
+}
+
+/**
+ * PasswordField() - the password field of a NAS, with the eye that shows or hides what is typed
+ * @param value the text typed
+ * @param onChange called with the new text
+ * @param isSaved a password is already saved: an empty field keeps it, and the label says so
+ *
+ * Context: composable; whether the password shows survives a rotation.
+ * Return: nothing.
+ */
+@Composable
+fun PasswordField(value: String, onChange: (String) -> Unit, isSaved: Boolean) {
+    var isShown by rememberSaveable { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(if (isSaved) "Password (vuota = quella salvata)" else "Password") },
+        singleLine = true,
+        shape = ArancioShape.control,
+        colors = arancioFieldColors(),
+        visualTransformation = if (isShown) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+        trailingIcon = {
+            FieldButton(
+                if (isShown) AppIcons.EyeOff else AppIcons.Eye,
+                if (isShown) "Nascondi password" else "Mostra password",
+                { isShown = !isShown },
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**

@@ -135,7 +135,6 @@ fun NasDialog(vm: AppViewModel, editing: OtherNas?, onDismiss: () -> Unit) {
     var user by rememberSaveable { mutableStateOf(editing?.server?.username.orEmpty()) }
     var password by rememberSaveable { mutableStateOf("") }
     var domain by rememberSaveable { mutableStateOf(editing?.server?.domain.orEmpty()) }
-    var showPassword by rememberSaveable { mutableStateOf(false) }
     val ready = host.isNotBlank() && user.isNotBlank() && (editing != null || password.isNotEmpty()) && !saving
 
     AlertDialog(
@@ -154,24 +153,7 @@ fun NasDialog(vm: AppViewModel, editing: OtherNas?, onDismiss: () -> Unit) {
                 NasField(name, { name = it }, "Nome della cartella (es. Ufficio)")
                 NasField(host, { host = it }, "Indirizzo IP o nome del NAS", code = true, keyboard = KeyboardType.Uri)
                 NasField(user, { user = it }, "Utente")
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(if (editing != null) "Password (vuota = quella salvata)" else "Password") },
-                    singleLine = true,
-                    shape = ArancioShape.control,
-                    colors = arancioFieldColors(),
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                    trailingIcon = {
-                        FieldButton(
-                            if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
-                            if (showPassword) "Nascondi password" else "Mostra password",
-                            { showPassword = !showPassword },
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                PasswordField(password, { password = it }, isSaved = editing != null)
                 NasField(domain, { domain = it }, "Dominio o gruppo di lavoro (facoltativo)")
             }
         },

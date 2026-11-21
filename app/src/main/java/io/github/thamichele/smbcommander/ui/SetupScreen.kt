@@ -91,7 +91,6 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     // the saved password is never shown again: left empty, the saved one is kept
     var password by rememberSaveable { mutableStateOf("") }
     var domain by rememberSaveable { mutableStateOf(saved?.domain.orEmpty()) }
-    var showPassword by rememberSaveable { mutableStateOf(false) }
     var confirmForget by remember { mutableStateOf(false) }
     val found by vm.found.collectAsStateWithLifecycle()
     val finding by vm.finding.collectAsStateWithLifecycle()
@@ -171,24 +170,7 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(if (saved != null) "Password (vuota = quella salvata)" else "Password") },
-                singleLine = true,
-                shape = ArancioShape.control,
-                colors = arancioFieldColors(),
-                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                trailingIcon = {
-                    FieldButton(
-                        if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
-                        if (showPassword) "Nascondi password" else "Mostra password",
-                        { showPassword = !showPassword },
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            PasswordField(password, { password = it }, isSaved = saved != null)
             OutlinedTextField(
                 value = domain,
                 onValueChange = { domain = it },

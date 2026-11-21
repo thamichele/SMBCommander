@@ -366,14 +366,7 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
     ) {
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(enabled = !behind, onClick = onOpen)) {
             if (!behind) {
-                SubcomposeAsyncImage(
-                    model = Thumb(entry, ImageSize.Card),
-                    contentDescription = entry.name,
-                    contentScale = ContentScale.Fit,
-                    loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
-                    error = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                CardPicture(entry)
             } else {
                 AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
@@ -586,14 +579,7 @@ private fun DuplicateSide(entry: RemoteEntry, root: String, verdict: Verdict, mo
             .border(width, outline, RoundedCornerShape(12.dp)),
     ) {
         Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black).clickable(onClick = onOpen)) {
-            SubcomposeAsyncImage(
-                model = Thumb(entry, ImageSize.Card),
-                contentDescription = entry.name,
-                contentScale = ContentScale.Fit,
-                loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
-                error = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
-                modifier = Modifier.fillMaxSize(),
-            )
+            CardPicture(entry)
             if (entry.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 40.dp)
         }
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -606,4 +592,17 @@ private fun DuplicateSide(entry: RemoteEntry, root: String, verdict: Verdict, mo
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
         ) { Text("Tieni questo") }
     }
+}
+
+/* The big picture of a card: the sharp copy, with the thumbnail shown while it loads or when it cannot be made. */
+@Composable
+private fun CardPicture(entry: RemoteEntry) {
+    SubcomposeAsyncImage(
+        model = Thumb(entry, ImageSize.Card),
+        contentDescription = entry.name,
+        contentScale = ContentScale.Fit,
+        loading = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
+        error = { AsyncImage(Thumb(entry), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) },
+        modifier = Modifier.fillMaxSize(),
+    )
 }

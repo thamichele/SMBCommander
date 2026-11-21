@@ -76,6 +76,8 @@ import coil3.compose.AsyncImage
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.graphics.Shape
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
@@ -358,26 +360,7 @@ private fun PhotoGrid(
                             .background(c.surface, RoundedCornerShape(4.dp))
                             .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) }),
                     ) {
-                        AsyncImage(
-                            model = Thumb(photo),
-                            contentDescription = photo.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(if (isSelected) 8.dp else 0.dp)
-                                .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
-                        )
-                        if (photo.isVideo) {
-                            VideoFrameCycle(
-                                photo,
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(if (isSelected) 8.dp else 0.dp)
-                                    .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
-                            )
-                        }
-                        if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
-                        if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                        PhotoTile(photo, isSelected, TILE_SQUARE)
                     }
                 }
             }
@@ -531,26 +514,7 @@ private fun PhotoMosaic(
                                     .background(c.surface, RoundedCornerShape(4.dp))
                                     .pressable(onClick = { onTap(photo, row.first + i) }, onLongClick = { onLongPress(photo) }),
                             ) {
-                                AsyncImage(
-                                    model = Thumb(photo),
-                                    contentDescription = photo.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(if (isSelected) 8.dp else 0.dp)
-                                        .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
-                                )
-                                if (photo.isVideo) {
-                                    VideoFrameCycle(
-                                        photo,
-                                        Modifier
-                                            .fillMaxSize()
-                                            .padding(if (isSelected) 8.dp else 0.dp)
-                                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
-                                    )
-                                }
-                                if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
-                                if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                                PhotoTile(photo, isSelected, TILE_ROUNDED)
                             }
                         }
                     }
@@ -723,3 +687,27 @@ private fun Modifier.pressable(onClick: () -> Unit, onLongClick: () -> Unit): Mo
  */
 internal fun monthName(month: Int): String =
     DateFormatSymbols(Locale.getDefault()).months[month - 1].replaceFirstChar { it.titlecase(Locale.getDefault()) }
+
+/* Shapes of the tiles, made once instead of at every recomposition of every tile. */
+private val TILE_SQUARE = RoundedCornerShape(0.dp)
+private val TILE_ROUNDED = RoundedCornerShape(4.dp)
+private val TILE_SELECTED = RoundedCornerShape(6.dp)
+private val TILE_SELECTED_INSET = 8.dp
+
+/*
+ * The picture of one tile of the grid or the mosaic: the thumbnail, the moving frames of a video, its badge and the
+ * tick of the selection. A selected photo shrinks inside its tile with rounder corners.
+ */
+@Composable
+private fun BoxScope.PhotoTile(photo: RemoteEntry, isSelected: Boolean, shape: Shape) {
+    val picture = Modifier
+        .fillMaxSize()
+        .padding(if (isSelected) TILE_SELECTED_INSET else 0.dp)
+        .clip(if (isSelected) TILE_SELECTED else shape)
+    AsyncImage(model = Thumb(photo), contentDescription = photo.name, contentScale = ContentScale.Crop, modifier = picture)
+    if (photo.isVideo) {
+        VideoFrameCycle(photo, picture)
+        VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
+    }
+    if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+}
