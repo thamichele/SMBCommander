@@ -37,6 +37,9 @@ class CredentialStore(context: Context) {
     /** The address alone, for screens that only show it: no Keystore round trip for the password. */
     fun host(): String? = prefs.getString(KEY_HOST, null)
 
+    /** The saved user name alone: unlike [load] it decrypts nothing, so it costs nothing on the main thread. */
+    fun user(): String = prefs.getString(KEY_USER, "").orEmpty()
+
     fun load(): NasServer? {
         val host = prefs.getString(KEY_HOST, null) ?: return null
         val password = prefs.getString(KEY_PASSWORD, null)?.let { runCatching { decrypt(it) }.getOrNull() } ?: return null

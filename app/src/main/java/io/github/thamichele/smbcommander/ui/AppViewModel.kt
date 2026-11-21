@@ -266,6 +266,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun savedServer(): NasServer? = repo.server()
 
+    /** The user of the main NAS, for the lists: cheap, where [savedServer] decrypts the password. */
+    fun savedUser(): String = repo.user()
+
     fun savedHost(): String = repo.host().orEmpty()
 
     // --- connection -------------------------------------------------------------------------------------------------
