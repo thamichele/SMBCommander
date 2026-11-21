@@ -3,6 +3,13 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.27.1 — 2026-11-21
+- Corretto: toccando File, Galleria o Impostazioni nella barra in basso l'animazione non scatta più mentre la
+  sezione si apre. La Galleria legge dal telefono l'elenco delle foto senza bloccare lo schermo, la sezione File non
+  decifra più la password del NAS a ogni apertura, e la pastiglia parte un attimo dopo il tocco, a sezione disegnata
+- Modificato: niente più lampo chiaro quando tocchi un pulsante della barra in basso; resta solo la pastiglia che
+  scivola
+
 ## 1.27.0 — 2026-11-21
 - Nuovo: nella Galleria (anche nella scheda Video) e in File le anteprime dei video sono animate: mostrano a turno
   due o tre momenti del video (dopo 2 secondi, dopo 10, a metà) con una breve dissolvenza. Si animano solo quelle

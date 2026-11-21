@@ -58,7 +58,7 @@ fun FoldersScreen(vm: AppViewModel) {
     val folders by vm.folders.collectAsStateWithLifecycle()
     val otherNas by vm.otherNas.collectAsStateWithLifecycle()
     val host = remember { vm.savedHost() }
-    val mainUser = remember { vm.savedServer()?.username.orEmpty() }
+    val mainUser = remember { vm.savedUser() }
     val c = Arancio.colors
     var adding by remember { mutableStateOf(false) }
     var addingNas by remember { mutableStateOf(false) }

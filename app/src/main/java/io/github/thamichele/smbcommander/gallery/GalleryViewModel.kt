@@ -88,7 +88,7 @@ data class GalleryState(
     val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
 
     /** The photos on screen in display order, as the viewer swipes through them. */
-    val shownPhotos: List<RemoteEntry> get() = shown.flatMap { it.photos }
+    val shownPhotos: List<RemoteEntry> by lazy { shown.flatMap { it.photos } }
 }
 
 /**
@@ -103,6 +103,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _state = MutableStateFlow(GalleryState(view = app.galleryPrefs.view, kind = app.galleryPrefs.kind))
     val state: StateFlow<GalleryState> = _state.asStateFlow()
     private var job: Job? = null
+
+    /** Reads from the phone what the gallery knew last time; a walk of the NAS never runs before it has ended. */
+    private var loadJob: Job? = null
     private var index = GalleryIndex()
     private var lastWalk = 0L
 
@@ -169,11 +172,21 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val current = _state.value
         if (folder != current.folder) {
             job?.cancel()
-            index = GalleryIndex(folder?.let(store::load).orEmpty())
+            loadJob?.cancel()
+            index = GalleryIndex()
             kinds.clear()
-            _state.value = GalleryState(folder = folder, view = current.view, kind = current.kind)
-            publish()
+            _state.value = GalleryState(folder = folder, view = current.view, kind = current.kind, loading = folder != null)
             lastWalk = 0
+            if (folder == null) return publish()
+            // reading and grouping thousands of photos is kept off the main thread: the screen opens at once
+            loadJob = viewModelScope.launch {
+                val known = withContext(Dispatchers.IO) { GalleryIndex(store.load(folder)) }
+                index = known
+                withContext(Dispatchers.Default) { publish() }
+                loadJob = null
+                refresh()
+            }
+            return
         }
         if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
@@ -225,6 +238,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun refresh(pulling: Boolean = false) {
         val folder = _state.value.folder ?: app.backupSettings.load().destination ?: return
         if (folder != _state.value.folder) return ensureLoaded()
+        // what the phone knows is still being read: the walk starts by itself right after
+        if (loadJob?.isActive == true) return
         job?.cancel()
         deleted.clear()
         _state.update { it.copy(loading = true, pulling = pulling, error = null) }

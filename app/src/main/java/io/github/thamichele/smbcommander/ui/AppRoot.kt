@@ -46,6 +46,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -257,13 +261,20 @@ private fun BottomNav(screen: Screen, vm: AppViewModel) {
         NavSection(AppIcons.Settings, "Impostazioni", Screen.Backup, vm::openSettings),
     )
     val active = sections.indexOfFirst { it.screen == screen }.coerceAtLeast(0)
+    // the pill leaves one frame after the touch: the frame that draws the new section is the long one, and an
+    // animation started in it would lose its first steps
+    var shown by remember { mutableIntStateOf(active) }
+    LaunchedEffect(active) {
+        withFrameNanos { }
+        shown = active
+    }
     Column(Modifier.background(c.nav).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
         BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = NAV_BAR_PADDING)) {
-            SlidingPill(active, maxWidth / sections.size)
+            SlidingPill(shown, maxWidth / sections.size)
             Row(Modifier.fillMaxWidth().selectableGroup()) {
                 sections.forEachIndexed { index, section ->
-                    NavItem(section, index == active, Modifier.weight(1f))
+                    NavItem(section, isSelected = index == active, isLit = index == shown, Modifier.weight(1f))
                 }
             }
         }
@@ -293,15 +304,17 @@ private fun SlidingPill(active: Int, itemWidth: Dp) {
 }
 
 @Composable
-private fun NavItem(section: NavSection, active: Boolean, modifier: Modifier) {
+private fun NavItem(section: NavSection, isSelected: Boolean, isLit: Boolean, modifier: Modifier) {
     val c = Arancio.colors
-    val tint by animateColorAsState(if (active) c.text else c.textSecondary, tween(NAV_LEAD_MS), label = "nav-tint")
-    val scale by animateFloatAsState(if (active) NAV_ACTIVE_SCALE else 1f, tween(NAV_TRAIL_MS, easing = NavEasing), label = "nav-scale")
+    val tint by animateColorAsState(if (isLit) c.text else c.textSecondary, tween(NAV_LEAD_MS), label = "nav-tint")
+    val scale by animateFloatAsState(if (isLit) NAV_ACTIVE_SCALE else 1f, tween(NAV_TRAIL_MS, easing = NavEasing), label = "nav-scale")
+    // no flash on touch: the pill sliding under the icon is the only answer
+    val interaction = remember { MutableInteractionSource() }
     Column(
         modifier
             .heightIn(min = 48.dp)
             .clip(ArancioShape.control)
-            .selectable(selected = active, role = Role.Tab, onClick = section.open)
+            .selectable(selected = isSelected, interactionSource = interaction, indication = null, role = Role.Tab, onClick = section.open)
             .padding(vertical = NAV_ITEM_PADDING),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(NAV_ITEM_PADDING),
