@@ -3,6 +3,15 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.3 — 2026-11-21
+- Corretto: tornando indietro verso la cartella di un altro NAS (quella che elenca le sue cartelle condivise) l'app
+  si chiudeva di colpo. Ora l'elenco si apre, e lì non si possono più selezionare le cartelle condivise, che non si
+  possono copiare né eliminare. Lo stesso valeva per «Salva sul NAS» scegliendo la cartella di un altro NAS
+- Modificato: Indietro rifà il percorso al contrario, una cartella alla volta, come le hai aperte; dalla prima
+  cartella aperta torna sempre a «Le mie cartelle». Prima saliva alla cartella che contiene quella aperta, anche se
+  non c'eri mai passato
+- Modificato: tornando a una cartella la ritrovi scorsa dove l'avevi lasciata
+
 ## 1.28.2 — 2026-11-21
 - Modificato: l'alone del pulsante «+» non è più fisso. A riposo il pulsante è piatto; l'alone compare animato
   quando lo tocchi e poi sfuma
