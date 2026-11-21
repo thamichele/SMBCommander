@@ -8,12 +8,16 @@ import android.content.Intent
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,8 +39,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -49,9 +54,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -213,51 +221,101 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     }
 }
 
-/** Pill behind the icon of the active section, sized for the same 28dp icons as the buttons. */
-private val NAV_PILL_WIDTH = 64.dp
-private val NAV_PILL_HEIGHT = 36.dp
+/** Pill behind the icon of the active section, and the room around the items: a low bar with little empty space. */
+private val NAV_PILL_WIDTH = 52.dp
+private val NAV_PILL_HEIGHT = 28.dp
+private val NAV_ICON_SIZE = 22.dp
+private val NAV_BAR_PADDING = 4.dp
+private val NAV_ITEM_PADDING = 2.dp
 
-/** The sections of the app, as in the kit's bottom bar: pill behind the active icon. */
+/** The pill slides to the section touched: its front edge leads, its back edge follows a little later and catches up. */
+private const val NAV_LEAD_MS = 200
+private const val NAV_TRAIL_MS = 320
+private const val NAV_ACTIVE_SCALE = 1.1f
+private val NavEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+/* Private: remembers the section the pill was on, to know which of its edges leads. */
+private class NavMotion(private var section: Int) {
+    var isMovingRight = true
+        private set
+
+    fun moveTo(target: Int) {
+        if (target == section) return
+        isMovingRight = target > section
+        section = target
+    }
+}
+
+private class NavSection(val icon: ImageVector, val label: String, val screen: Screen, val open: () -> Unit)
+
+/** The sections of the app, as in the kit's bottom bar: one pill that slides behind the active icon. */
 @Composable
 private fun BottomNav(screen: Screen, vm: AppViewModel) {
     val c = Arancio.colors
+    val sections = listOf(
+        NavSection(AppIcons.Folder, "File", Screen.Shares, vm::openFiles),
+        NavSection(AppIcons.Image, "Galleria", Screen.Gallery, vm::openGallery),
+        NavSection(AppIcons.Upload, "Backup foto", Screen.Backup, vm::openBackup),
+    )
+    val active = sections.indexOfFirst { it.screen == screen }.coerceAtLeast(0)
     Column(Modifier.background(c.nav).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
-        Row(Modifier.fillMaxWidth().selectableGroup().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
-            NavItem(AppIcons.Folder, "File", screen == Screen.Shares, vm::openFiles, Modifier.weight(1f))
-            NavItem(AppIcons.Image, "Galleria", screen == Screen.Gallery, vm::openGallery, Modifier.weight(1f))
-            NavItem(AppIcons.Upload, "Backup foto", screen == Screen.Backup, vm::openBackup, Modifier.weight(1f))
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = NAV_BAR_PADDING)) {
+            SlidingPill(active, maxWidth / sections.size)
+            Row(Modifier.fillMaxWidth().selectableGroup()) {
+                sections.forEachIndexed { index, section ->
+                    NavItem(section, index == active, Modifier.weight(1f))
+                }
+            }
         }
     }
 }
 
+/* Private: the pill behind the active icon; itemWidth is the width of one section. */
 @Composable
-private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun SlidingPill(active: Int, itemWidth: Dp) {
+    // which way the last change went; kept while the pill is still travelling
+    val motion = remember { NavMotion(active) }
+    motion.moveTo(active)
+    val isMovingRight = motion.isMovingRight
+    val left = itemWidth * active + (itemWidth - NAV_PILL_WIDTH) / 2
+    val right = left + NAV_PILL_WIDTH
+    // the edge on the side of the move goes first: the pill stretches, then gathers itself
+    val leftEdge by animateDpAsState(left, tween(if (isMovingRight) NAV_TRAIL_MS else NAV_LEAD_MS, easing = NavEasing), label = "nav-left")
+    val rightEdge by animateDpAsState(right, tween(if (isMovingRight) NAV_LEAD_MS else NAV_TRAIL_MS, easing = NavEasing), label = "nav-right")
+    Box(
+        Modifier
+            .padding(top = NAV_ITEM_PADDING)
+            .offset { IntOffset(leftEdge.roundToPx(), 0) }
+            .width(rightEdge - leftEdge)
+            .height(NAV_PILL_HEIGHT)
+            .background(Arancio.colors.accentSoft, ArancioShape.pill),
+    )
+}
+
+@Composable
+private fun NavItem(section: NavSection, active: Boolean, modifier: Modifier) {
     val c = Arancio.colors
-    val pill by animateColorAsState(if (active) c.accentSoft else Color.Transparent, tween(180), label = "nav-pill")
+    val tint by animateColorAsState(if (active) c.text else c.textSecondary, tween(NAV_LEAD_MS), label = "nav-tint")
+    val scale by animateFloatAsState(if (active) NAV_ACTIVE_SCALE else 1f, tween(NAV_TRAIL_MS, easing = NavEasing), label = "nav-scale")
     Column(
         modifier
             .heightIn(min = 48.dp)
             .clip(ArancioShape.control)
-            .selectable(selected = active, role = Role.Tab, onClick = onClick)
-            .padding(vertical = 6.dp),
+            .selectable(selected = active, role = Role.Tab, onClick = section.open)
+            .padding(vertical = NAV_ITEM_PADDING),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(NAV_ITEM_PADDING),
     ) {
-        Box(
-            Modifier
-                .width(NAV_PILL_WIDTH)
-                .height(NAV_PILL_HEIGHT)
-                .background(pill, ArancioShape.pill),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = if (active) c.text else c.textSecondary, modifier = Modifier.size(TOOL_ICON_SIZE))
+        Box(Modifier.height(NAV_PILL_HEIGHT), contentAlignment = Alignment.Center) {
+            Icon(
+                section.icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(NAV_ICON_SIZE).graphicsLayer { scaleX = scale; scaleY = scale },
+            )
         }
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (active) c.text else c.textSecondary,
-        )
+        Text(section.label, style = MaterialTheme.typography.labelSmall, color = tint)
     }
 }
 

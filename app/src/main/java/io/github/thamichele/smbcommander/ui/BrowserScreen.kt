@@ -124,7 +124,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     )
     val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
 
-    // the header of the folder slides away while the files scroll down, and comes back scrolling up
+    // while the files scroll down the header of the folder shrinks to its buttons, and grows back scrolling up
     val collapse = rememberCollapsingHeaderState()
     LaunchedEffect(screen.path, selected.isEmpty(), state.searching) { collapse.show() }
     Box(Modifier.fillMaxSize()) {
@@ -164,32 +164,31 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                 val title = if (screen.path.isEmpty()) screen.share else RemotePath.name(screen.path)
                 val context = if (screen.path.isEmpty()) "Cartella condivisa" else
                     (listOf(screen.share) + RemotePath.parent(screen.path).split('/').filter { it.isNotEmpty() }).joinToString(" / ")
-                CollapsingHeader(collapse) {
-                    PageHeader(
-                        context = context,
-                        title = title,
-                        navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
-                    ) {
-                        ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
-                        ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
-                        Box {
-                            ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
-                            ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                                MenuItem(AppIcons.Refresh, "Aggiorna") { moreMenu = false; vm.refresh() }
-                                MenuItem(
-                                    if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
-                                    if (state.showHidden) "Nascondi file di sistema" else "Mostra file di sistema",
-                                ) { moreMenu = false; vm.toggleHidden() }
-                                if (!pinned) {
-                                    MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
-                                }
-                                MenuItem(AppIcons.Info, "Info su questa cartella") {
-                                    moreMenu = false
-                                    dialog = Dialog.Info(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
-                                }
-                                MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
-                                MenuItem(AppIcons.Server, "Impostazioni") { moreMenu = false; vm.openSettings() }
+                PageHeader(
+                    context = context,
+                    title = title,
+                    navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+                    collapse = collapse,
+                ) {
+                    ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
+                    ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
+                    Box {
+                        ToolButton(AppIcons.More, "Altre azioni", { moreMenu = true })
+                        ArancioMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                            MenuItem(AppIcons.Refresh, "Aggiorna") { moreMenu = false; vm.refresh() }
+                            MenuItem(
+                                if (state.showHidden) AppIcons.EyeOff else AppIcons.Eye,
+                                if (state.showHidden) "Nascondi file di sistema" else "Mostra file di sistema",
+                            ) { moreMenu = false; vm.toggleHidden() }
+                            if (!pinned) {
+                                MenuItem(AppIcons.FolderPlus, "Aggiungi alle mie cartelle") { moreMenu = false; vm.pinCurrent() }
                             }
+                            MenuItem(AppIcons.Info, "Info su questa cartella") {
+                                moreMenu = false
+                                dialog = Dialog.Info(RemoteEntry(screen.share, screen.path, isDirectory = true, size = 0, modified = 0))
+                            }
+                            MenuItem(AppIcons.Delete, "Cestino") { moreMenu = false; vm.openTrash() }
+                            MenuItem(AppIcons.Server, "Impostazioni") { moreMenu = false; vm.openSettings() }
                         }
                     }
                 }

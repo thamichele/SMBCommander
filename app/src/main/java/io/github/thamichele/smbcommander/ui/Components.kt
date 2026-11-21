@@ -55,11 +55,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -107,6 +108,7 @@ private val HEADER_GAP = 4.dp
  * @param context the small grey line over the title (a path, "Album"); empty for none
  * @param title the big title in JetBrains Mono
  * @param navigation the back or close button on the left, or null
+ * @param collapse when not null, the title shrinks and fades with the scroll and only the buttons stay
  * @param actions the buttons of the page
  *
  * No text is ever cut, and the header stays short: the title wraps beside the
@@ -123,19 +125,26 @@ fun PageHeader(
     context: String,
     title: String,
     navigation: (@Composable () -> Unit)? = null,
+    collapse: CollapsingHeaderState? = null,
     actions: @Composable () -> Unit = {},
 ) {
+    val part = rememberCollapsingPart(collapse)
     Layout(
         contents = listOf(
             { navigation?.invoke() },
-            { HeaderTitle(context, title) },
+            {
+                Box(Modifier.graphicsLayer { alpha = 1f - (collapse?.fraction ?: 0f) }) { HeaderTitle(context, title) }
+            },
             {
                 FlowRow(horizontalArrangement = Arrangement.End, itemVerticalAlignment = Alignment.CenterVertically) {
                     actions()
                 }
             },
         ),
-        modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
     ) { (navMeasurables, titleMeasurables, actionMeasurables), constraints ->
         val width = constraints.maxWidth
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
@@ -148,11 +157,18 @@ fun PageHeader(
         val isOneLine = titleMeasurable.minIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
         val titleWidth = if (isOneLine) titleRoom - actions.width else titleRoom
         val titlePlaced = titleMeasurable.measure(loose.copy(maxWidth = titleWidth))
-        val topHeight = maxOf(nav?.height ?: 0, titlePlaced.height, if (isOneLine) actions.height else 0)
+        val navHeight = nav?.height ?: 0
+        val fullTop = maxOf(navHeight, titlePlaced.height, if (isOneLine) actions.height else 0)
+        // shrunk by the scroll, the title goes and the row of the buttons stays
+        val shrunkTop = maxOf(navHeight, if (isOneLine) actions.height else 0)
+        collapse?.report(part, fullTop - shrunkTop)
+        val fraction = collapse?.fraction ?: 0f
+        val topHeight = fullTop - ((fullTop - shrunkTop) * fraction).roundToInt()
         val height = if (isOneLine) topHeight else topHeight + actions.height
         layout(width, height) {
             nav?.placeRelative(0, (topHeight - nav.height) / 2)
-            titlePlaced.placeRelative(navWidth, (topHeight - titlePlaced.height) / 2)
+            val titleY = if (isOneLine) (topHeight - titlePlaced.height) / 2 else topHeight - titlePlaced.height
+            titlePlaced.placeRelative(navWidth, titleY)
             val actionsY = if (isOneLine) (topHeight - actions.height) / 2 else topHeight
             actions.placeRelative(width - actions.width, actionsY)
         }
@@ -171,26 +187,29 @@ private fun HeaderTitle(context: String, title: String) {
 }
 
 /**
- * CollapsingHeaderState - how much of a [CollapsingHeader] is hidden by the scroll
+ * CollapsingHeaderState - how much a header is shrunk by the scroll
  *
  * Give [connection] to Modifier.nestedScroll() on a parent of both the header
- * and the list: scrolling down hides the header a pixel at a time, scrolling
- * up brings it back at once, wherever the list is.
+ * and the list: scrolling down shrinks the header a pixel at a time down to
+ * the row of its buttons, scrolling up brings it back at once, wherever the
+ * list is. Each part that can shrink (the title of a [PageHeader], a
+ * [CollapsibleBox]) tells the state how many pixels it can give.
  */
 @Stable
 class CollapsingHeaderState {
-    /** 0 = whole header shown, -height = all hidden. */
-    var offset by mutableFloatStateOf(0f)
-        private set
+    /** 0 = whole header shown, -[range] = shrunk to the buttons. */
+    private var offset by mutableFloatStateOf(0f)
+    private val parts = mutableStateMapOf<Any, Int>()
 
-    /** Height of the header, measured at each layout. */
-    var height by mutableIntStateOf(0)
-        internal set
+    private val range: Int get() = parts.values.sum()
+
+    /** 0 = whole header, 1 = only the buttons left. */
+    val fraction: Float get() = if (range == 0) 0f else (-offset / range).coerceIn(0f, 1f)
 
     val connection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
             val before = offset
-            offset = (offset + available.y).coerceIn(-height.toFloat(), 0f)
+            offset = (offset + available.y).coerceIn(-range.toFloat(), 0f)
             return Offset(0f, offset - before)
         }
     }
@@ -203,6 +222,14 @@ class CollapsingHeaderState {
     fun show() {
         offset = 0f
     }
+
+    internal fun report(part: Any, pixels: Int) {
+        if (parts[part] != pixels) parts[part] = pixels
+    }
+
+    internal fun forget(part: Any) {
+        parts.remove(part)
+    }
 }
 
 /**
@@ -213,24 +240,37 @@ class CollapsingHeaderState {
 @Composable
 fun rememberCollapsingHeaderState(): CollapsingHeaderState = remember { CollapsingHeaderState() }
 
+/* Private: registers one shrinking part with the state for as long as it is on screen. */
+@Composable
+private fun rememberCollapsingPart(state: CollapsingHeaderState?): Any {
+    val part = remember { Any() }
+    if (state != null) {
+        DisposableEffect(state, part) { onDispose { state.forget(part) } }
+    }
+    return part
+}
+
 /**
- * CollapsingHeader() - a header that slides away while the list under it scrolls down
- * @param state how much is hidden; its connection must be on a parent of the list
- * @param content the header: PageHeader, tabs, anything
+ * CollapsibleBox() - something under a header that disappears with the scroll (the tabs)
+ * @param state the state shared with the header and the list
+ * @param content what disappears
  *
- * The header keeps its full size and is only moved up and clipped, so no
- * text in it is ever squeezed or cut while it is shown.
+ * It is only made shorter, clipped and faded: never squeezed.
  *
  * Context: composable.
  * Return: nothing.
  */
 @Composable
-fun CollapsingHeader(state: CollapsingHeaderState, content: @Composable () -> Unit) {
-    Layout(content = { Column { content() } }, modifier = Modifier.fillMaxWidth().clipToBounds()) { measurables, constraints ->
+fun CollapsibleBox(state: CollapsingHeaderState, content: @Composable () -> Unit) {
+    val part = rememberCollapsingPart(state)
+    Layout(
+        content = { Box(Modifier.graphicsLayer { alpha = 1f - state.fraction }) { content() } },
+        modifier = Modifier.fillMaxWidth().clipToBounds(),
+    ) { measurables, constraints ->
         val placed = measurables.first().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-        if (state.height != placed.height) state.height = placed.height
-        val shift = state.offset.roundToInt().coerceAtLeast(-placed.height)
-        layout(placed.width, placed.height + shift) { placed.placeRelative(0, shift) }
+        state.report(part, placed.height)
+        val shown = (placed.height * (1f - state.fraction)).roundToInt()
+        layout(placed.width, shown) { placed.placeRelative(0, shown - placed.height) }
     }
 }
 
