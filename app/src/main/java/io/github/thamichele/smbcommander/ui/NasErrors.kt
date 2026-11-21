@@ -1,3 +1,10 @@
+/*
+ * NasErrors.kt - errors of the NAS and of the app, said in words for the user
+ *
+ * Turns exceptions into short Italian sentences; it never shows secrets.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import com.hierynomus.mserref.NtStatus

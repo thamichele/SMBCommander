@@ -1,3 +1,11 @@
+/*
+ * BackupViewModel.kt - state and actions of the Backup page: settings, progress, Libera spazio
+ *
+ * Saves the settings, reschedules the backup and checks which phone photos are verified on the NAS before offering to
+ * delete them from the phone. The deletion itself is asked to Android, which shows its own confirmation.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.app.Application

@@ -1,3 +1,10 @@
+/*
+ * ShareScreen.kt - the screen of Salva sul NAS: choose the folder, then upload
+ *
+ * Draws only; the folder list and the upload are ShareViewModel's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.share
 
 import androidx.activity.compose.BackHandler

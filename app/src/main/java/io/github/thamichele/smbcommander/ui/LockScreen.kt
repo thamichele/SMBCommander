@@ -1,3 +1,10 @@
+/*
+ * LockScreen.kt - the optional app lock: fingerprint, face or the screen lock of the phone
+ *
+ * Off unless turned on in the settings; asks Android's biometric prompt and covers the app until it answers.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.content.Context

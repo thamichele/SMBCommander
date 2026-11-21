@@ -1,3 +1,10 @@
+/*
+ * CleanupScreen.kt - the quick cleanup of the gallery: one card at a time, swipe to keep or discard
+ *
+ * Draws the cards, the tabs and the duplicates side by side; every decision is CleanupViewModel's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import android.text.format.Formatter

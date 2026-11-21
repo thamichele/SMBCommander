@@ -1,3 +1,10 @@
+/*
+ * FolderStore.kt - the folders the user added to the app, kept on the phone
+ *
+ * The start screen shows only these: nothing of the NAS appears on its own. No NAS access.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context

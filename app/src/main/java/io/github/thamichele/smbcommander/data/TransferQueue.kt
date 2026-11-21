@@ -1,3 +1,11 @@
+/*
+ * TransferQueue.kt - the queue of copies, moves and uploads, one job at a time
+ *
+ * Runs the jobs in order, with pause, resume and cancel, and carries a job on after a dropped connection. The copying
+ * itself is Transfers' and PhoneUploads' job; keeping the app alive is TransferService's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import io.github.thamichele.smbcommander.core.NasFileSystem

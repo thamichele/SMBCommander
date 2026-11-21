@@ -1,3 +1,11 @@
+/*
+ * AppViewModel.kt - state and actions of the file browser and of everything shared by the screens
+ *
+ * Navigation, folders, file operations, editing, transfers, the bin and the settings. The NAS work itself is done by
+ * the core module and by the stores of SmbCommanderApp.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.app.Application

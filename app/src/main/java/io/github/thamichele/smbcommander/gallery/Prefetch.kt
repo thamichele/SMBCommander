@@ -1,3 +1,11 @@
+/*
+ * Prefetch.kt - loads the thumbnails just past the edge of the screen
+ *
+ * In the direction the gallery is scrolling, so they are ready before they come into view. It only loads: nothing is
+ * drawn here.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import androidx.compose.runtime.Composable

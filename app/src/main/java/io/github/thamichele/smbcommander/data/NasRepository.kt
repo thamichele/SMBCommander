@@ -1,3 +1,11 @@
+/*
+ * NasRepository.kt - the SMB connections of the app: the main NAS and the other NAS
+ *
+ * Opens, keeps and closes the connections and gives every screen one file system for all of them. Storing the settings
+ * is CredentialStore's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import io.github.thamichele.smbcommander.core.MultiNasFileSystem

@@ -1,3 +1,11 @@
+/*
+ * ArchiveScreen.kt - a ZIP archive on the NAS opened like a folder
+ *
+ * A file opens after extracting just that file to the phone; Estrai puts files into the NAS folder of the archive.
+ * Reading the archive is ZipArchive's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.text.format.Formatter

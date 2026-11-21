@@ -1,3 +1,11 @@
+/*
+ * BackupLedger.kt - the private list of photos already saved on the NAS by the backup
+ *
+ * One key per line in a file of the phone, appended while a backup runs, so an interrupted run resumes where it
+ * stopped. It does not know the NAS: a reinstall starts it empty and BackupPlacement recognises what is already there.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.backup
 
 import java.io.File

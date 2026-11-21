@@ -1,3 +1,10 @@
+/*
+ * BackupSettings.kt - the photo backup settings and the outcome of its last run, kept on the phone
+ *
+ * Reads and writes SharedPreferences only; scheduling the backup is BackupScheduler's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.content.Context

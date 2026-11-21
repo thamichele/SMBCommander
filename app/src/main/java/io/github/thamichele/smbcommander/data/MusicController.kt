@@ -1,3 +1,10 @@
+/*
+ * MusicController.kt - the link between the screens and the music player service
+ *
+ * Starts and controls MusicService and turns its state into what the mini player shows.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.ComponentName

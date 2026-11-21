@@ -1,3 +1,10 @@
+/*
+ * MediaDetails.kt - what a photo or video says about itself: resolution, date, camera, position
+ *
+ * Reads only the parts of the file that hold the metadata, never the whole file. Showing them is InfoDialog's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.graphics.BitmapFactory

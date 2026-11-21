@@ -1,3 +1,10 @@
+/*
+ * BackupWidget.kt - the home screen widget: a folder on the left, Backup ora on the right
+ *
+ * Opens the folder in the app or starts the backup; it reads the status, it does not run the backup itself.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.widget
 
 import android.app.PendingIntent

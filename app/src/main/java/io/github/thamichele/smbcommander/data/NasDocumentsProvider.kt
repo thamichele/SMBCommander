@@ -1,3 +1,11 @@
+/*
+ * NasDocumentsProvider.kt - the NAS in Android's file picker, for other apps
+ *
+ * Shows only the folders added in the app. Reading streams from the NAS; writing goes through a private copy uploaded
+ * with the usual checks when the other app closes it.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.database.Cursor

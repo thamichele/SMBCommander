@@ -1,3 +1,10 @@
+/*
+ * BrowserPrefs.kt - how folders are shown, remembered between app starts
+ *
+ * SharedPreferences only.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.content.Context

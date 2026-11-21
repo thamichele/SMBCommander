@@ -1,3 +1,11 @@
+/*
+ * Components.kt - the shared pieces of every screen: header, buttons, cards, dialogs, fields
+ *
+ * Built on the Arancio Mix tokens of the theme, so every screen looks the same. Stateless where possible: the screens
+ * hold the state.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils
@@ -520,20 +528,6 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) c.background else c.text,
         )
     }
-}
-
-/** Small label as a pill: accent at 16% with the accent label colour, or [tint] at 16%. */
-@Composable
-fun Tag(text: String, tint: Color? = null, modifier: Modifier = Modifier) {
-    val c = Arancio.colors
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = tint ?: c.accentLabel,
-        modifier = modifier
-            .background((tint ?: c.accent).copy(alpha = 0.16f), ArancioShape.pill)
-            .padding(horizontal = 10.dp, vertical = 3.dp),
-    )
 }
 
 /** Uppercase heading over a group of cards or settings. */

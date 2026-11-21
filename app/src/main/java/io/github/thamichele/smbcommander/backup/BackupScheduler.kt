@@ -1,3 +1,11 @@
+/*
+ * BackupScheduler.kt - when the photo backup runs: hourly on Wi-Fi, or right now
+ *
+ * Turns the backup settings into WorkManager work, and cancels it when the backup is off. The backup itself is
+ * PhotoBackupWorker.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.content.Context

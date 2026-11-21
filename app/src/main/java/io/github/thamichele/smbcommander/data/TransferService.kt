@@ -1,3 +1,11 @@
+/*
+ * TransferService.kt - keeps the app alive while the transfer queue has work
+ *
+ * A notification with progress, Pausa and Annulla; holds CPU and Wi-Fi only while a transfer runs and stops itself
+ * when the queue is empty or paused.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.annotation.SuppressLint

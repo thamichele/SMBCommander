@@ -1,3 +1,11 @@
+/*
+ * EditSessionStore.kt - the files currently opened for editing, kept across app restarts
+ *
+ * The editor may outlive the app's process: the sessions are kept in SharedPreferences so the changes are still
+ * brought back. Deciding what to upload is EditSync's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context

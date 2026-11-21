@@ -1,3 +1,11 @@
+/*
+ * CredentialStore.kt - the NAS connection settings kept on the phone, password encrypted
+ *
+ * The password is encrypted with an AES key that never leaves the Android Keystore. Connecting is NasRepository's job;
+ * this file only stores.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context

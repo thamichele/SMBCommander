@@ -1,3 +1,10 @@
+/*
+ * BrowserScreen.kt - the file browser: one folder of the NAS, its files and what can be done with them
+ *
+ * Draws the list or grid, the selection, the search and the dialogs; every action is AppViewModel's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult

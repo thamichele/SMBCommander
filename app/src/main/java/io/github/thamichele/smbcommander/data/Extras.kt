@@ -1,3 +1,10 @@
+/*
+ * Extras.kt - the optional functions, all off until turned on in the settings
+ *
+ * App lock, Wake-on-LAN, finding the NAS again, videos that start by themselves, and the like. Kept on the phone only.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context

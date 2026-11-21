@@ -1,3 +1,10 @@
+/*
+ * DeletionDialog.kt - the window of a deletion of several files, one at a time
+ *
+ * Shows the file being deleted, the bar and the outcome of each file; the deletion itself is the view model's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.animation.AnimatedContent

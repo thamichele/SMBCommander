@@ -1,3 +1,10 @@
+/*
+ * SetupScreen.kt - address and user of the NAS: the first connection and the NAS page of the settings
+ *
+ * Draws the form and the NAS found on the network; connecting is AppViewModel's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import io.github.thamichele.smbcommander.data.WakeOnLan

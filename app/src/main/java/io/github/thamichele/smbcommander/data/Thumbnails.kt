@@ -52,7 +52,7 @@ val RemoteEntry.isVideo: Boolean get() = !isDirectory && extension in ThumbnailC
 val RemoteEntry.isMedia: Boolean get() = isImage || isVideo
 
 val RemoteEntry.isAudio: Boolean get() = !isDirectory && extension in ThumbnailCache.AUDIO_EXTENSIONS
-val RemoteEntry.isPdf: Boolean get() = !isDirectory && extension == "pdf"
+private val RemoteEntry.isPdf: Boolean get() = !isDirectory && extension == "pdf"
 
 /** Files with a picture of their own in lists: photos, videos, the first page of a PDF, the cover of a song. */
 val RemoteEntry.hasPicture: Boolean get() = isMedia || isAudio || (isPdf && size <= ThumbnailCache.MAX_PDF_BYTES)

@@ -1,3 +1,10 @@
+/*
+ * ContentNames.kt - name and size of a document picked or shared from another app
+ *
+ * Reads only what the providing app reports and accepts only plain file names. No NAS access.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.ContentResolver

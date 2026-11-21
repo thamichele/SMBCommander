@@ -1,3 +1,10 @@
+/*
+ * GalleryPrefs.kt - how the gallery looks and behaves, remembered on the phone
+ *
+ * SharedPreferences only.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import android.content.Context

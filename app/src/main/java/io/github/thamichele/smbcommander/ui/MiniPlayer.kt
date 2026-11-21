@@ -1,3 +1,10 @@
+/*
+ * MiniPlayer.kt - the song playing, over every screen
+ *
+ * Draws only; the player is MusicController's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.foundation.Image

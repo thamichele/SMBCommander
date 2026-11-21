@@ -1,3 +1,10 @@
+/*
+ * Theme.kt - the Arancio Mix tokens: colours, type, shapes, light and dark
+ *
+ * Every screen reads its colours and shapes from here, never from literal values.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui.theme
 
 import android.graphics.drawable.ColorDrawable

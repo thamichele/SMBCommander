@@ -1,3 +1,10 @@
+/*
+ * MediaScanner.kt - the albums, photos and videos of the phone, read through MediaStore
+ *
+ * Read only: it never changes or deletes anything on the phone.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.content.ContentUris

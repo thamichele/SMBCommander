@@ -1,3 +1,10 @@
+/*
+ * ReaderDataSource.kt - lets Android's media classes read a NAS file in place
+ *
+ * Only the parts they ask for travel. Opening and closing the reader is the caller's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.media.MediaDataSource

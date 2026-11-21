@@ -1,3 +1,10 @@
+/*
+ * TrashScreen.kt - the bin of the file browser, every share together
+ *
+ * Each element goes back where it was or goes for good; the bin itself is FileTrash's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils

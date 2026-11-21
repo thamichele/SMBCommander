@@ -1,3 +1,10 @@
+/*
+ * PhoneUploads.kt - files and folders of the phone sent to the NAS as jobs of the transfer queue
+ *
+ * Each file goes through EditSync.safeUpload with its SHA-256 check; a job run again skips what is already sent.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.ContentResolver

@@ -1,3 +1,10 @@
+/*
+ * DateScroller.kt - the handle on the right of the gallery that scrolls by date
+ *
+ * Works on any lazy list or grid through ScrollPosition; it only moves the list, it changes nothing.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import androidx.compose.animation.AnimatedVisibility

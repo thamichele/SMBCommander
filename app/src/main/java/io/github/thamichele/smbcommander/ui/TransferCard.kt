@@ -1,3 +1,10 @@
+/*
+ * TransferCard.kt - the card of the transfer queue: the job running, those waiting, those failed
+ *
+ * Draws only; the queue is TransferQueue's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.foundation.background

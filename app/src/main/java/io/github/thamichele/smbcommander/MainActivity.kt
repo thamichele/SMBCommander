@@ -1,3 +1,11 @@
+/*
+ * MainActivity.kt - the single activity of the app: the screens, the app lock and the links opened from outside
+ *
+ * Hosts AppRoot, covers it while the optional app lock waits for the owner, and turns the intents of the widget and of
+ * other apps into screens. Keeps no data of its own: everything lives in AppViewModel and SmbCommanderApp.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander
 
 import android.content.Context

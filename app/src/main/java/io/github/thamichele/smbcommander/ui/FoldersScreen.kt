@@ -1,3 +1,10 @@
+/*
+ * FoldersScreen.kt - the start screen: only the folders the user added
+ *
+ * Nothing of the NAS appears on its own; adding and removing folders is AppViewModel's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi

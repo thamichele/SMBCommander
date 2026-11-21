@@ -1,3 +1,10 @@
+/*
+ * InfoDialog.kt - everything known about a file or folder
+ *
+ * Its path, ready to copy, size and dates, and what photos and videos say about themselves (read by MediaDetails).
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.content.ClipData

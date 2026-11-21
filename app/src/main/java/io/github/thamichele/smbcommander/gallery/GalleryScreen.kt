@@ -1,3 +1,10 @@
+/*
+ * GalleryScreen.kt - the gallery: the photos of the backup folder by month, as grid, mosaic or list
+ *
+ * Draws the months, the selection and the swipe to delete; the content and every action are GalleryViewModel's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import androidx.activity.compose.BackHandler

@@ -1,3 +1,10 @@
+/*
+ * AccentTheme.kt - the main colours the user can choose for app, widget and icon
+ *
+ * Only the main colour changes: greys, layout and status colours stay the same.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.ui.theme
 
 import android.content.ComponentName
