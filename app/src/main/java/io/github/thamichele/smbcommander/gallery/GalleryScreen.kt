@@ -162,13 +162,8 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     val onLongPress: (RemoteEntry) -> Unit = { photo -> selected = selected + photo.path }
     /** Returns true when the photo goes at once, false when the dialog asks first. */
     val onSwipe: (RemoteEntry) -> Boolean = { photo ->
-        if (withoutConfirm) {
-            appVm.deletePhotos(listOf(photo))
-            true
-        } else {
-            dialogs.toDelete = listOf(photo)
-            false
-        }
+        if (!withoutConfirm) dialogs.toDelete = listOf(photo) else appVm.deletePhotos(listOf(photo))
+        withoutConfirm
     }
 
     // while the photos scroll down the header shrinks to its buttons, and grows back as soon as they scroll up

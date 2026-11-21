@@ -116,7 +116,6 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
         val f = freeSpace
         if (f is FreeSpace.Ready && f.continuing) launchDelete()
     }
-    val c = Arancio.colors
 
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -146,15 +145,7 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
         item { SectionTitle("Album da salvare") }
         item { AlbumsCard(albums, settings.albums, vm::toggleAlbum) }
 
-        item {
-            Text(
-                "Il backup parte da solo ogni ora quando sei sul Wi-Fi di casa e il NAS risponde. " +
-                    "Le foto vengono cancellate dal telefono solo se lo chiedi tu con «Libera spazio».",
-                style = MaterialTheme.typography.bodySmall,
-                color = c.textSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
+        item { BackupFooter() }
     }
 
     if (confirmFree) {
@@ -175,6 +166,18 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
             },
         )
     }
+}
+
+/* When the backup runs, and that nothing leaves the phone unless asked. */
+@Composable
+private fun BackupFooter() {
+    Text(
+        "Il backup parte da solo ogni ora quando sei sul Wi-Fi di casa e il NAS risponde. " +
+            "Le foto vengono cancellate dal telefono solo se lo chiedi tu con «Libera spazio».",
+        style = MaterialTheme.typography.bodySmall,
+        color = Arancio.colors.textSecondary,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
 }
 
 /* Without the permission to read the gallery the page only asks for it. */

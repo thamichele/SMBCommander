@@ -71,34 +71,7 @@ fun TransferCard(
             .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        when {
-            running?.state == TransferJob.State.Retrying -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Connessione al NAS persa: riprovo tra ${running.retryIn} s, da dove si era fermato",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.accentText,
-                )
-                ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
-            }
-            running != null -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall)
-                if (running.current.isNotEmpty()) {
-                    Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                }
-                ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
-            }
-            paused -> {
-                Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
-                pausedJob?.let {
-                    Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                }
-            }
-            !active -> Text(
-                if (failed.isEmpty()) "Trasferimenti completati" else "Trasferimenti terminati con errori",
-                style = MaterialTheme.typography.titleSmall,
-            )
-        }
+        TransferStatus(running, pausedJob, paused, active, failedAny = failed.isNotEmpty())
         failed.forEach { job ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -127,6 +100,40 @@ fun TransferCard(
                 GhostButton(onClick = onClose) { Text("Chiudi") }
             }
         }
+    }
+}
+
+/* The headline of the card: the job running, the pause, or how everything ended. */
+@Composable
+private fun TransferStatus(running: TransferJob?, pausedJob: TransferJob?, paused: Boolean, active: Boolean, failedAny: Boolean) {
+    val c = Arancio.colors
+    when {
+        running?.state == TransferJob.State.Retrying -> {
+            Text(running.label, style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Connessione al NAS persa: riprovo tra ${running.retryIn} s, da dove si era fermato",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.accentText,
+            )
+            ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
+        }
+        running != null -> {
+            Text(running.label, style = MaterialTheme.typography.titleSmall)
+            if (running.current.isNotEmpty()) {
+                Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+            ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
+        }
+        paused -> {
+            Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
+            pausedJob?.let {
+                Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+        }
+        !active -> Text(
+            if (failedAny) "Trasferimenti terminati con errori" else "Trasferimenti completati",
+            style = MaterialTheme.typography.titleSmall,
+        )
     }
 }
 
