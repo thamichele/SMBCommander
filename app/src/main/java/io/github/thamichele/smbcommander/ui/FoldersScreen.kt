@@ -97,7 +97,7 @@ fun FoldersScreen(vm: AppViewModel) {
                             folder,
                             title = folder.name,
                             detail = folderDetail(folder, nas),
-                            access = if (extras.showNasOnFolders) accessLine(folder, nas, host, mainUser) else null,
+                            access = if (extras.showNasOnFolders && !folder.isNas) accessLine(folder, nas, host, mainUser) else null,
                             onOpen = { vm.openSaved(folder) },
                             onRemove = { vm.removeFolder(folder) },
                             onEditNas = nas?.takeIf { folder.isNas }?.let { { editingNas = it } },
