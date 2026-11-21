@@ -432,6 +432,9 @@ private fun Preview(entry: RemoteEntry, size: Dp?) {
                     .clip(RoundedCornerShape(if (size != null) 10.dp else 12.dp))
                     .background(Arancio.colors.surface),
             )
+            if (entry.isVideo) {
+                VideoFrameCycle(entry, Modifier.matchParentSize().clip(RoundedCornerShape(if (size != null) 10.dp else 12.dp)))
+            }
             if (entry.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = if (size != null) 18.dp else 32.dp)
         }
     } else {

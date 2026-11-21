@@ -93,6 +93,7 @@ fun SettingsScreen(vm: AppViewModel) {
             SectionLabel("Backup")
             BackupOptions()
             GalleryOptions(vm)
+            VideoFrameOptions()
             OptionalSection(vm)
         }
         SettingsMenu.Appearance -> SettingsPage(SettingsMenu.Appearance, close) { AppearanceSection() }
@@ -112,7 +113,7 @@ private fun SettingsList(vm: AppViewModel, onOpen: (SettingsMenu) -> Unit) {
             for (menu in SettingsMenu.entries) {
                 val detail = when (menu) {
                     SettingsMenu.Backup -> "Backup automatico, cartella sul NAS, album da salvare, libera spazio"
-                    SettingsMenu.Options -> "Opzioni del backup e della Galleria, funzioni facoltative"
+                    SettingsMenu.Options -> "Opzioni del backup, della Galleria e dei video, funzioni facoltative"
                     SettingsMenu.Appearance -> "Colore principale: ${accent.label}"
                     SettingsMenu.Nas -> host.ifEmpty { "Indirizzo e utente del NAS" }
                 }
