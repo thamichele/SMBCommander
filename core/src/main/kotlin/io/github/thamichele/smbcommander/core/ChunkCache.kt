@@ -106,12 +106,13 @@ class ChunkCache(
 
     /* Private, under the lock: drops whole files, oldest first, never [keep], until under the limit. */
     private fun shrink(keep: String) {
-        val names = files.keys.iterator()
-        while (total > maxBytes && names.hasNext()) {
-            val name = names.next()
-            if (name == keep) continue
-            total -= files.getValue(name).bytes
-            names.remove()
+        // through the entries: a get() on an access-ordered map would move the entry and break the iteration
+        val entries = files.entries.iterator()
+        while (total > maxBytes && entries.hasNext()) {
+            val entry = entries.next()
+            if (entry.key == keep) continue
+            total -= entry.value.bytes
+            entries.remove()
         }
         // the file being read is alone and still too big: its newest pieces wait for the next video
         val own = files[keep] ?: return
