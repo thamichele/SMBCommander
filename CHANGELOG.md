@@ -16,6 +16,14 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   incollare, che altrimenti continuavano a cercare il NAS appena dimenticato
 - Corretto: se Android rifiuta di tenere attivi i trasferimenti in sottofondo (app aperta dallo sfondo), l'app non si
   chiude più: i trasferimenti continuano mentre l'app è aperta
+- Corretto (batteria): con l'app in sottofondo non si preparano più le miniature della Galleria né si dividono le
+  foto in categorie, e un backup finito non fa più rileggere tutta la cartella del NAS: tutto riprende quando
+  riapri l'app
+- Corretto (batteria): durante copie e caricamenti la notifica e la scheda dell'avanzamento si aggiornano qualche
+  volta al secondo invece che a ogni pezzo di file copiato, cioè centinaia di volte al secondo
+- Corretto (batteria): il backup non parte più ogni volta che Android avvia l'app da solo (backup orario, widget,
+  musica) ma solo quando la apri tu; e con il NAS non raggiungibile (un Wi-Fi fuori casa) aspetta il controllo
+  dell'ora dopo invece di riprovare subito più volte rileggendo tutte le foto del telefono
 
 ## 1.28.3 — 2026-11-21
 - Corretto: tornando indietro verso la cartella di un altro NAS (quella che elenca le sue cartelle condivise) l'app
