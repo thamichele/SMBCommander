@@ -1,3 +1,11 @@
+/*
+ * AspectRatios.kt - the shape of each photo, learnt from its thumbnail and kept on the phone
+ *
+ * Lets the mosaic of the gallery lay photos out by their real shape without asking the NAS anything. Making the
+ * thumbnails is ThumbnailCache's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -7,7 +15,8 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Width / height of each photo as it is shown (turned upright), learnt from its thumbnail the first time it is made or
+ * Width / height of each photo as it is shown (turned upright), learnt from its thumbnail the first time it is made
+ * or
  * loaded, and kept in a small file on the phone: the mosaic of the gallery lays photos out by their real shape
  * without asking the NAS anything.
  */
@@ -29,19 +38,43 @@ class AspectRatios(private val file: File) {
         }
     }
 
+    /**
+     * get() - the shape of a photo, if already learnt
+     * @param key the name of its thumbnail, see ThumbnailCache.key
+     *
+     * Return: width / height, or null when not learnt yet.
+     */
     operator fun get(key: String): Float? = ratios[key]
 
-    /** Learns a shape; with [publish] false the mosaic hears of it only at the next [publish]. */
+    /**
+     * put() - learns the shape of a photo and appends it to the file
+     * @param key the name of its thumbnail
+     * @param ratio width / height, more than zero
+     * @param publish false to tell the mosaic only at the next [publish]
+     *
+     * Context: writes a line to a file of the phone.
+     * Return: nothing; a shape already known is not written again.
+     */
     fun put(key: String, ratio: Float, publish: Boolean = true) {
         if (ratio <= 0f || ratio.isNaN() || ratios.put(key, ratio) != null) return
         synchronized(this) { runCatching { file.appendText("$key\t$ratio\n") } }
         if (publish) _version.value++
     }
 
+    /**
+     * publish() - tells the mosaic that new shapes were learnt
+     *
+     * Return: nothing.
+     */
     fun publish() {
         _version.value++
     }
 
+    /**
+     * clear() - forgets every shape, also on the phone's storage
+     *
+     * Return: nothing.
+     */
     fun clear() {
         ratios.clear()
         synchronized(this) { file.delete() }

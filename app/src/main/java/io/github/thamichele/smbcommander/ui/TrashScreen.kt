@@ -1,3 +1,10 @@
+/*
+ * TrashScreen.kt - the bin of the file browser, every share together
+ *
+ * Each element goes back where it was or goes for good; the bin itself is FileTrash's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils
@@ -32,8 +39,13 @@ import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /**
- * What was deleted from the file browser, every share together, most recent first: each element goes back where it
- * was, or goes for good. After [FileTrash.KEEP_DAYS] days it goes on its own.
+ * TrashScreen() - what was deleted from the file browser, every share together, most recent first
+ * @param vm the bin and its actions
+ *
+ * Each element goes back where it was, or goes for good. After [FileTrash.KEEP_DAYS] days it goes on its own.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun TrashScreen(vm: AppViewModel) {
@@ -69,28 +81,12 @@ fun TrashScreen(vm: AppViewModel) {
             state.items.isEmpty() -> EmptyState(AppIcons.Delete, "Il cestino è vuoto")
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
                 items(state.items, key = { it.share + "/" + it.slot }) { item ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        KindTile(item.entry, 44.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(item.entry.name, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "Era in " + NasShares.display(item.share, RemotePath.parent(item.original)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = c.text,
-                            )
-                            Text(
-                                "Eliminato " + DateUtils.getRelativeTimeSpanString(item.deletedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = c.textSecondary,
-                            )
-                        }
-                        GhostButton(onClick = { vm.restoreFromTrash(listOf(item)) }, enabled = !state.working) { Text("Ripristina") }
-                        ToolButton(AppIcons.Delete, "Elimina definitivamente ${item.entry.name}", { confirmDelete = item }, tint = c.danger)
-                    }
+                    TrashRow(
+                        item,
+                        enabled = !state.working,
+                        onRestore = { vm.restoreFromTrash(listOf(item)) },
+                        onDelete = { confirmDelete = item },
+                    )
                 }
             }
         }
@@ -121,5 +117,33 @@ fun TrashScreen(vm: AppViewModel) {
                 vm.deleteFromTrash(listOf(item))
             },
         )
+    }
+}
+
+/* One element of the bin: where it was, when it was deleted, and its two buttons. */
+@Composable
+private fun TrashRow(item: FileTrash.Item, enabled: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
+    val c = Arancio.colors
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KindTile(item.entry, 44.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(item.entry.name, style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Era in " + NasShares.display(item.share, RemotePath.parent(item.original)),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text,
+            )
+            Text(
+                "Eliminato " + DateUtils.getRelativeTimeSpanString(item.deletedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+        }
+        GhostButton(onClick = onRestore, enabled = enabled) { Text("Ripristina") }
+        ToolButton(AppIcons.Delete, "Elimina definitivamente ${item.entry.name}", onDelete, tint = c.danger)
     }
 }

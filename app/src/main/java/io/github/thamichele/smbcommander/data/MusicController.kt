@@ -1,3 +1,10 @@
+/*
+ * MusicController.kt - the link between the screens and the music player service
+ *
+ * Starts and controls MusicService and turns its state into what the mini player shows.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.ComponentName
@@ -51,19 +58,50 @@ class MusicController(private val context: Context) {
     private val _state = MutableStateFlow(MusicState())
     val state: StateFlow<MusicState> = _state.asStateFlow()
 
-    /** Plays [songs] in order from [start]: the other songs of the folder follow. */
+    /**
+     * play() - plays songs of a folder from one of them on
+     * @param songs the songs, in order
+     * @param start the index of the first one to play
+     *
+     * Return: nothing; the other songs follow.
+     */
     fun play(songs: List<RemoteEntry>, start: Int) = withController { c ->
         c.setMediaItems(songs.map(::itemOf), start.coerceIn(0, songs.lastIndex), 0)
         c.prepare()
         c.play()
     }
 
+    /**
+     * toggle() - pauses or plays again
+     *
+     * Return: nothing.
+     */
     fun toggle() = withController { if (it.isPlaying) it.pause() else it.play() }
+    /**
+     * next() - skips to the next song
+     *
+     * Return: nothing.
+     */
     fun next() = withController { it.seekToNextMediaItem() }
+    /**
+     * previous() - goes back to the previous song
+     *
+     * Return: nothing.
+     */
     fun previous() = withController { it.seekToPreviousMediaItem() }
+    /**
+     * seek() - jumps inside the song
+     * @param position where, in milliseconds
+     *
+     * Return: nothing.
+     */
     fun seek(position: Long) = withController { it.seekTo(position) }
 
-    /** Stops and empties the queue: the mini player closes and the service goes. */
+    /**
+     * stop() - stops and empties the queue: the mini player closes and the service goes
+     *
+     * Return: nothing.
+     */
     fun stop() = withController {
         it.stop()
         it.clearMediaItems()

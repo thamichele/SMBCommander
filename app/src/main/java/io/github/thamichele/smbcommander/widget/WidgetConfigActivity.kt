@@ -1,3 +1,10 @@
+/*
+ * WidgetConfigActivity.kt - picks the folder a widget opens, among the user's folders
+ *
+ * Shown by Android when the widget is placed.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.widget
 
 import android.appwidget.AppWidgetManager

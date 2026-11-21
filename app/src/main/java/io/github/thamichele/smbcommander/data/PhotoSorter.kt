@@ -1,9 +1,16 @@
+/*
+ * PhotoSorter.kt - sorts photos into people, screens, text and the rest, on the phone
+ *
+ * Looks at the thumbnails with Android's face detector and PhotoKinds; nothing leaves the phone. Each photo is looked
+ * at once and the outcome is kept in a small file.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.FaceDetector
-import android.os.Process
 import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.PhotoKinds
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -13,7 +20,8 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Sorts photos into people, screens, text and the rest, looking at their thumbnails on the phone: faces with Android's
+ * Sorts photos into people, screens, text and the rest, looking at their thumbnails on the phone: faces with
+ * Android's
  * own face detector, the rest with [PhotoKinds]. Nothing leaves the phone and no model is downloaded. Each photo is
  * looked at once: the outcome is kept in a small file, by the same key as its thumbnail (path, size and date), so an
  * edited photo is looked at again.
@@ -34,21 +42,38 @@ class PhotoSorter(private val file: File, private val thumbnails: ThumbnailCache
         }
     }
 
-    /** What [photo] shows, if it has been looked at already; videos are videos. */
+    /**
+     * known() - what a photo shows, if it has been looked at already
+     * @param photo the photo or video
+     *
+     * Return: the kind, Video for videos, or null when not looked at yet.
+     */
     fun known(photo: RemoteEntry): PhotoKind? =
         if (photo.isVideo) PhotoKind.Video else kinds[thumbnails.key(Thumb(photo))]
 
-    /** Looks at [photo] (its thumbnail is made first when missing) and remembers what it shows. */
+    /**
+     * sort() - looks at a photo and remembers what it shows
+     * @param photo the photo
+     *
+     * Its thumbnail is made first when missing.
+     *
+     * Context: suspends; the looking runs on Dispatchers.Default at background priority.
+     * Return: the kind.
+     */
     suspend fun sort(photo: RemoteEntry): PhotoKind {
         known(photo)?.let { return it }
         val thumb = thumbnails.background(photo)
-        val kind = withContext(Dispatchers.Default) { lowPriority { look(thumb) } }
+        val kind = withContext(Dispatchers.Default) { atBackgroundPriority { look(thumb) } }
         val key = thumbnails.key(Thumb(photo))
         if (kinds.put(key, kind) == null) synchronized(this) { runCatching { file.appendText("$key\t${kind.name}\n") } }
         return kind
     }
 
-    /** Forgets everything, e.g. when the app is unpaired from the NAS. */
+    /**
+     * clear() - forgets everything, e.g. when the app is unpaired from the NAS
+     *
+     * Return: nothing.
+     */
     fun clear() {
         kinds.clear()
         synchronized(this) { file.delete() }
@@ -77,17 +102,6 @@ class PhotoSorter(private val file: File, private val thumbnails: ThumbnailCache
         val count = runCatching { FaceDetector(bitmap.width, bitmap.height, MAX_FACES).findFaces(bitmap, found) }.getOrDefault(0)
         val minEyes = minOf(bitmap.width, bitmap.height) * MIN_EYES
         return found.take(count).count { it != null && it.confidence() >= MIN_CONFIDENCE && it.eyesDistance() >= minEyes }
-    }
-
-    private inline fun <T> lowPriority(block: () -> T): T {
-        val tid = Process.myTid()
-        val before = Process.getThreadPriority(tid)
-        Process.setThreadPriority(tid, Process.THREAD_PRIORITY_BACKGROUND)
-        try {
-            return block()
-        } finally {
-            Process.setThreadPriority(tid, before)
-        }
     }
 
     companion object {

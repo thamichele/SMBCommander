@@ -1,3 +1,10 @@
+/*
+ * MediaDetails.kt - what a photo or video says about itself: resolution, date, camera, position
+ *
+ * Reads only the parts of the file that hold the metadata, never the whole file. Showing them is InfoDialog's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.graphics.BitmapFactory
@@ -20,6 +27,14 @@ object MediaDetails {
     private const val TAG_LENS_MODEL = "LensModel"
     private const val TAG_ISO = "ISOSpeedRatings"
 
+    /**
+     * read() - what a photo or video says about itself
+     * @param fs the file system
+     * @param entry the photo or video
+     *
+     * Context: blocking, reads parts of the file on the NAS.
+     * Return: a label and a value per line; empty for other files.
+     */
     fun read(fs: NasFileSystem, entry: RemoteEntry): List<Pair<String, String>> = when {
         entry.isImage -> photo(fs, entry)
         entry.isVideo -> video(fs, entry)
@@ -107,6 +122,13 @@ object MediaDetails {
         return coordinates(m.groupValues[1].toDouble(), m.groupValues[2].toDouble())
     }
 
+    /**
+     * coordinates() - a GPS position as the user reads it
+     * @param lat latitude in degrees
+     * @param lon longitude in degrees
+     *
+     * Return: "45.123456, 9.123456".
+     */
     fun coordinates(lat: Double, lon: Double) = "%.6f, %.6f".format(Locale.US, lat, lon)
 
     private fun exposure(seconds: Double): String =

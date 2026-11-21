@@ -1,3 +1,12 @@
+/*
+ * PhotoKinds.kt - what a photo shows, worked out from the pixels of its thumbnail
+ *
+ * Tells screenshots, photos of text and ordinary photos apart with simple measures and no model, so it runs offline
+ * on any phone. Counting faces is the caller's job (Android's own face detector), and so is decoding the thumbnail.
+ * Raise VERSION whenever a threshold changes, so the photos already sorted are looked at again.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.core
 
 import kotlin.math.abs
@@ -44,7 +53,14 @@ object PhotoKinds {
         val busyRows: Float,
     )
 
-    /** Measures the picture [argb] (row by row, [width] x [height], as Android's Bitmap.getPixels gives it). */
+    /**
+     * features() - measures a picture
+     * @param width its width in pixels, more than 1
+     * @param height its height in pixels, more than 1
+     * @param argb the pixels row by row, as Android's Bitmap.getPixels gives them
+     *
+     * Return: the measures [kind] decides on.
+     */
     fun features(width: Int, height: Int, argb: IntArray): Features {
         require(width > 1 && height > 1 && argb.size >= width * height) { "Immagine vuota" }
         val n = width * height
@@ -57,11 +73,11 @@ object PhotoKinds {
             val r = (p shr 16) and 0xFF
             val g = (p shr 8) and 0xFF
             val b = p and 0xFF
-            lum[i] = (77 * r + 150 * g + 29 * b) shr 8
+            lum[i] = (LUMA_R * r + LUMA_G * g + LUMA_B * b) shr LUMA_SHIFT
             val hi = max(r, max(g, b))
             val lo = min(r, min(g, b))
             if (hi > 0) satSum += (hi - lo).toFloat() / hi
-            if (lo >= 250 || hi <= 5) pure++
+            if (lo >= PURE_WHITE || hi <= PURE_BLACK) pure++
             // 4 bits per channel: JPEG noise on a flat area stays in one bin
             val q = ((r shr 4) shl 8) or ((g shr 4) shl 4) or (b shr 4)
             colors[q] = (colors[q] ?: 0) + 1
@@ -85,16 +101,16 @@ object PhotoKinds {
             if (share < BLANK_ROW) blank++ else if (share > BUSY_ROW) busy++
         }
 
-        val histogram = IntArray(32)
-        for (l in lum) histogram[l shr 3]++
+        val histogram = IntArray(LUM_BINS)
+        for (l in lum) histogram[l shr LUM_BIN_SHIFT]++
         val mode = histogram.indices.maxBy { histogram[it] }
         var near = 0
-        for (b in max(0, mode - 3)..min(31, mode + 3)) near += histogram[b]
+        for (b in max(0, mode - NEAR_BINS)..min(LUM_BINS - 1, mode + NEAR_BINS)) near += histogram[b]
 
         return Features(
             ratio = height.toFloat() / width,
             flat = flat.toFloat() / n,
-            topColors = colors.values.sortedDescending().take(6).sum().toFloat() / n,
+            topColors = colors.values.sortedDescending().take(TOP_COLORS).sum().toFloat() / n,
             pure = pure.toFloat() / n,
             saturation = satSum / n,
             background = near.toFloat() / n,
@@ -104,7 +120,15 @@ object PhotoKinds {
         )
     }
 
-    /** A screen is checked first (a chat screenshot is full of text and may show faces), then people, then text. */
+    /**
+     * kind() - what a photo shows
+     * @param f its measures
+     * @param faces how many faces were found in it
+     *
+     * A screen is checked first (a chat screenshot is full of text and may show faces), then people, then text.
+     *
+     * Return: the group the quick cleanup puts it in.
+     */
     fun kind(f: Features, faces: Int): PhotoKind = when {
         isScreen(f) -> PhotoKind.Screen
         faces > 0 -> PhotoKind.People
@@ -112,25 +136,68 @@ object PhotoKinds {
         else -> PhotoKind.Photo
     }
 
+    /**
+     * isScreen() - tells whether a picture is a screenshot
+     * @param f its measures
+     *
+     * Return: true when enough signs of a phone screen add up: its shape, few colours, flat areas, pure white or black.
+     */
     fun isScreen(f: Features): Boolean {
         // phones' screens are much longer than any camera format (4:3, 3:2, 16:9); panoramas are far wider still
         val long = max(f.ratio, 1 / f.ratio)
         var score = 0
-        if (long in 1.95f..2.45f) score += 2
-        if (f.topColors >= 0.45f) score++
-        if (f.topColors >= 0.65f) score++
-        if (f.flat >= 0.55f) score++
-        if (f.flat >= 0.75f) score++
-        if (f.pure >= 0.2f) score++
-        return score >= 4
+        if (long in SCREEN_RATIO) score += SCREEN_RATIO_SCORE
+        if (f.topColors >= FEW_COLORS) score++
+        if (f.topColors >= VERY_FEW_COLORS) score++
+        if (f.flat >= FLAT_SHARE) score++
+        if (f.flat >= VERY_FLAT_SHARE) score++
+        if (f.pure >= PURE_SHARE) score++
+        return score >= SCREEN_SCORE
     }
 
+    /**
+     * isText() - tells whether a picture is a photo of text: a document, a receipt, a whiteboard
+     * @param f its measures
+     *
+     * Return: true for a pale, even background crossed by rows of sharp changes with blank rows between them.
+     */
     fun isText(f: Features): Boolean =
-        f.saturation < 0.25f &&
-            f.background >= 0.4f &&
-            f.edges in 0.02f..0.3f &&
-            f.blankRows in 0.1f..0.8f &&
-            f.busyRows >= 0.1f
+        f.saturation < TEXT_MAX_SATURATION &&
+            f.background >= TEXT_MIN_BACKGROUND &&
+            f.edges in TEXT_EDGES &&
+            f.blankRows in TEXT_BLANK_ROWS &&
+            f.busyRows >= TEXT_MIN_BUSY_ROWS
+
+    /* Signs of a screenshot and how many points they must add up to. */
+    private val SCREEN_RATIO = 1.95f..2.45f
+    private const val SCREEN_RATIO_SCORE = 2
+    private const val FEW_COLORS = 0.45f
+    private const val VERY_FEW_COLORS = 0.65f
+    private const val FLAT_SHARE = 0.55f
+    private const val VERY_FLAT_SHARE = 0.75f
+    private const val PURE_SHARE = 0.2f
+    private const val SCREEN_SCORE = 4
+
+    /* Signs of a photo of text. */
+    private const val TEXT_MAX_SATURATION = 0.25f
+    private const val TEXT_MIN_BACKGROUND = 0.4f
+    private val TEXT_EDGES = 0.02f..0.3f
+    private val TEXT_BLANK_ROWS = 0.1f..0.8f
+    private const val TEXT_MIN_BUSY_ROWS = 0.1f
+
+    /* Brightness as 0..255 from the channels, ITU-R BT.601 weights in 1/256. */
+    private const val LUMA_R = 77
+    private const val LUMA_G = 150
+    private const val LUMA_B = 29
+    private const val LUMA_SHIFT = 8
+    private const val PURE_WHITE = 250
+    private const val PURE_BLACK = 5
+
+    /* Brightness histogram of 32 bins of 8 levels; the background is the top bin and three on each side. */
+    private const val LUM_BINS = 32
+    private const val LUM_BIN_SHIFT = 3
+    private const val NEAR_BINS = 3
+    private const val TOP_COLORS = 6
 
     private const val FLAT = 2
     private const val EDGE = 40

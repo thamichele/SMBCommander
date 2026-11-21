@@ -1,3 +1,10 @@
+/*
+ * LockScreen.kt - the optional app lock: fingerprint, face or the screen lock of the phone
+ *
+ * Off unless turned on in the settings; asks Android's biometric prompt and covers the app until it answers.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.content.Context
@@ -39,7 +46,14 @@ object AppLock {
         Authenticators.BIOMETRIC_WEAK or Authenticators.DEVICE_CREDENTIAL
     }
 
-    /** False when the phone has no fingerprint, face or screen lock set: turning the lock on would lock out. */
+    /**
+     * available() - tells whether the app lock can be turned on
+     * @param context any context
+     *
+     * False when the phone has no fingerprint, face or screen lock set: turning the lock on would lock the user out.
+     *
+     * Return: true when a way to unlock exists.
+     */
     fun available(context: Context): Boolean =
         BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
 
@@ -94,7 +108,16 @@ object AppLock {
     private const val PROMPT_SUBTITLE = "Impronta, volto o blocco schermo"
 }
 
-/** Covers the whole app until it is unlocked; touches do not reach the screens below. */
+/**
+ * LockScreen() - covers the whole app until it is unlocked
+ * @param onUnlock called once the owner is confirmed
+ * @param onExit called when the user leaves instead
+ *
+ * Touches do not reach the screens below.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun LockScreen(onUnlock: () -> Unit, onExit: () -> Unit) {
     val c = Arancio.colors

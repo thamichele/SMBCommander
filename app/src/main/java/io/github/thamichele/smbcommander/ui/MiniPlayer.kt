@@ -1,3 +1,10 @@
+/*
+ * MiniPlayer.kt - the song playing, over every screen
+ *
+ * Draws only; the player is MusicController's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.foundation.Image
@@ -33,7 +40,21 @@ import io.github.thamichele.smbcommander.data.MusicState
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 
-/** The song playing, over every screen: tap to show the seek bar; play/pause, next, previous and close. */
+/**
+ * MiniPlayer() - the song playing, over every screen
+ * @param music what the player is doing
+ * @param onToggle play or pause
+ * @param onNext next song
+ * @param onPrevious previous song
+ * @param onSeek jump inside the song, in milliseconds
+ * @param onClose stop and close
+ * @param modifier placement
+ *
+ * Tap to show the seek bar.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun MiniPlayer(
     music: MusicState,

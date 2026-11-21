@@ -1,3 +1,12 @@
+/*
+ * ZipArchive.kt - ZIP archives on the NAS opened like folders, and extraction of their files
+ *
+ * Reads only the index at the end of the archive and the entries asked for, never the whole file. Stored and
+ * deflated entries, ZIP64 included; encrypted ones and other methods are refused with a clear message. Names that
+ * would climb out of the archive ("../") are dropped. Creating archives is not supported.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.core
 
 import java.io.FilterInputStream
@@ -30,7 +39,12 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         val name: String get() = path.trimEnd('/').substringAfterLast('/')
     }
 
-    /** The elements directly inside [dir] of the archive ("" for the top), folders implied by paths included. */
+    /**
+     * list() - the elements directly inside a folder of the archive
+     * @param dir the folder inside the archive, "" for the top
+     *
+     * Return: files and folders, folders implied by longer paths included, in the order of the index.
+     */
     fun list(dir: String): List<Entry> {
         val base = RemotePath.normalize(dir)
         val prefix = if (base.isEmpty()) "" else "$base/"
@@ -42,7 +56,7 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
             val first = rest.substringBefore('/')
             if ('/' in rest) {
                 val folder = prefix + first
-                seen.putIfAbsent(folder, Entry(folder, true, 0, 0, 0, 0, e.modified, false, -1))
+                seen.putIfAbsent(folder, Entry(folder, true, 0, 0, STORED, 0, e.modified, false, NO_HEADER))
             } else {
                 seen[p] = e.copy(path = p)
             }
@@ -50,33 +64,36 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         return seen.values.toList()
     }
 
-    /** Every file at or under [path] (a folder) or that file itself. */
+    /**
+     * filesUnder() - the files to extract for a selection
+     * @param path a folder of the archive, or one file
+     *
+     * Return: every file at or under [path], or that file itself.
+     */
     fun filesUnder(path: String): List<Entry> {
         val p = RemotePath.normalize(path)
         return entries.filter { !it.isDirectory && (p.isEmpty() || it.path == p || it.path.startsWith("$p/")) }
     }
 
-    /** The bytes of [entry], uncompressed; reading to the end checks the CRC. */
+    /**
+     * open() - the bytes of one file of the archive
+     * @param entry the file, from [entries] or [list]
+     *
+     * Reading to the end checks the CRC: a damaged entry fails there instead of passing as complete.
+     *
+     * Return: a stream of the uncompressed bytes; the caller closes it.
+     */
     fun open(entry: Entry): InputStream {
         if (entry.encrypted) throw NasException("«${entry.name}» è protetto da password: aprilo con un'app per gli archivi")
         if (entry.method != STORED && entry.method != DEFLATED) throw NasException("«${entry.name}» usa una compressione non supportata")
-        val header = ByteArray(30)
-        readFully(entry.localHeader, header)
+        val header = ByteArray(LOCAL_HEADER_SIZE)
+        readAt(reader, entry.localHeader, header)
         if (le32(header, 0) != LOCAL_SIG) throw NasException("Archivio danneggiato")
-        val dataStart = entry.localHeader + 30 + le16(header, 26) + le16(header, 28)
+        val dataStart = entry.localHeader + LOCAL_HEADER_SIZE + le16(header, LOCAL_NAME_LENGTH) + le16(header, LOCAL_EXTRA_LENGTH)
         // the inflater may ask for one byte past the data to finish: it gets a zero, as java.util.zip does
         val raw: InputStream = RangeStream(reader, dataStart, entry.compressedSize, pad = entry.method == DEFLATED)
-        val data = if (entry.method == DEFLATED) InflaterInputStream(raw, Inflater(true), 64 * 1024) else raw
+        val data = if (entry.method == DEFLATED) InflaterInputStream(raw, Inflater(true), INFLATE_BUFFER_BYTES) else raw
         return CrcCheck(data, entry)
-    }
-
-    private fun readFully(position: Long, buffer: ByteArray) {
-        var done = 0
-        while (done < buffer.size) {
-            val n = reader.read(position + done, buffer, done, buffer.size - done)
-            if (n <= 0) throw NasException("Archivio troncato")
-            done += n
-        }
     }
 
     private class RangeStream(private val reader: RandomReader, private var position: Long, private var left: Long, private var pad: Boolean) : InputStream() {
@@ -130,94 +147,139 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private const val ZIP64_LOCATOR_SIG = 0x07064b50L
         private const val ZIP64_END_SIG = 0x06064b50L
         private const val MAX_ENTRIES = 200_000
-        private const val MAX_INDEX_BYTES = 64L * 1024 * 1024
-        private const val ZIP64_END_SIZE = 56L
         private const val BAD_INDEX = "Indice dell'archivio non valido"
 
-        /** Archives opened as folders; documents that are ZIP inside (.docx, .epub) still open with their app. */
-        fun isZip(name: String) = RemotePath.extension(name).lowercase() in setOf("zip", "cbz")
+        /* Fixed parts of the records, APPNOTE.TXT 4.3. */
+        private const val LOCAL_HEADER_SIZE = 30
+        private const val LOCAL_NAME_LENGTH = 26
+        private const val LOCAL_EXTRA_LENGTH = 28
+        private const val CENTRAL_HEADER_SIZE = 46
+        private const val END_RECORD_SIZE = 22
+        private const val ZIP64_LOCATOR_SIZE = 20
+        private const val ZIP64_END_SIZE = 56
+        private const val ZIP64_EXTRA_ID = 0x0001
+        private const val EXTRA_HEADER_SIZE = 4
 
-        /** Reads the index of the archive; the [reader] stays open for [open] and is closed by the caller. */
+        /* The end record sits in the last 64 KiB plus its own size: its comment is at most 65535 bytes. */
+        private const val MAX_TAIL = 65_557L
+        private const val MAX_INDEX_BYTES = 64L * 1024 * 1024
+        private const val INFLATE_BUFFER_BYTES = 64 * 1024
+
+        /* A 32-bit field set to all ones: the real value is in the ZIP64 extra field. */
+        private const val ZIP64_MARK = 0xFFFFFFFFL
+        private const val FLAG_ENCRYPTED = 0x1
+        private const val FLAG_UTF8 = 0x800
+        private const val NO_HEADER = -1L
+        private val ZIP_EXTENSIONS = setOf("zip", "cbz")
+
+        /* Where the index is and how many entries it holds, from the end record or its ZIP64 version. */
+        private class Index(val count: Long, val size: Long, val offset: Long)
+
+        /**
+         * isZip() - tells whether a file is opened as a folder
+         * @param name the file name
+         *
+         * Documents that are ZIP inside (.docx, .epub) still open with their app.
+         *
+         * Return: true for .zip and .cbz.
+         */
+        fun isZip(name: String) = RemotePath.extension(name).lowercase() in ZIP_EXTENSIONS
+
+        /**
+         * read() - reads the index of an archive
+         * @param reader the archive; stays open for [open] and is closed by the caller
+         *
+         * Context: blocking: reads the end of the file and the index.
+         * Return: the archive with its entries.
+         */
         fun read(reader: RandomReader): ZipArchive {
-            val size = reader.size
-            val tailLength = minOf(size, 65_557L).toInt()
-            val tail = ByteArray(tailLength)
-            readAt(reader, size - tailLength, tail)
-            var end = -1
-            for (i in tailLength - 22 downTo 0) {
-                if (le32(tail, i) == END_SIG) { end = i; break }
-            }
-            if (end < 0) throw NasException("Non è un archivio ZIP leggibile")
-            var count = le16(tail, end + 10).toLong()
-            var dirSize = le32(tail, end + 12)
-            var dirOffset = le32(tail, end + 16)
-            // ZIP64: the real values are in a record of their own, found through the locator just before
-            if (end >= 20 && le32(tail, end - 20) == ZIP64_LOCATOR_SIG) {
-                val zip64End = le64(tail, end - 20 + 8)
-                if (zip64End < 0 || zip64End > size - ZIP64_END_SIZE) throw NasException(BAD_INDEX)
-                val record = ByteArray(ZIP64_END_SIZE.toInt())
-                readAt(reader, zip64End, record)
-                if (le32(record, 0) == ZIP64_END_SIG) {
-                    count = le64(record, 32)
-                    dirSize = le64(record, 40)
-                    dirOffset = le64(record, 48)
-                }
-            }
-            if (count > MAX_ENTRIES || dirSize > MAX_INDEX_BYTES || dirOffset < 0 || dirOffset + dirSize > size) {
+            val index = findIndex(reader)
+            if (index.count > MAX_ENTRIES || index.size > MAX_INDEX_BYTES || index.offset < 0 ||
+                index.offset + index.size > reader.size
+            ) {
                 throw NasException(BAD_INDEX)
             }
-            val dir = ByteArray(dirSize.toInt())
-            readAt(reader, dirOffset, dir)
+            val dir = ByteArray(index.size.toInt())
+            readAt(reader, index.offset, dir)
             val entries = ArrayList<Entry>()
             var p = 0
-            while (p + 46 <= dir.size && le32(dir, p) == CENTRAL_SIG) {
-                val flags = le16(dir, p + 8)
-                val method = le16(dir, p + 10)
-                val time = le16(dir, p + 12)
-                val date = le16(dir, p + 14)
-                val crc = le32(dir, p + 16)
-                var compressed = le32(dir, p + 20)
-                var uncompressed = le32(dir, p + 24)
-                val nameLength = le16(dir, p + 28)
-                val extraLength = le16(dir, p + 30)
-                val commentLength = le16(dir, p + 32)
-                var local = le32(dir, p + 42)
-                // lengths that run past the index belong to a damaged (or crafted) archive: refused as a whole
-                if (p + 46 + nameLength + extraLength + commentLength > dir.size) throw NasException(BAD_INDEX)
-                val nameBytes = dir.copyOfRange(p + 46, p + 46 + nameLength)
-                // ZIP64 extra field: the 32-bit values set to all ones are found here, in this order
-                var x = p + 46 + nameLength
-                val extraEnd = x + extraLength
-                while (x + 4 <= extraEnd) {
-                    val id = le16(dir, x)
-                    val len = le16(dir, x + 2)
-                    if (x + 4 + len > extraEnd) break
-                    if (id == 0x0001) {
-                        var q = x + 4
-                        if (uncompressed == 0xFFFFFFFFL && q + 8 <= x + 4 + len) { uncompressed = le64(dir, q); q += 8 }
-                        if (compressed == 0xFFFFFFFFL && q + 8 <= x + 4 + len) { compressed = le64(dir, q); q += 8 }
-                        if (local == 0xFFFFFFFFL && q + 8 <= x + 4 + len) { local = le64(dir, q) }
-                    }
-                    x += 4 + len
-                }
-                val name = decodeName(nameBytes, utf8 = flags and 0x800 != 0).replace('\\', '/').trimStart('/')
-                // a name that climbs out of the archive ("../") is left out: extracting it could write anywhere
-                if (name.isNotEmpty() && name.split('/').none { it == ".." }) {
-                    entries += Entry(
-                        path = name,
-                        isDirectory = name.endsWith("/"),
-                        size = uncompressed,
-                        compressedSize = compressed,
-                        method = method,
-                        crc = crc,
-                        modified = dosTime(date, time),
-                        encrypted = flags and 1 != 0,
-                        localHeader = local,
-                    )
-                }
-                p += 46 + nameLength + extraLength + commentLength
+            while (p + CENTRAL_HEADER_SIZE <= dir.size && le32(dir, p) == CENTRAL_SIG) {
+                readCentralEntry(dir, p)?.let { entries += it }
+                p += CENTRAL_HEADER_SIZE + le16(dir, p + 28) + le16(dir, p + 30) + le16(dir, p + 32)
             }
             return ZipArchive(reader, entries)
+        }
+
+        /* Finds the end record in the tail of the file, then the ZIP64 record when the archive has one. */
+        private fun findIndex(reader: RandomReader): Index {
+            val size = reader.size
+            val tailLength = minOf(size, MAX_TAIL).toInt()
+            val tail = ByteArray(tailLength)
+            readAt(reader, size - tailLength, tail)
+            val end = (tailLength - END_RECORD_SIZE downTo 0).firstOrNull { le32(tail, it) == END_SIG }
+                ?: throw NasException("Non è un archivio ZIP leggibile")
+            val plain = Index(le16(tail, end + 10).toLong(), le32(tail, end + 12), le32(tail, end + 16))
+            // ZIP64: the real values are in a record of their own, found through the locator just before
+            val locator = end - ZIP64_LOCATOR_SIZE
+            if (locator < 0 || le32(tail, locator) != ZIP64_LOCATOR_SIG) return plain
+            val zip64End = le64(tail, locator + 8)
+            if (zip64End < 0 || zip64End > size - ZIP64_END_SIZE) throw NasException(BAD_INDEX)
+            val record = ByteArray(ZIP64_END_SIZE)
+            readAt(reader, zip64End, record)
+            if (le32(record, 0) != ZIP64_END_SIG) return plain
+            return Index(le64(record, 32), le64(record, 40), le64(record, 48))
+        }
+
+        /* One entry of the central directory at [p], or null when its name would climb out of the archive. */
+        private fun readCentralEntry(dir: ByteArray, p: Int): Entry? {
+            val flags = le16(dir, p + 8)
+            val nameLength = le16(dir, p + 28)
+            // lengths that run past the index belong to a damaged (or crafted) archive: refused as a whole
+            val recordEnd = p + CENTRAL_HEADER_SIZE + nameLength + le16(dir, p + 30) + le16(dir, p + 32)
+            if (recordEnd > dir.size) throw NasException(BAD_INDEX)
+            val sizes = longArrayOf(le32(dir, p + 24), le32(dir, p + 20), le32(dir, p + 42))
+            val nameStart = p + CENTRAL_HEADER_SIZE
+            readZip64Extra(dir, nameStart + nameLength, le16(dir, p + 30), sizes)
+            val nameBytes = dir.copyOfRange(nameStart, nameStart + nameLength)
+            val name = decodeName(nameBytes, utf8 = flags and FLAG_UTF8 != 0).replace('\\', '/').trimStart('/')
+            // a name that climbs out of the archive ("../") is left out: extracting it could write anywhere
+            if (name.isEmpty() || name.split('/').any { it == ".." }) return null
+            return Entry(
+                path = name,
+                isDirectory = name.endsWith("/"),
+                size = sizes[0],
+                compressedSize = sizes[1],
+                method = le16(dir, p + 10),
+                crc = le32(dir, p + 16),
+                modified = dosTime(le16(dir, p + 14), le16(dir, p + 12)),
+                encrypted = flags and FLAG_ENCRYPTED != 0,
+                localHeader = sizes[2],
+            )
+        }
+
+        /*
+         * The ZIP64 extra field: the values of [sizes] (uncompressed, compressed, local header offset) set to all
+         * ones are found there, in this order, and replaced in place.
+         */
+        private fun readZip64Extra(dir: ByteArray, start: Int, length: Int, sizes: LongArray) {
+            var x = start
+            val extraEnd = start + length
+            while (x + EXTRA_HEADER_SIZE <= extraEnd) {
+                val id = le16(dir, x)
+                val len = le16(dir, x + 2)
+                if (x + EXTRA_HEADER_SIZE + len > extraEnd) break
+                if (id == ZIP64_EXTRA_ID) readZip64Values(dir, x + EXTRA_HEADER_SIZE, x + EXTRA_HEADER_SIZE + len, sizes)
+                x += EXTRA_HEADER_SIZE + len
+            }
+        }
+
+        private fun readZip64Values(dir: ByteArray, start: Int, end: Int, sizes: LongArray) {
+            var q = start
+            for (i in sizes.indices) {
+                if (sizes[i] != ZIP64_MARK || q + Long.SIZE_BYTES > end) continue
+                sizes[i] = le64(dir, q)
+                q += Long.SIZE_BYTES
+            }
         }
 
         private fun readAt(reader: RandomReader, position: Long, buffer: ByteArray) {
@@ -259,8 +321,19 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
 object ZipExtract {
 
     /**
-     * Extracts [entries] into [toDir]: their folders inside the archive below [base] are recreated there. Names
-     * already taken are handled as [conflict] says; a run again with the same [log] skips what is done.
+     * extract() - copies files out of an archive into a folder of the NAS
+     * @param fs the file system
+     * @param archive the archive, open
+     * @param entries the files to extract
+     * @param base the folder of the archive they are taken from: their path below it is recreated
+     * @param share share of the destination
+     * @param toDir destination folder
+     * @param conflict what to do with names already taken
+     * @param log what an earlier run of the same extraction already did
+     * @param progress the file being written, its bytes so far and its size
+     *
+     * Context: blocking; stops with InterruptedException when the thread is interrupted.
+     * Return: nothing.
      */
     fun extract(
         fs: NasFileSystem,
@@ -281,24 +354,8 @@ object ZipExtract {
             if (log.has(key)) continue
             val relative = if (root.isEmpty()) entry.path else entry.path.removePrefix("$root/")
             val path = RemotePath.child(toDir, relative)
-            val parent = RemotePath.parent(path)
-            if (parent !in made) {
-                var current = ""
-                for (part in parent.split('/').filter { it.isNotEmpty() }) {
-                    current = RemotePath.child(current, part)
-                    if (current !in made && fs.stat(share, current) == null) fs.createDirectory(share, current)
-                    made += current
-                }
-            }
-            val target = log.remember(key) {
-                val existing = fs.stat(share, path)
-                when {
-                    existing == null -> path
-                    conflict == Conflict.Skip && !existing.isDirectory -> ""
-                    conflict == Conflict.Replace && !existing.isDirectory -> path
-                    else -> EditSync.freePath(fs, share, path)
-                }
-            }
+            fs.makeDirs(share, RemotePath.parent(path), made)
+            val target = log.remember(key) { Transfers.fileTarget(fs, share, path, conflict).orEmpty() }
             if (target.isEmpty()) {
                 log.skip(key)
                 continue

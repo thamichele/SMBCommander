@@ -1,3 +1,10 @@
+/*
+ * PhoneUploads.kt - files and folders of the phone sent to the NAS as jobs of the transfer queue
+ *
+ * Each file goes through EditSync.safeUpload with its SHA-256 check; a job run again skips what is already sent.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.ContentResolver
@@ -8,6 +15,7 @@ import io.github.thamichele.smbcommander.core.EditSync
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.TransferLog
+import io.github.thamichele.smbcommander.core.Transfers
 
 /**
  * Files and folders of the phone going to the NAS, as jobs of the transfer queue. Each file goes through
@@ -25,19 +33,45 @@ object PhoneUploads {
 
     data class FolderItem(val tree: Uri, val documentId: String, override val name: String) : Item
 
+    /**
+     * file() - a document picked with the system picker
+     * @param resolver to ask its name and size
+     * @param uri the document
+     *
+     * Return: the item to send.
+     */
     fun file(resolver: ContentResolver, uri: Uri): FileItem {
         val (name, size) = resolver.describe(uri)
         return FileItem(uri, name, size)
     }
 
-    /** The folder picked with the system folder picker. */
+    /**
+     * folder() - a folder picked with the system folder picker
+     * @param resolver to ask its name
+     * @param tree the folder
+     *
+     * Return: the item to send.
+     */
     fun folder(resolver: ContentResolver, tree: Uri): FolderItem {
         val id = DocumentsContract.getTreeDocumentId(tree)
         val name = resolver.describe(DocumentsContract.buildDocumentUriUsingTree(tree, id)).first
         return FolderItem(tree, id, name)
     }
 
-    /** Sends [items] into the folder [dir] of [share]; returns a note on the files left alone, if any. */
+    /**
+     * send() - sends files and folders of the phone into a folder of the NAS
+     * @param resolver to read them
+     * @param fs the file system
+     * @param items what to send
+     * @param share the share of the destination
+     * @param dir the destination folder
+     * @param conflict what to do with names already taken
+     * @param log what an earlier run of the same job already did
+     * @param progress the file being sent and its bytes
+     *
+     * Context: blocking; stops with InterruptedException when the thread is interrupted.
+     * Return: a note on the files left alone, or null when none.
+     */
     fun send(
         resolver: ContentResolver,
         fs: NasFileSystem,
@@ -74,15 +108,7 @@ object PhoneUploads {
         val key = item.uri.toString()
         if (log.has(key)) return
         // chosen once: a job run again writes to the same name, it does not number a second copy
-        val target = log.remember(key) {
-            val existing = fs.stat(share, path)
-            when {
-                existing == null -> path
-                conflict == Conflict.Skip && !existing.isDirectory -> ""
-                conflict == Conflict.Replace && !existing.isDirectory -> path
-                else -> EditSync.freePath(fs, share, path)
-            }
-        }
+        val target = log.remember(key) { Transfers.fileTarget(fs, share, path, conflict).orEmpty() }
         if (target.isEmpty()) {
             log.skip(key)
             return

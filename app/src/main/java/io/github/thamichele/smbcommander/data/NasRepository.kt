@@ -1,3 +1,12 @@
+/*
+ * NasRepository.kt - the SMB connections of the app: the main NAS and the other NAS
+ *
+ * Opens, keeps and closes the connections and gives every screen one file system for all of them. Storing the
+ * settings
+ * is CredentialStore's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import io.github.thamichele.smbcommander.core.MultiNasFileSystem
@@ -29,13 +38,37 @@ class NasRepository(private val credentials: CredentialStore) {
 
     val isConfigured: Boolean get() = current != null || credentials.hasServer()
 
+    /**
+     * server() - the settings of the main NAS
+     *
+     * Context: blocking: decrypts the password.
+     * Return: them, or null when none are saved.
+     */
     fun server(): NasServer? = credentials.load()
 
+    /**
+     * host() - the address of the main NAS, for screens that only show it
+     *
+     * Return: the address, or null.
+     */
     fun host(): String? = credentials.host()
 
+    /**
+     * user() - the user of the main NAS, for screens that only show it
+     *
+     * Return: the user, "" when none.
+     */
     fun user(): String = credentials.user()
 
-    /** Checks the settings by really connecting, then keeps them. Pairs again with whichever NAS answers now. */
+    /**
+     * connect() - checks the settings by really connecting, then keeps them
+     * @param server the settings typed by the user
+     *
+     * Pairs again with whichever NAS answers now.
+     *
+     * Context: suspends on Dispatchers.IO.
+     * Return: nothing; a failure is thrown as NasException.
+     */
     suspend fun connect(server: NasServer) = withContext(Dispatchers.IO) {
         val fs = SmbNasFileSystem(server.copy(serverId = ""))
         try {
@@ -50,9 +83,13 @@ class NasRepository(private val credentials: CredentialStore) {
     }
 
     /**
-     * The paired NAS answering at a new [address] (the router gave it another one): its identity is checked before
-     * any login, so a different machine there never receives the password. True when it was the same NAS and the
-     * new address is now saved.
+     * follow() - follows the paired NAS to a new address the router gave it
+     * @param address where it may answer now
+     *
+     * Its identity is checked before any login, so a different machine there never receives the password.
+     *
+     * Context: suspends on Dispatchers.IO.
+     * Return: true when it was the paired NAS and the new address is saved.
      */
     suspend fun follow(address: String): Boolean = withContext(Dispatchers.IO) {
         val saved = credentials.load() ?: return@withContext false
@@ -70,6 +107,11 @@ class NasRepository(private val credentials: CredentialStore) {
         true
     }
 
+    /**
+     * forget() - closes every connection and forgets every NAS
+     *
+     * Return: nothing.
+     */
     fun forget() {
         current?.close()
         current = null
@@ -81,10 +123,19 @@ class NasRepository(private val credentials: CredentialStore) {
         NasShares.names = emptyMap()
     }
 
-    /** The other NAS, in the order they were added. */
+    /**
+     * otherNas() - the other NAS
+     *
+     * Return: them, in the order they were added.
+     */
     fun otherNas(): List<OtherNas> = credentials.otherNas()
 
-    /** Address of the NAS that holds [share], for screens that only show it. */
+    /**
+     * hostOf() - the address of the NAS that holds a share, for screens that only show it
+     * @param share any share name of the app
+     *
+     * Return: the address, or null when unknown.
+     */
     fun hostOf(share: String): String? {
         val id = NasShares.nasOf(share) ?: return host()
         return credentials.otherNas().find { it.id == id }?.server?.host
@@ -120,13 +171,23 @@ class NasRepository(private val credentials: CredentialStore) {
         nas
     }
 
+    /**
+     * removeOther() - closes and forgets another NAS
+     * @param id the NAS
+     *
+     * Return: nothing.
+     */
     fun removeOther(id: String) {
         synchronized(otherConnections) { otherConnections.remove(id)?.close() }
         credentials.removeOther(id)
         NasShares.names = credentials.otherNames()
     }
 
-    /** One file system for every NAS: the share name chooses the NAS, see NasShares. */
+    /**
+     * fs() - one file system for every NAS: the share name chooses the NAS, see NasShares
+     *
+     * Return: the shared file system; never close it.
+     */
     fun fs(): NasFileSystem = router
 
     private fun otherFs(id: String): NasFileSystem? = synchronized(otherConnections) {
@@ -144,5 +205,12 @@ class NasRepository(private val credentials: CredentialStore) {
         ).also { current = it }
     }
 
+    /**
+     * io() - runs NAS work off the main thread
+     * @param block the work, given the file system
+     *
+     * Context: suspends on Dispatchers.IO.
+     * Return: what [block] returned.
+     */
     suspend fun <T> io(block: (NasFileSystem) -> T): T = withContext(Dispatchers.IO) { block(fs()) }
 }

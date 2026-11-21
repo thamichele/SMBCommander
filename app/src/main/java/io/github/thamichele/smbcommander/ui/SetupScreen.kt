@@ -1,3 +1,10 @@
+/*
+ * SetupScreen.kt - address and user of the NAS: the first connection and the NAS page of the settings
+ *
+ * Draws the form and the NAS found on the network; connecting is AppViewModel's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import io.github.thamichele.smbcommander.data.WakeOnLan
@@ -59,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.NasServer
+import io.github.thamichele.smbcommander.data.FoundNas
 import io.github.thamichele.smbcommander.ui.theme.AccentStore
 import io.github.thamichele.smbcommander.ui.theme.ThemeStore
 import io.github.thamichele.smbcommander.ui.theme.AccentTheme
@@ -84,7 +92,6 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     // the saved password is never shown again: left empty, the saved one is kept
     var password by rememberSaveable { mutableStateOf("") }
     var domain by rememberSaveable { mutableStateOf(saved?.domain.orEmpty()) }
-    var showPassword by rememberSaveable { mutableStateOf(false) }
     var confirmForget by remember { mutableStateOf(false) }
     val found by vm.found.collectAsStateWithLifecycle()
     val finding by vm.finding.collectAsStateWithLifecycle()
@@ -120,94 +127,12 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
                 modifier = Modifier.fillMaxWidth(),
             )
             // NAS that announce themselves on the Wi-Fi (Bonjour): one tap fills the address
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                GhostButton(onClick = { vm.findNas() }, enabled = !finding) {
-                    Text(if (finding) "Cerco nella rete…" else "Cerca il NAS nella rete")
-                }
-                if (finding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Arancio.colors.accent)
-            }
-            found?.let { list ->
-                if (list.isEmpty() && !finding) {
-                    Text(
-                        "Nessun NAS si è presentato. Su QNAP serve il servizio Bonjour (Pannello di controllo › Servizi di rete).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Arancio.colors.textSecondary,
-                    )
-                }
-                list.forEach { nas ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(ArancioShape.control)
-                            .background(if (host == nas.address) Arancio.colors.accentTint else Arancio.colors.surface)
-                            .border(1.dp, if (host == nas.address) Arancio.colors.accentBorder else Arancio.colors.border, ArancioShape.control)
-                            .clickable { host = nas.address }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentIcon, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(nas.name, style = MaterialTheme.typography.titleSmall)
-                            Text(nas.address, style = ArancioType.data, color = Arancio.colors.textSecondary)
-                        }
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text("Utente") },
-                singleLine = true,
-                shape = ArancioShape.control,
-                colors = arancioFieldColors(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(if (saved != null) "Password (vuota = quella salvata)" else "Password") },
-                singleLine = true,
-                shape = ArancioShape.control,
-                colors = arancioFieldColors(),
-                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                trailingIcon = {
-                    FieldButton(
-                        if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
-                        if (showPassword) "Nascondi password" else "Mostra password",
-                        { showPassword = !showPassword },
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = domain,
-                onValueChange = { domain = it },
-                label = { Text("Dominio o gruppo di lavoro (facoltativo)") },
-                singleLine = true,
-                shape = ArancioShape.control,
-                colors = arancioFieldColors(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            FoundNasList(found, finding, host, onFind = { vm.findNas() }, onPick = { host = it })
+            SetupField(user, { user = it }, "Utente", ImeAction.Next)
+            PasswordField(password, { password = it }, isSaved = saved != null)
+            SetupField(domain, { domain = it }, "Dominio o gruppo di lavoro (facoltativo)", ImeAction.Done)
             Spacer(Modifier.height(4.dp))
-            PrimaryButton(
-                onClick = submit,
-                enabled = ready,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) {
-                if (connecting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = Arancio.colors.onAccent,
-                    )
-                } else {
-                    Text(if (saved != null) "Salva e ricollega" else "Collega")
-                }
-            }
+            ConnectButton(connecting, ready, isSaved = saved != null, onClick = submit)
             if (saved != null) {
                 ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS")
@@ -219,22 +144,104 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     }
 
     if (confirmForget) {
-        ConfirmDialog(
-            title = "Dimenticare il NAS?",
-            text = "Indirizzo, utente, password, gli altri NAS e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
-            confirm = "Dimentica",
-            danger = true,
-            onDismiss = { confirmForget = false },
-            onConfirm = {
-                confirmForget = false
-                host = ""; user = ""; password = ""; domain = ""
-                vm.disconnect()
-            },
-        )
+        ForgetNasDialog(onDismiss = { confirmForget = false }) {
+            confirmForget = false
+            host = ""; user = ""; password = ""; domain = ""
+            vm.disconnect()
+        }
     }
 }
 
-/** The one option of the Gallery: deleting with a swipe, with or without asking first. */
+/* The search of the NAS on the Wi-Fi and what it found; a tap on one fills the address. */
+@Composable
+private fun FoundNasList(found: List<FoundNas>?, finding: Boolean, host: String, onFind: () -> Unit, onPick: (String) -> Unit) {
+    val c = Arancio.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        GhostButton(onClick = onFind, enabled = !finding) {
+            Text(if (finding) "Cerco nella rete…" else "Cerca il NAS nella rete")
+        }
+        if (finding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = c.accent)
+    }
+    val list = found ?: return
+    if (list.isEmpty() && !finding) {
+        Text(
+            "Nessun NAS si è presentato. Su QNAP serve il servizio Bonjour (Pannello di controllo › Servizi di rete).",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+    }
+    list.forEach { nas ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(ArancioShape.control)
+                .background(if (host == nas.address) c.accentTint else c.surface)
+                .border(1.dp, if (host == nas.address) c.accentBorder else c.border, ArancioShape.control)
+                .clickable { onPick(nas.address) }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Server, contentDescription = null, tint = c.accentIcon, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(nas.name, style = MaterialTheme.typography.titleSmall)
+                Text(nas.address, style = ArancioType.data, color = c.textSecondary)
+            }
+        }
+    }
+}
+
+/* A plain one-line field of the form. */
+@Composable
+private fun SetupField(value: String, onChange: (String) -> Unit, label: String, imeAction: ImeAction) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        shape = ArancioShape.control,
+        colors = arancioFieldColors(),
+        keyboardOptions = KeyboardOptions(imeAction = imeAction),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/* "Collega", or a spinner while the connection is tried. */
+@Composable
+private fun ConnectButton(connecting: Boolean, ready: Boolean, isSaved: Boolean, onClick: () -> Unit) {
+    PrimaryButton(
+        onClick = onClick,
+        enabled = ready,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+    ) {
+        if (connecting) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Arancio.colors.onAccent)
+        } else {
+            Text(if (isSaved) "Salva e ricollega" else "Collega")
+        }
+    }
+}
+
+/* Asks before everything about the NAS leaves the phone. */
+@Composable
+private fun ForgetNasDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    ConfirmDialog(
+        title = "Dimenticare il NAS?",
+        text = "Indirizzo, utente, password, gli altri NAS e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
+        confirm = "Dimentica",
+        danger = true,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+    )
+}
+
+/**
+ * GalleryOptions() - the one option of the Gallery: deleting with a swipe, with or without asking first
+ * @param vm where the option is kept
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun GalleryOptions(vm: AppViewModel) {
     val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
@@ -263,7 +270,13 @@ internal fun GalleryOptions(vm: AppViewModel) {
     }
 }
 
-/** Functions that not everyone wants: all off until turned on here. */
+/**
+ * OptionalSection() - the functions that not everyone wants, all off until turned on here
+ * @param vm where the options are kept
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun OptionalSection(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()
@@ -342,7 +355,12 @@ private val ACCENT_GAP = 8.dp
 private val ACCENT_PADDING = 10.dp
 private val ACCENT_SWATCH = 22.dp
 
-/** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
+/**
+ * AppearanceSection() - the theme and the main colour of the app, its widget and its launcher icon
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 internal fun AppearanceSection() {
     val context = LocalContext.current

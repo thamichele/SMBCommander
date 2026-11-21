@@ -1,3 +1,11 @@
+/*
+ * AppRoot.kt - the frame of the app: the screen on show, the bottom bar, the dialogs over everything
+ *
+ * Chooses which screen to draw from AppViewModel.screen and shows the transfer card, the mini player and the prompts.
+ * It holds no state of its own beyond the animations.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.content.ActivityNotFoundException
@@ -17,6 +25,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,44 +85,20 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import java.io.File
 import kotlinx.coroutines.launch
 
+/**
+ * AppRoot() - the whole app: the screen of the moment, the bar of the sections and what floats above them
+ * @param vm the app's state and actions
+ * @param onExit called when back is pressed with nowhere left to go back to
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     val screen by vm.screen.collectAsStateWithLifecycle()
-    val transfer by vm.transfer.collectAsStateWithLifecycle()
     val prompt by vm.syncPrompt.collectAsStateWithLifecycle()
-    val jobs by vm.transfers.collectAsStateWithLifecycle()
-    val transfersPaused by vm.transfersPaused.collectAsStateWithLifecycle()
-    val conflictAsk by vm.conflictAsk.collectAsStateWithLifecycle()
-    val music by vm.music.collectAsStateWithLifecycle()
-    val deletion by vm.deletion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-
-    LaunchedEffect(vm) {
-        vm.uiEvents.collect { event ->
-            when (event) {
-                is UiEvent.Message -> scope.launch {
-                    snackbar.currentSnackbarData?.dismiss()
-                    snackbar.showSnackbar(event.text)
-                }
-                is UiEvent.MessageWithAction -> scope.launch {
-                    snackbar.currentSnackbarData?.dismiss()
-                    if (snackbar.showSnackbar(event.text, actionLabel = event.action, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
-                        event.onAction()
-                    }
-                }
-                is UiEvent.OpenFile -> if (!openExternally(context, event.file, event.name, event.edit)) {
-                    vm.openFailed(event.file)
-                }
-                is UiEvent.Share -> if (!shareExternally(context, event.files)) {
-                    event.files.firstOrNull()?.parentFile?.deleteRecursively()
-                    snackbar.currentSnackbarData?.dismiss()
-                    scope.launch { snackbar.showSnackbar("Nessuna app installata può ricevere questi file") }
-                }
-            }
-        }
-    }
+    UiEvents(vm, snackbar)
 
     BackHandler { if (!vm.back()) onExit() }
 
@@ -143,85 +128,130 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
                 is Screen.Viewer -> ViewerScreen(vm, s)
             }
             if (viewer != null) ViewerScreen(vm, viewer)
-            // the song playing stays on every screen but the full-screen viewer, above the transfers
-            if (music.active && viewer == null) {
-                MiniPlayer(
-                    music,
-                    onToggle = vm::musicToggle,
-                    onNext = vm::musicNext,
-                    onPrevious = vm::musicPrevious,
-                    onSeek = vm::musicSeek,
-                    onClose = vm::musicStop,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (jobs.isNotEmpty() || transfer != null) 120.dp else 0.dp),
-                )
-            }
-            if (jobs.isNotEmpty() && transfer == null) {
-                TransferCard(
-                    jobs,
-                    paused = transfersPaused,
-                    onCancel = vm::cancelTransfers,
-                    onPause = vm::pauseTransfers,
-                    onResume = vm::resumeTransfers,
-                    onRetry = vm::retryTransfer,
-                    onClose = vm::clearTransfers,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
-            conflictAsk?.let { ConflictDialog(it, onChoice = vm::answerConflict) }
-            deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
-            transfer?.let { t ->
-                Column(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                        .fillMaxWidth()
-                        .floating(Arancio.colors)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(t.label, style = MaterialTheme.typography.titleSmall)
-                    ArancioProgress(t.fraction)
+            Overlays(vm, showMusic = viewer == null)
+        }
+    }
+
+    prompt?.let { SyncPromptDialog(it, vm) }
+}
+
+/* Shows the messages of the view model and opens or shares the files it hands over. */
+@Composable
+private fun UiEvents(vm: AppViewModel, snackbar: SnackbarHostState) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    LaunchedEffect(vm) {
+        vm.uiEvents.collect { event ->
+            when (event) {
+                is UiEvent.Message -> scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    snackbar.showSnackbar(event.text)
+                }
+                is UiEvent.MessageWithAction -> scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    if (snackbar.showSnackbar(event.text, actionLabel = event.action, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                        event.onAction()
+                    }
+                }
+                is UiEvent.OpenFile -> if (!openExternally(context, event.file, event.name, event.edit)) {
+                    vm.openFailed(event.file)
+                }
+                is UiEvent.Share -> if (!shareExternally(context, event.files)) {
+                    event.files.firstOrNull()?.parentFile?.deleteRecursively()
+                    snackbar.currentSnackbarData?.dismiss()
+                    scope.launch { snackbar.showSnackbar("Nessuna app installata può ricevere questi file") }
                 }
             }
         }
     }
+}
 
-    prompt?.let { p ->
-        val name = RemotePath.name(p.session.path)
-        AlertDialog(
-            onDismissRequest = {},
-            containerColor = Arancio.colors.surfaceRaised,
-            title = {
-                Text(
-                    if (p.remoteMissing) "«$name» non c'è più sul NAS" else "«$name» è cambiato anche sul NAS",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            },
-            text = {
-                Text(
-                    if (p.remoteMissing) {
-                        "Hai modificato il file sul telefono, ma nel frattempo è stato spostato o eliminato dal NAS."
-                    } else {
-                        "Hai modificato il file sul telefono, ma qualcun altro lo ha cambiato sul NAS dopo che l'hai aperto."
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            },
-            confirmButton = {
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    PrimaryButton(onClick = vm::resolveKeepBoth) {
-                        Text("Salva come copia")
-                    }
-                    SecondaryButton(onClick = vm::resolveOverwrite) {
-                        Text(if (p.remoteMissing) "Ricrea il file" else "Sovrascrivi il NAS")
-                    }
-                    GhostButton(onClick = vm::resolveDiscard) {
-                        Text("Scarta le modifiche", color = Arancio.colors.danger)
-                    }
-                }
-            },
+/* What floats over every screen: the song playing, the transfers, and the dialogs of conflicts and deletions. */
+@Composable
+private fun BoxScope.Overlays(vm: AppViewModel, showMusic: Boolean) {
+    val transfer by vm.transfer.collectAsStateWithLifecycle()
+    val jobs by vm.transfers.collectAsStateWithLifecycle()
+    val transfersPaused by vm.transfersPaused.collectAsStateWithLifecycle()
+    val conflictAsk by vm.conflictAsk.collectAsStateWithLifecycle()
+    val music by vm.music.collectAsStateWithLifecycle()
+    val deletion by vm.deletion.collectAsStateWithLifecycle()
+    // the song playing stays on every screen but the full-screen viewer, above the transfers
+    if (music.active && showMusic) {
+        MiniPlayer(
+            music,
+            onToggle = vm::musicToggle,
+            onNext = vm::musicNext,
+            onPrevious = vm::musicPrevious,
+            onSeek = vm::musicSeek,
+            onClose = vm::musicStop,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (jobs.isNotEmpty() || transfer != null) 120.dp else 0.dp),
         )
     }
+    if (jobs.isNotEmpty() && transfer == null) {
+        TransferCard(
+            jobs,
+            paused = transfersPaused,
+            onCancel = vm::cancelTransfers,
+            onPause = vm::pauseTransfers,
+            onResume = vm::resumeTransfers,
+            onRetry = vm::retryTransfer,
+            onClose = vm::clearTransfers,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+    conflictAsk?.let { ConflictDialog(it, onChoice = vm::answerConflict) }
+    deletion?.let { DeletionDialog(it, onStop = vm::stopDeletion, onClose = vm::closeDeletion) }
+    transfer?.let { t ->
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
+                .fillMaxWidth()
+                .floating(Arancio.colors)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(t.label, style = MaterialTheme.typography.titleSmall)
+            ArancioProgress(t.fraction)
+        }
+    }
+}
+
+/* A file edited on the phone changed or vanished on the NAS meanwhile: keep both, overwrite, or drop the edit. */
+@Composable
+private fun SyncPromptDialog(p: SyncPrompt, vm: AppViewModel) {
+    val name = RemotePath.name(p.session.path)
+    AlertDialog(
+        onDismissRequest = {},
+        containerColor = Arancio.colors.surfaceRaised,
+        title = {
+            Text(
+                if (p.remoteMissing) "«$name» non c'è più sul NAS" else "«$name» è cambiato anche sul NAS",
+                style = MaterialTheme.typography.titleLarge,
+            )
+        },
+        text = {
+            Text(
+                if (p.remoteMissing) {
+                    "Hai modificato il file sul telefono, ma nel frattempo è stato spostato o eliminato dal NAS."
+                } else {
+                    "Hai modificato il file sul telefono, ma qualcun altro lo ha cambiato sul NAS dopo che l'hai aperto."
+                },
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PrimaryButton(onClick = vm::resolveKeepBoth) { Text("Salva come copia") }
+                SecondaryButton(onClick = vm::resolveOverwrite) {
+                    Text(if (p.remoteMissing) "Ricrea il file" else "Sovrascrivi il NAS")
+                }
+                GhostButton(onClick = vm::resolveDiscard) {
+                    Text("Scarta le modifiche", color = Arancio.colors.danger)
+                }
+            }
+        },
+    )
 }
 
 /** Pill behind the icon of the active section, and the room around the items: a low bar with little empty space. */

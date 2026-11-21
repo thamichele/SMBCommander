@@ -1,20 +1,51 @@
+/*
+ * FolderScan.kt - walks a folder and everything under it: its size, and a search by name
+ *
+ * Breadth first, so nearer folders come first and a stop leaves a useful partial result. A subfolder that cannot be
+ * read is skipped; only the folder asked for must be readable. Showing the results is the app's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.core
 
-/** Walks a folder and everything under it: its size, and a search by name. */
+/** Size of a folder and search by name, over every level below it. */
 object FolderScan {
+
+    /* Levels below the folder a search goes, and matches it stops at: enough for any real NAS, bounded anyway. */
+    private const val SEARCH_DEPTH = 30
+    private const val SEARCH_LIMIT = 2000
 
     /** What a folder holds, all levels included. */
     data class Totals(val files: Int = 0, val folders: Int = 0, val bytes: Long = 0) {
+        /**
+         * plus() - the totals with one more element
+         * @param e a file or a folder
+         *
+         * Return: new totals; this one is unchanged.
+         */
         operator fun plus(e: RemoteEntry) =
             if (e.isDirectory) copy(folders = folders + 1) else copy(files = files + 1, bytes = bytes + e.size)
     }
 
-    /** Hidden and system names (".name", "@Recycle", "#recycle"): the browser hides them too unless asked. */
+    /**
+     * isHidden() - tells whether a name is hidden or belongs to the system
+     * @param name a file or folder name
+     *
+     * Return: true for ".name", "@Recycle", "#recycle".
+     */
     fun isHidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#")
 
     /**
-     * Adds up the files under [path], calling [onProgress] after each folder with the totals so far. Stops at once
-     * when [stopped] says so. A subfolder that cannot be read is skipped and counted in [onUnreadable].
+     * measure() - adds up the files under a folder
+     * @param fs the file system
+     * @param share the share
+     * @param path the folder
+     * @param stopped asked before each folder: true stops at once
+     * @param onUnreadable called for each subfolder that cannot be read, and is skipped
+     * @param onProgress called after each folder with the totals so far
+     *
+     * Context: blocking.
+     * Return: the totals, partial when stopped.
      */
     fun measure(
         fs: NasFileSystem,
@@ -45,9 +76,20 @@ object FolderScan {
     }
 
     /**
-     * Looks for names containing [query] (any case) under [path], at most [maxDepth] levels down, nearer folders
-     * first. Each match goes to [onFound] as soon as it is seen; the search ends after [limit] matches or when
-     * [stopped] says so. Hidden elements are left out unless [includeHidden].
+     * search() - looks for names containing [query], any case, under a folder
+     * @param fs the file system
+     * @param share the share
+     * @param path the folder
+     * @param query the text to look for; blank finds nothing
+     * @param includeHidden also look at hidden elements
+     * @param maxDepth levels below [path] to go at most
+     * @param limit matches to stop at
+     * @param stopped asked before each folder: true stops at once
+     * @param onFolder the folder being read
+     * @param onFound each match, as soon as it is seen
+     *
+     * Context: blocking.
+     * Return: how many matches were found.
      */
     fun search(
         fs: NasFileSystem,
@@ -55,8 +97,8 @@ object FolderScan {
         path: String,
         query: String,
         includeHidden: Boolean = false,
-        maxDepth: Int = 30,
-        limit: Int = 2000,
+        maxDepth: Int = SEARCH_DEPTH,
+        limit: Int = SEARCH_LIMIT,
         stopped: () -> Boolean = { false },
         onFolder: (String) -> Unit = {},
         onFound: (RemoteEntry) -> Unit,

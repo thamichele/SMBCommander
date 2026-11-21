@@ -1,3 +1,11 @@
+/*
+ * NasDocumentsProvider.kt - the NAS in Android's file picker, for other apps
+ *
+ * Shows only the folders added in the app. Reading streams from the NAS; writing goes through a private copy uploaded
+ * with the usual checks when the other app closes it.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.database.Cursor
@@ -299,6 +307,12 @@ class NasDocumentsProvider : DocumentsProvider() {
             Document.COLUMN_LAST_MODIFIED, Document.COLUMN_FLAGS, Document.COLUMN_SUMMARY,
         )
 
+        /**
+         * mimeOf() - the MIME type of a file, from its name
+         * @param name the file name
+         *
+         * Return: the type Android knows for its extension, or "application/octet-stream".
+         */
         fun mimeOf(name: String): String =
             MimeTypeMap.getSingleton().getMimeTypeFromExtension(RemotePath.extension(name).lowercase()) ?: "application/octet-stream"
 

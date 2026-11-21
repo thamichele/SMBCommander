@@ -1,3 +1,12 @@
+/*
+ * SmbNasFileSystem.kt - NasFileSystem over SMB 2/3, with the smbj library
+ *
+ * Keeps one authenticated session per NAS and reconnects on demand when the NAS fell asleep or the Wi-Fi changed.
+ * Every message is signed and, with SMB 3, encrypted; the NAS must show the identity it was paired with before the
+ * login is sent (see ServerIdentity). Routing between several NAS is MultiNasFileSystem's job, not this file's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.core
 
 import com.hierynomus.msdtyp.AccessMask
@@ -15,8 +24,10 @@ import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.SMB2GuestSigningRequiredException
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
+import com.hierynomus.smbj.share.File
 import com.rapid7.client.dcerpc.mssrvs.ServerService
 import com.rapid7.client.dcerpc.transport.SMBTransportFactories
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -34,8 +45,8 @@ class SmbNasFileSystem(
 
     private val client = SMBClient(
         SmbConfig.builder()
-            .withTimeout(20, TimeUnit.SECONDS)
-            .withSoTimeout(60, TimeUnit.SECONDS)
+            .withTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .withSoTimeout(SOCKET_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             // Android ships a stripped BouncyCastle: use the full one bundled with the app
             .withSecurityProvider(BCSecurityProvider())
             .withDfsEnabled(false)
@@ -55,7 +66,12 @@ class SmbNasFileSystem(
     var serverId: String = server.serverId
         private set
 
-    /** Connects and authenticates, so wrong credentials surface right away. */
+    /**
+     * connect() - connects and authenticates now instead of at the first file operation
+     *
+     * Context: blocking.
+     * Return: nothing; wrong credentials or an unknown NAS surface right away as [NasException].
+     */
     fun connect() {
         session()
     }
@@ -64,7 +80,7 @@ class SmbNasFileSystem(
         val transport = SMBTransportFactories.SRVSVC.getTransport(session())
         ServerService(transport).shares1
             // low bits 0 = disk share; the "special" bit marks administrative shares such as ADMIN$ and C$
-            .filter { (it.type and 0xFFFF) == 0 && (it.type and STYPE_SPECIAL) == 0 }
+            .filter { (it.type and STYPE_MASK) == STYPE_DISKTREE && (it.type and STYPE_SPECIAL) == 0 }
             .map { it.netName }
             .sortedBy { it.lowercase() }
     }
@@ -102,42 +118,17 @@ class SmbNasFileSystem(
         }
     }
 
-    override fun openRead(share: String, path: String): InputStream = withRetry {
-        val file = disk(share).openFile(
-            RemotePath.toSmb(path),
-            EnumSet.of(AccessMask.GENERIC_READ),
-            null,
-            SMB2ShareAccess.ALL,
-            SMB2CreateDisposition.FILE_OPEN,
-            null
-        )
-        object : java.io.FilterInputStream(file.inputStream) {
-            override fun close() {
-                try {
-                    super.close()
-                } finally {
-                    file.close()
-                }
-            }
-        }
-    }
+    override fun openRead(share: String, path: String): InputStream = withRetry { streamOf(openForRead(share, path)) }
 
     override fun download(share: String, path: String, out: OutputStream, progress: Progress) {
-        val total = stat(share, path)?.size ?: -1L
-        openRead(share, path).use { input -> copy(input, out, total, progress) }
+        // the size comes from the open file: no separate stat() round trip before the bytes start
+        val file = withRetry { openForRead(share, path) }
+        val total = runCatching { file.fileInformation.standardInformation.endOfFile }.getOrDefault(UNKNOWN_SIZE)
+        streamOf(file).use { input -> copy(input, out, total, progress) }
     }
 
     override fun upload(share: String, path: String, input: InputStream, length: Long, progress: Progress) {
-        withRetry {
-            disk(share).openFile(
-                RemotePath.toSmb(path),
-                EnumSet.of(AccessMask.GENERIC_WRITE),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OVERWRITE_IF,
-                null
-            )
-        }.use { file ->
+        withRetry { openForWrite(share, path, EnumSet.of(AccessMask.GENERIC_WRITE)) }.use { file ->
             file.outputStream.use { out -> copy(input, out, length, progress) }
         }
     }
@@ -173,14 +164,7 @@ class SmbNasFileSystem(
     }
 
     override fun openRandom(share: String, path: String): RandomReader = withRetry {
-        val file = disk(share).openFile(
-            RemotePath.toSmb(path),
-            EnumSet.of(AccessMask.GENERIC_READ),
-            null,
-            SMB2ShareAccess.ALL,
-            SMB2CreateDisposition.FILE_OPEN,
-            null
-        )
+        val file = openForRead(share, path)
         val length = file.fileInformation.standardInformation.endOfFile
         object : RandomReader {
             override val size: Long = length
@@ -195,27 +179,14 @@ class SmbNasFileSystem(
     }
 
     override fun copyFile(fromShare: String, from: String, toShare: String, to: String, progress: Progress): String? {
-        val total = stat(fromShare, from)?.size ?: -1L
+        val total = stat(fromShare, from)?.size ?: UNKNOWN_SIZE
         progress(0, total)
         // server-side copy (FSCTL_SRV_COPYCHUNK): the NAS copies the bytes itself
         val copiedOnNas = runCatching {
             withRetry {
-                disk(fromShare).openFile(
-                    RemotePath.toSmb(from),
-                    EnumSet.of(AccessMask.GENERIC_READ),
-                    null,
-                    SMB2ShareAccess.ALL,
-                    SMB2CreateDisposition.FILE_OPEN,
-                    null
-                ).use { source ->
-                    disk(toShare).openFile(
-                        RemotePath.toSmb(to),
-                        EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE),
-                        null,
-                        SMB2ShareAccess.ALL,
-                        SMB2CreateDisposition.FILE_OVERWRITE_IF,
-                        null
-                    ).use { target -> source.remoteCopyTo(target) }
+                openForRead(fromShare, from).use { source ->
+                    openForWrite(toShare, to, EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE))
+                        .use { target -> source.remoteCopyTo(target) }
                 }
             }
         }.isSuccess
@@ -248,10 +219,7 @@ class SmbNasFileSystem(
             if (!ServerIdentity.accepts(serverId, presented)) {
                 // checked before authenticating: an impostor never sees the login
                 disconnect()
-                throw NasException(
-                    "A questo indirizzo risponde un NAS diverso da quello collegato. Se hai cambiato o rinominato il " +
-                        "NAS, collegalo di nuovo dalle impostazioni."
-                )
+                throw NasException(MSG_OTHER_NAS)
             }
             conn.authenticate(
                 AuthenticationContext(server.username, server.password.toCharArray(), server.domain)
@@ -265,11 +233,11 @@ class SmbNasFileSystem(
         } catch (e: SMB2GuestSigningRequiredException) {
             // the NAS let us in as guest (unknown user): a guest session cannot be signed, so it is refused
             disconnect()
-            throw NasException("Il NAS non riconosce l'utente: controlla utente e password", e)
+            throw NasException(MSG_GUEST, e)
         } catch (e: SMBApiException) {
             disconnect()
             throw NasException(
-                if (e.status == NtStatus.STATUS_LOGON_FAILURE) "Utente o password non corretti" else "Accesso negato: ${e.status}",
+                if (e.status == NtStatus.STATUS_LOGON_FAILURE) MSG_LOGON_FAILURE else "Accesso negato: ${e.status}",
                 e
             )
         } catch (e: IOException) {
@@ -284,6 +252,37 @@ class SmbNasFileSystem(
             ?: throw NasException("\"$share\" non è una cartella condivisa")
         shares[share] = disk
         disk
+    }
+
+    /* Opens an existing file for reading; the caller runs it inside withRetry and closes it. */
+    private fun openForRead(share: String, path: String): File = disk(share).openFile(
+        RemotePath.toSmb(path),
+        EnumSet.of(AccessMask.GENERIC_READ),
+        null,
+        SMB2ShareAccess.ALL,
+        SMB2CreateDisposition.FILE_OPEN,
+        null
+    )
+
+    /* Opens [path] with [access], creating it or emptying it first; the caller runs it inside withRetry. */
+    private fun openForWrite(share: String, path: String, access: Set<AccessMask>): File = disk(share).openFile(
+        RemotePath.toSmb(path),
+        access,
+        null,
+        SMB2ShareAccess.ALL,
+        SMB2CreateDisposition.FILE_OVERWRITE_IF,
+        null
+    )
+
+    /* The bytes of [file] as a stream whose close() also closes the file on the NAS. */
+    private fun streamOf(file: File): InputStream = object : FilterInputStream(file.inputStream) {
+        override fun close() {
+            try {
+                super.close()
+            } finally {
+                file.close()
+            }
+        }
     }
 
     private fun disconnect() {
@@ -332,7 +331,18 @@ class SmbNasFileSystem(
 
     private companion object {
         const val BUFFER_SIZE = 1 shl 20
+        const val TIMEOUT_SECONDS = 20L
+        const val SOCKET_TIMEOUT_SECONDS = 60L
+
+        /* Share types of MS-SRVS 2.2.2.4: the low bits say disk, printer, device or IPC; one high bit says special. */
+        const val STYPE_MASK = 0xFFFF
+        const val STYPE_DISKTREE = 0
         const val STYPE_SPECIAL = 0x80000000.toInt()
+
+        const val MSG_OTHER_NAS = "A questo indirizzo risponde un NAS diverso da quello collegato. Se hai cambiato o " +
+            "rinominato il NAS, collegalo di nuovo dalle impostazioni."
+        const val MSG_GUEST = "Il NAS non riconosce l'utente: controlla utente e password"
+        const val MSG_LOGON_FAILURE = "Utente o password non corretti"
         val NO_GUID = java.util.UUID(0, 0)
         val NOT_FOUND = setOf(
             NtStatus.STATUS_OBJECT_NAME_NOT_FOUND,

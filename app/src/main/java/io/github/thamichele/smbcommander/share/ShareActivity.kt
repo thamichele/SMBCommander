@@ -1,3 +1,10 @@
+/*
+ * ShareActivity.kt - Condividi from any app: the shared files go into a folder of the NAS
+ *
+ * Stays open until the upload ends, because the permission to read what was shared lasts only as long as it does.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.share
 
 import android.content.ContentResolver

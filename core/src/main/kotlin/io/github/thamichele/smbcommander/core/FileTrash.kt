@@ -1,3 +1,12 @@
+/*
+ * FileTrash.kt - the bin of the file browser, one hidden folder at the top of each share
+ *
+ * Deleting moves the element there by a rename, into a slot of its own with a note of where it was, so it goes back
+ * exactly there; slots older than KEEP_DAYS days are deleted for good. It never mixes with the cleanup's bin of the
+ * gallery (CleanupTrash). Asking the user and showing the bin are the app's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.core
 
 /**
@@ -12,17 +21,32 @@ object FileTrash {
     const val DIR = ".smbcommander-cestino-file"
     private const val ORIGIN = ".origine"
     const val KEEP_DAYS = 30
+    private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
     /** One deleted element: [entry] is where it is now, [original] where it was. */
     data class Item(val share: String, val slot: String, val entry: RemoteEntry, val original: String, val deletedAt: Long)
 
-    /** True for the bin itself and everything inside it: deleted from there, things are gone for good. */
+    /**
+     * isInside() - tells whether a path is the bin or inside it
+     * @param path a path inside a share
+     *
+     * Deleted from there, things are gone for good.
+     *
+     * Return: true for the bin itself and everything inside it.
+     */
     fun isInside(path: String): Boolean {
         val p = RemotePath.normalize(path)
         return p == DIR || p.startsWith("$DIR/")
     }
 
-    /** Moves [entry] into the bin of its share. */
+    /**
+     * discard() - moves an element into the bin of its share
+     * @param fs the file system
+     * @param entry the file or folder
+     * @param now the time of the deletion, which names the slot
+     *
+     * Return: the element as it now sits in the bin.
+     */
     fun discard(fs: NasFileSystem, entry: RemoteEntry, now: Long = System.currentTimeMillis()): Item {
         require(!isInside(entry.path) && entry.path.isNotEmpty()) { "«${entry.name}» non può andare nel cestino" }
         if (fs.stat(entry.share, DIR) == null) fs.createDirectory(entry.share, DIR)
@@ -40,7 +64,15 @@ object FileTrash {
         return Item(entry.share, slot, entry.copy(path = target), entry.path, now)
     }
 
-    /** What is in the bin of [share], most recently deleted first. */
+    /**
+     * contents() - what is in the bin of a share
+     * @param fs the file system
+     * @param share the share
+     *
+     * A slot that cannot be read is left out instead of failing the whole list.
+     *
+     * Return: the elements, most recently deleted first.
+     */
     fun contents(fs: NasFileSystem, share: String): List<Item> {
         if (fs.stat(share, DIR) == null) return emptyList()
         return fs.list(share, DIR).filter { it.isDirectory }.mapNotNull { slot ->
@@ -48,7 +80,7 @@ object FileTrash {
                 val inside = fs.list(share, slot.path)
                 val element = inside.firstOrNull { it.name != ORIGIN } ?: return@runCatching null
                 val original = inside.firstOrNull { it.name == ORIGIN }
-                    ?.let { fs.openRead(share, it.path).use { s -> s.readBytes().decodeToString() } }
+                    ?.let { note -> fs.openRead(share, note.path).use { s -> s.readBytes().decodeToString() } }
                     ?.takeIf { it.isNotBlank() }
                     ?: element.name
                 val at = slot.name.takeWhile { it.isDigit() }.toLongOrNull() ?: slot.modified
@@ -57,25 +89,40 @@ object FileTrash {
         }.sortedByDescending { it.deletedAt }
     }
 
-    /** Puts [item] back where it was, or next to it when that name was taken meanwhile; returns the path. */
+    /**
+     * restore() - puts an element back where it was
+     * @param fs the file system
+     * @param item the element in the bin
+     *
+     * Return: its path: where it was, or next to it when that name was taken meanwhile.
+     */
     fun restore(fs: NasFileSystem, item: Item): String {
-        var current = ""
-        for (part in RemotePath.parent(item.original).split('/').filter { it.isNotEmpty() }) {
-            current = RemotePath.child(current, part)
-            if (fs.stat(item.share, current) == null) fs.createDirectory(item.share, current)
-        }
+        fs.makeDirs(item.share, RemotePath.parent(item.original))
         val free = EditSync.freePath(fs, item.share, item.original)
         fs.rename(item.share, item.entry.path, free, replace = false)
         runCatching { fs.delete(item.share, item.slot) }
         return free
     }
 
-    /** Deletes [item] for good; false when it was no longer there. */
+    /**
+     * delete() - deletes an element of the bin for good
+     * @param fs the file system
+     * @param item the element
+     *
+     * Return: false when it was no longer there.
+     */
     fun delete(fs: NasFileSystem, item: Item): Boolean = fs.unlessGone(item.share, item.slot) { fs.delete(item.share, item.slot) } != null
 
-    /** Deletes for good what has been in the bin longer than [KEEP_DAYS] days; returns how many. */
+    /**
+     * purge() - deletes for good what has been in the bin longer than [KEEP_DAYS] days
+     * @param fs the file system
+     * @param share the share
+     * @param now the time to count from
+     *
+     * Return: how many elements were deleted.
+     */
     fun purge(fs: NasFileSystem, share: String, now: Long = System.currentTimeMillis()): Int {
-        val limit = now - KEEP_DAYS * 24L * 60 * 60 * 1000
+        val limit = now - KEEP_DAYS * MILLIS_PER_DAY
         return contents(fs, share).filter { it.deletedAt < limit }.count { delete(fs, it) }
     }
 }

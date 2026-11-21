@@ -1,3 +1,11 @@
+/*
+ * CleanupViewModel.kt - state and actions of the quick cleanup
+ *
+ * Picks the photos to look at, keeps the choices on the NAS, moves the discarded ones to the bin and empties it. The
+ * rules are CleanupRules' and PhotoKinds'.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import android.app.Application
@@ -17,6 +25,7 @@ import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.unlessGone
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.Deletion
+import io.github.thamichele.smbcommander.ui.DeletionProgress
 import io.github.thamichele.smbcommander.ui.DeletionStep
 import io.github.thamichele.smbcommander.ui.readable
 import kotlinx.coroutines.CancellationException
@@ -77,7 +86,8 @@ data class CleanupState(
     val error: String? = null,
 ) {
     /**
-     * Photos still waiting in the Duplicates tab: those of a group with at least two copies not decided yet. They stay
+     * Photos still waiting in the Duplicates tab: those of a group with at least two copies not decided yet. They
+     * stay
      * out of the swipe queues until they are on their own, so the same photo is not asked about in two places.
      */
     val inDuplicates: Set<String> by lazy {
@@ -163,7 +173,14 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
     private var loadJob: Job? = null
     private var sortJob: Job? = null
 
-    /** Builds the queues from what the gallery shows; the lists of kept photos come from the NAS. */
+    /**
+     * start() - builds the queues from what the gallery shows
+     * @param media every photo and video of the gallery
+     *
+     * The lists of kept photos come from the NAS. Nothing happens when the same folder is already loaded.
+     *
+     * Return: nothing; the queues arrive in [state].
+     */
     fun start(media: List<RemoteEntry>) {
         val folder = app.backupSettings.load().destination ?: return
         if (_state.value.folder == folder && (_state.value.loading || _state.value.suspects.isNotEmpty() || _state.value.others.isNotEmpty())) return
@@ -205,18 +222,36 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Starts over with what the gallery shows now, keeping the lists on the NAS. */
+    /**
+     * reload() - starts over with what the gallery shows now, keeping the lists on the NAS
+     * @param media every photo and video of the gallery
+     *
+     * Return: nothing.
+     */
     fun reload(media: List<RemoteEntry>) {
         _state.update { it.copy(folder = null) }
         start(media)
     }
 
+    /**
+     * showTab() - shows one of the tabs
+     * @param tab the tab
+     *
+     * Return: nothing.
+     */
     fun showTab(tab: CleanupTab) = _state.update { it.copy(tab = tab) }
 
+    /**
+     * showKind() - shows one group of "all the others"
+     * @param kind the group, or null for all of them
+     *
+     * Return: nothing.
+     */
     fun showKind(kind: PhotoKind?) = _state.update { it.copy(tab = CleanupTab.Others, othersKind = kind) }
 
     /**
-     * Looks at the photos of "all the others" not sorted yet, newest first, a few at a time, in the background lane of
+     * Looks at the photos of "all the others" not sorted yet, newest first, a few at a time, in the background lane
+     * of
      * the thumbnails: the groups fill up while the user swipes. A photo that cannot be read stays only in "all".
      */
     private fun sortOthers(photos: List<RemoteEntry>): Job = viewModelScope.launch(Dispatchers.IO) {
@@ -241,21 +276,39 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** In a pair of copies, [keep] stays where it is and the other one goes to the bin, as a left swipe would. */
+    /**
+     * keepOnly() - in a pair of copies, keeps one where it is and sends the other to the bin
+     * @param pair the two copies
+     * @param keep the one that stays
+     *
+     * Return: nothing.
+     */
     fun keepOnly(pair: DuplicatePair, keep: RemoteEntry) {
         val root = _state.value.folder?.path ?: return
         val other = if (keep == pair.first) pair.second else pair.first
         discard(CleanupCard(other, CleanupReason(CleanupReason.Kind.Duplicate, "tenuta ${CleanupRules.relative(keep.path, root)}")))
     }
 
-    /** Not copies after all, or both wanted: the second one is kept, and the first is compared with the next copy. */
+    /**
+     * keepBoth() - keeps both copies: the first one is then compared with the next copy
+     * @param pair the two copies
+     *
+     * Return: nothing.
+     */
     fun keepBoth(pair: DuplicatePair) = keep(CleanupCard(pair.second, null))
 
     private val _sameContent = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     /** For pairs of the same size, whether the two files are the same bytes (SHA-256), once worked out. */
     val sameContent: StateFlow<Map<String, Boolean>> = _sameContent.asStateFlow()
 
-    /** Compares the two files of [pair] byte for byte, when they have the same size and are not too big to read. */
+    /**
+     * compare() - compares the two files of a pair byte for byte
+     * @param pair the two copies
+     *
+     * Only when they have the same size and are not too big to read twice over the network.
+     *
+     * Return: nothing; the outcome arrives in [sameContent].
+     */
     fun compare(pair: DuplicatePair) {
         if (pair.first.size != pair.second.size || pair.first.size > MAX_COMPARE_BYTES || pair.key in _sameContent.value) return
         viewModelScope.launch(Dispatchers.IO) {
@@ -268,6 +321,12 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * keep() - keeps a photo: it leaves the queue and goes in the list on the NAS
+     * @param card the photo
+     *
+     * Return: nothing.
+     */
     fun keep(card: CleanupCard) {
         val folder = _state.value.folder ?: return
         kept.add(card.entry, folder.path)
@@ -277,6 +336,12 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         scheduleFlush()
     }
 
+    /**
+     * discard() - sends a photo to the bin of the backup folder
+     * @param card the photo
+     *
+     * Return: nothing; a failure comes back as an error and the card returns.
+     */
     fun discard(card: CleanupCard) {
         val folder = _state.value.folder ?: return
         val action = Action.Discard(card)
@@ -316,7 +381,11 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         scheduleFlush()
     }
 
-    /** Takes back the last choice: the card comes back, and a discarded photo returns to its folder. */
+    /**
+     * undo() - takes back the last choice: the card comes back, and a discarded photo returns to its folder
+     *
+     * Return: nothing.
+     */
     fun undo() {
         val folder = _state.value.folder ?: return
         val (action, more) = synchronized(history) { (history.removeLastOrNull() ?: return) to history.isNotEmpty() }
@@ -357,53 +426,58 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * clearError() - hides the error shown
+     *
+     * Return: nothing.
+     */
     fun clearError() = _state.update { it.copy(error = null) }
 
-    private val _deletion = MutableStateFlow<Deletion?>(null)
+    private val deletions = DeletionProgress()
+
     /** The bin being emptied, file by file, or just emptied: shown in a window with the outcome of each file. */
-    val deletion: StateFlow<Deletion?> = _deletion.asStateFlow()
-
-    @Volatile
-    private var stopDeletion = false
-
-    fun stopDeletion() {
-        stopDeletion = true
-        _deletion.update { it?.copy(stopping = true) }
-    }
-
-    fun closeDeletion() {
-        if (_deletion.value?.finished == true) _deletion.value = null
-    }
+    val deletion: StateFlow<Deletion?> = deletions.state
 
     /**
-     * Deletes the bin for good, one file at a time, each step shown by [deletion]. A file no longer there is skipped,
-     * one that fails stays in the bin and does not stop the others.
+     * stopDeletion() - stops emptying the bin after the file being deleted now
+     *
+     * Return: nothing.
+     */
+    fun stopDeletion() = deletions.stop()
+
+    /**
+     * closeDeletion() - closes the window of the deletion once it has finished
+     *
+     * Return: nothing.
+     */
+    fun closeDeletion() = deletions.close()
+
+    /**
+     * emptyTrash() - deletes the bin for good, one file at a time, each step shown by [deletion]
+     *
+     * A file no longer there is skipped, one that fails stays in the bin and does not stop the others.
+     *
+     * Return: nothing.
      */
     fun emptyTrash() {
         val folder = _state.value.folder ?: return
-        stopDeletion = false
-        _deletion.value = Deletion(total = 0, preparing = 0, preparingNote = "Leggo il contenuto del cestino")
+        deletions.start()
+        var d = Deletion(total = 0, preparing = 0, preparingNote = "Leggo il contenuto del cestino")
+        deletions.show(d)
         viewModelScope.launch(Dispatchers.IO) {
             nas.withLock {
-                var d = _deletion.value!!
                 fun publish(next: Deletion) {
                     d = next
-                    _deletion.value = next
+                    deletions.show(next)
                 }
                 try {
                     val fs = app.repository.fs()
                     val files = CleanupTrash.contents(fs, folder.share, folder.path)
                     publish(Deletion(total = files.size))
                     for (file in files) {
-                        if (stopDeletion) break
+                        if (deletions.isStopRequested) break
                         publish(d.copy(current = file))
-                        val step = try {
-                            val outcome = if (CleanupTrash.delete(fs, folder.share, file.path)) DeletionStep.Outcome.Deleted else DeletionStep.Outcome.Skipped
-                            DeletionStep(file, outcome)
-                        } catch (e: Exception) {
-                            if (e is CancellationException) throw e
-                            DeletionStep(file, DeletionStep.Outcome.Failed, e.readable())
-                        }
+                        val step = DeletionProgress.step(file) { CleanupTrash.delete(fs, folder.share, file.path) }
                         publish(d.copy(steps = d.steps + step))
                     }
                     CleanupTrash.removeFolders(fs, folder.share, folder.path)
@@ -428,7 +502,11 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Puts everything in the bin back where it was, and out of the deleted list. */
+    /**
+     * restoreTrash() - puts everything in the bin back where it was, and out of the deleted list
+     *
+     * Return: nothing.
+     */
     fun restoreTrash() {
         val folder = _state.value.folder ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -480,7 +558,11 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Writes the pending choices to the NAS now, e.g. when leaving the screen. */
+    /**
+     * flushNow() - writes the pending choices to the NAS now, e.g. when leaving the screen
+     *
+     * Return: nothing.
+     */
     fun flushNow() {
         flushJob?.cancel()
         viewModelScope.launch(Dispatchers.IO) { flush() }

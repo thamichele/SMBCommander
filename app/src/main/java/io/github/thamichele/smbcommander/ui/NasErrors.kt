@@ -1,10 +1,21 @@
+/*
+ * NasErrors.kt - errors of the NAS and of the app, said in words for the user
+ *
+ * Turns exceptions into short Italian sentences; it never shows secrets.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import com.hierynomus.mserref.NtStatus
 import com.hierynomus.mssmb2.SMBApiException
 import io.github.thamichele.smbcommander.core.NasException
 
-/** An error of the NAS or of the app, said in words. */
+/**
+ * readable() - an error of the NAS or of the app, said in words
+ *
+ * Return: a short sentence for the user, never a secret.
+ */
 fun Throwable.readable(): String = when (this) {
     is IllegalArgumentException, is IllegalStateException -> message ?: "Errore"
     is NasException -> message ?: "Errore del NAS"
@@ -26,7 +37,13 @@ fun Throwable.readable(): String = when (this) {
     else -> message ?: javaClass.simpleName
 }
 
-/** True when [this] means the network or the NAS went away (Wi-Fi lost, NAS asleep or restarting): worth retrying. */
+/**
+ * isConnectionLost() - tells whether an error means the network or the NAS went away
+ *
+ * Wi-Fi lost, NAS asleep or restarting: worth retrying.
+ *
+ * Return: true for errors of the connection.
+ */
 fun Throwable.isConnectionLost(): Boolean {
     var e: Throwable? = this
     var depth = 0

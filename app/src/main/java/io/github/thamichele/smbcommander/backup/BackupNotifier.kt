@@ -1,3 +1,11 @@
+/*
+ * BackupNotifier.kt - the backup status notification
+ *
+ * Says how many photos are still to save, how the last run went and the error, if any; quiet when there is nothing to
+ * say. Running the backup is PhotoBackupWorker's job.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.Manifest
@@ -23,6 +31,12 @@ object BackupNotifier {
     private const val CHANNEL = "backup_status"
     private const val NOTIFICATION_ID = 43
 
+    /**
+     * update() - shows, changes or hides the backup status notification
+     * @param context any context of the app
+     *
+     * Return: nothing.
+     */
     fun update(context: Context) {
         val app = context.applicationContext as SmbCommanderApp
         val settings = app.backupSettings.load()

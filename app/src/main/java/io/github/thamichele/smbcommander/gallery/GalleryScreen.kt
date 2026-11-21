@@ -1,3 +1,10 @@
+/*
+ * GalleryScreen.kt - the gallery: the photos of the backup folder by month, as grid, mosaic or list
+ *
+ * Draws the months, the selection and the swipe to delete; the content and every action are GalleryViewModel's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import androidx.activity.compose.BackHandler
@@ -69,6 +76,8 @@ import coil3.compose.AsyncImage
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.PhotoKind
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.graphics.Shape
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.AppIcons
@@ -76,6 +85,7 @@ import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ArancioMenu
 import io.github.thamichele.smbcommander.ui.ArancioMenuItem
 import io.github.thamichele.smbcommander.ui.CollapsibleBox
+import io.github.thamichele.smbcommander.ui.CollapsingHeaderState
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import io.github.thamichele.smbcommander.ui.EmptyState
 import io.github.thamichele.smbcommander.ui.ErrorCard
@@ -103,13 +113,20 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Only the photos of the backup folder, by month, newest first: as a grid, or as a list where a swipe deletes. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * GalleryScreen() - the gallery: only the photos of the backup folder, by month, newest first
+ * @param appVm the app, for the deletion settings, the viewer and the way back
+ * @param vm the gallery's state and actions
+ *
+ * As a grid, a mosaic, or a list where a swipe deletes.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val withoutConfirm by appVm.deleteWithoutConfirm.collectAsStateWithLifecycle()
-    val c = Arancio.colors
     // each time the gallery comes into view: what the phone knows at once, then the NAS's news
     LifecycleResumeEffect(Unit) {
         vm.ensureLoaded()
@@ -118,11 +135,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
 
     // paths of the selected photos: a long press starts the selection, then taps add or remove
     var selected by remember { mutableStateOf(emptySet<String>()) }
-    // photos waiting for "Elimina" in the confirmation dialog
-    var toDelete by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
-    var info by remember { mutableStateOf<RemoteEntry?>(null) }
-    // photos waiting for the album they are moved to
-    var toMove by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    val dialogs = remember { GalleryDialogs() }
     LaunchedEffect(vm) { vm.notices.collect { appVm.showMessage(it) } }
     // photos deleted or reloaded meanwhile leave the selection
     val shown = state.shownPhotos
@@ -149,13 +162,8 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     val onLongPress: (RemoteEntry) -> Unit = { photo -> selected = selected + photo.path }
     /** Returns true when the photo goes at once, false when the dialog asks first. */
     val onSwipe: (RemoteEntry) -> Boolean = { photo ->
-        if (withoutConfirm) {
-            appVm.deletePhotos(listOf(photo))
-            true
-        } else {
-            toDelete = listOf(photo)
-            false
-        }
+        if (!withoutConfirm) dialogs.toDelete = listOf(photo) else appVm.deletePhotos(listOf(photo))
+        withoutConfirm
     }
 
     // while the photos scroll down the header shrinks to its buttons, and grows back as soon as they scroll up
@@ -163,151 +171,224 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     LaunchedEffect(selected.isEmpty(), albumTitle, state.kind) { collapse.show() }
     Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
         if (selected.isEmpty()) {
-            // the videos have a tab of their own: for the button of the categories they are "all the photos"
-            val category = state.kind?.takeIf { it != PhotoKind.Video }
-            val actions: @Composable () -> Unit = {
-                if (state.folder != null) {
-                    KindMenu(category, state.kindCounts, vm::setKind)
-                    ViewMenu(state.view, vm::setView)
-                    // the quick cleanup goes through the whole gallery, not one album
-                    if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
-                    ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
-                }
-            }
-            if (albumTitle != null) {
-                PageHeader(
-                    context = "Album",
-                    title = albumTitle,
-                    navigation = { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) },
-                    collapse = collapse,
-                    actions = actions,
-                )
-            } else {
-                // the tabs and the buttons share the row under the title, which alone stays while scrolling
-                val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
-                PageHeader(
-                    context = state.folder?.fullPath ?: "Foto salvate sul NAS",
-                    title = category?.label ?: "Galleria",
-                    collapse = collapse,
-                    tabs = { if (state.folder != null) GalleryTabs(tab, vm) },
-                    actions = actions,
-                )
-            }
+            GalleryHeader(state, vm, albumTitle, collapse, appVm::openCleanup)
         } else {
-            // only the number as title: four big buttons leave little room next to it
-            val chosen = if (selected.size == 1) "selezionata" else "selezionate"
-            PageHeader(
-                context = "${albumTitle ?: "Galleria"} · $chosen",
-                title = "${selected.size}",
-                navigation = { ToolButton(AppIcons.Close, "Annulla selezione", { selected = emptySet() }) },
-            ) {
-                if (selected.size == 1) {
-                    ToolButton(AppIcons.Info, "Informazioni", { info = shown.firstOrNull { it.path in selected } })
-                }
-                ToolButton(AppIcons.Move, "Sposta in un album", { toMove = shown.filter { it.path in selected } })
-                ToolButton(AppIcons.Share, "Condividi", {
-                    val photos = shown.filter { it.path in selected }
+            val chosen = { shown.filter { it.path in selected } }
+            GallerySelectionHeader(
+                count = selected.size,
+                albumTitle = albumTitle,
+                onClear = { selected = emptySet() },
+                onInfo = { dialogs.info = shown.firstOrNull { it.path in selected } },
+                onMove = { dialogs.toMove = chosen() },
+                onShare = {
+                    val photos = chosen()
                     selected = emptySet()
                     appVm.share(photos)
-                })
-                ToolButton(
-                    AppIcons.Delete,
-                    "Elimina dal NAS",
-                    { toDelete = shown.filter { it.path in selected } },
-                    tint = c.danger,
-                )
-            }
-        }
-        val folder = state.folder
-        // a quiet refresh: a thin bar, the photos stay where they are
-        if (state.loading && !state.pulling && state.months.isNotEmpty()) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background, gapSize = 0.dp)
-        }
-        if (state.kind != null && state.sorting > 0 && state.months.isNotEmpty()) {
-            Text(
-                "Divido le foto per categoria sul telefono: ne mancano ${state.sorting}",
-                style = MaterialTheme.typography.bodySmall,
-                color = c.textSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                },
+                onDelete = { dialogs.toDelete = chosen() },
             )
         }
-        if (state.error != null && state.months.isNotEmpty()) {
-            Text(
-                state.error.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = c.textSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-        }
-        when {
-            folder == null -> EmptyState(
-                icon = AppIcons.Image,
-                title = "Nessuna cartella di backup",
-                text = "La galleria mostra la cartella in cui il backup salva le foto. Scegli prima quella cartella nel backup.",
-            ) {
-                PrimaryButton(onClick = appVm::openBackup) { Text("Vai al backup foto") }
-            }
-            state.error != null && state.months.isEmpty() ->
-                ErrorCard(state.error.orEmpty(), "Riprova", vm::pull)
-            state.loading && state.months.isEmpty() -> SkeletonGrid()
-            state.months.isEmpty() -> EmptyState(
-                icon = AppIcons.Image,
-                title = "Ancora nessuna foto",
-                text = "La cartella del backup è vuota: le foto arrivano con il prossimo backup.",
-            )
-            state.shown.isEmpty() && state.kind == null -> EmptyState(
-                icon = AppIcons.Folder,
-                title = "Album vuoto",
-                text = "Per riempirlo seleziona delle foto nella Galleria o in un altro album e premi «Sposta in un album».",
-            )
-            state.shown.isEmpty() -> EmptyState(
-                icon = state.kind?.icon ?: AppIcons.Categories,
-                title = if (state.kind == PhotoKind.Video) "Nessun video" else "Nessuna foto in «${state.kind?.label}»",
-                text = if (state.sorting > 0) "Le altre arrivano man mano che le divido." else null,
-            ) {
-                SecondaryButton(onClick = { vm.setKind(null) }) { Text("Mostra tutte le foto") }
-            }
-            else -> PullToRefreshBox(
-                isRefreshing = state.pulling,
-                onRefresh = vm::pull,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                when (state.view) {
-                    GalleryView.List -> PhotoList(state.shown, selected, onTap, onLongPress, onSwipe)
-                    GalleryView.Mosaic -> PhotoMosaic(state.shown, selected, onTap, onLongPress)
-                    GalleryView.Grid -> PhotoGrid(state.shown, selected, onTap, onLongPress)
-                }
+        GalleryNotes(state)
+        GalleryContent(state, vm, appVm::openBackup) {
+            when (state.view) {
+                GalleryView.List -> PhotoList(state.shown, selected, onTap, onLongPress, onSwipe)
+                GalleryView.Mosaic -> PhotoMosaic(state.shown, selected, onTap, onLongPress)
+                GalleryView.Grid -> PhotoGrid(state.shown, selected, onTap, onLongPress)
             }
         }
     }
 
-    info?.let { InfoDialog(it, onDismiss = { info = null }) }
+    GalleryDialogsHost(dialogs, state, vm, appVm, onDone = { selected = emptySet() })
+}
 
-    if (toMove.isNotEmpty()) {
-        val photos = toMove
-        AlbumPicker(state, vm, count = photos.size, onDismiss = { toMove = emptyList() }) { album ->
-            toMove = emptyList()
-            selected = emptySet()
+/* What the gallery shows or asks over the photos; each one is closed while empty. */
+private class GalleryDialogs {
+    var info by mutableStateOf<RemoteEntry?>(null)
+
+    // photos waiting for the album they are moved to
+    var toMove by mutableStateOf<List<RemoteEntry>>(emptyList())
+
+    // photos waiting for "Elimina" in the confirmation dialog
+    var toDelete by mutableStateOf<List<RemoteEntry>>(emptyList())
+}
+
+/* Shows the open dialogs; onDone empties the selection once photos were moved or deleted. */
+@Composable
+private fun GalleryDialogsHost(
+    dialogs: GalleryDialogs,
+    state: GalleryState,
+    vm: GalleryViewModel,
+    appVm: AppViewModel,
+    onDone: () -> Unit,
+) {
+    dialogs.info?.let { InfoDialog(it, onDismiss = { dialogs.info = null }) }
+
+    if (dialogs.toMove.isNotEmpty()) {
+        val photos = dialogs.toMove
+        AlbumPicker(state, vm, count = photos.size, onDismiss = { dialogs.toMove = emptyList() }) { album ->
+            dialogs.toMove = emptyList()
+            onDone()
             vm.moveToAlbum(photos, album)
         }
     }
 
-    if (toDelete.isNotEmpty()) {
-        val photos = toDelete
-        ConfirmDialog(
-            title = if (photos.size == 1) "Eliminare «${photos[0].name}» dal NAS?" else "Eliminare ${photos.size} foto dal NAS?",
-            text = "Verranno eliminate dalla cartella del backup. Le foto sul telefono restano dove sono e il backup " +
-                "non le caricherà di nuovo.",
-            confirm = "Elimina",
-            danger = true,
-            onDismiss = { toDelete = emptyList() },
-            onConfirm = {
-                toDelete = emptyList()
-                selected = emptySet()
-                appVm.deletePhotos(photos)
-            },
+    if (dialogs.toDelete.isNotEmpty()) {
+        val photos = dialogs.toDelete
+        DeletePhotosDialog(photos, onDismiss = { dialogs.toDelete = emptyList() }) {
+            dialogs.toDelete = emptyList()
+            onDone()
+            appVm.deletePhotos(photos)
+        }
+    }
+}
+
+/* The header when nothing is selected: the album's name with a way back, or the tabs of the whole gallery. */
+@Composable
+private fun GalleryHeader(
+    state: GalleryState,
+    vm: GalleryViewModel,
+    albumTitle: String?,
+    collapse: CollapsingHeaderState,
+    onCleanup: () -> Unit,
+) {
+    // the videos have a tab of their own: for the button of the categories they are "all the photos"
+    val category = state.kind?.takeIf { it != PhotoKind.Video }
+    val actions: @Composable () -> Unit = {
+        if (state.folder != null) {
+            KindMenu(category, state.kindCounts, vm::setKind)
+            ViewMenu(state.view, vm::setView)
+            // the quick cleanup goes through the whole gallery, not one album
+            if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", onCleanup)
+            ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
+        }
+    }
+    if (albumTitle != null) {
+        PageHeader(
+            context = "Album",
+            title = albumTitle,
+            navigation = { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) },
+            collapse = collapse,
+            actions = actions,
+        )
+        return
+    }
+    // the tabs and the buttons share the row under the title, which alone stays while scrolling
+    val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
+    PageHeader(
+        context = state.folder?.fullPath ?: "Foto salvate sul NAS",
+        title = category?.label ?: "Galleria",
+        collapse = collapse,
+        tabs = { if (state.folder != null) GalleryTabs(tab, vm) },
+        actions = actions,
+    )
+}
+
+/* The header of a selection: only the number as title, since four big buttons leave little room next to it. */
+@Composable
+private fun GallerySelectionHeader(
+    count: Int,
+    albumTitle: String?,
+    onClear: () -> Unit,
+    onInfo: () -> Unit,
+    onMove: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val chosen = if (count == 1) "selezionata" else "selezionate"
+    PageHeader(
+        context = "${albumTitle ?: "Galleria"} · $chosen",
+        title = "$count",
+        navigation = { ToolButton(AppIcons.Close, "Annulla selezione", onClear) },
+    ) {
+        if (count == 1) ToolButton(AppIcons.Info, "Informazioni", onInfo)
+        ToolButton(AppIcons.Move, "Sposta in un album", onMove)
+        ToolButton(AppIcons.Share, "Condividi", onShare)
+        ToolButton(AppIcons.Delete, "Elimina dal NAS", onDelete, tint = Arancio.colors.danger)
+    }
+}
+
+/* The quiet news above photos already shown: a refresh under way, the sorting left, the last error. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GalleryNotes(state: GalleryState) {
+    val c = Arancio.colors
+    if (state.months.isEmpty()) return
+    // a quiet refresh: a thin bar, the photos stay where they are
+    if (state.loading && !state.pulling) {
+        LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = c.accent, trackColor = c.background, gapSize = 0.dp)
+    }
+    if (state.kind != null && state.sorting > 0) GalleryNote("Divido le foto per categoria sul telefono: ne mancano ${state.sorting}")
+    state.error?.let { GalleryNote(it) }
+}
+
+@Composable
+private fun GalleryNote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Arancio.colors.textSecondary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+/* What fills the screen under the header: the photos, or why there are none. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GalleryContent(
+    state: GalleryState,
+    vm: GalleryViewModel,
+    onOpenBackup: () -> Unit,
+    photos: @Composable () -> Unit,
+) {
+    when {
+        state.folder == null -> EmptyState(
+            icon = AppIcons.Image,
+            title = "Nessuna cartella di backup",
+            text = "La galleria mostra la cartella in cui il backup salva le foto. Scegli prima quella cartella nel backup.",
+        ) {
+            PrimaryButton(onClick = onOpenBackup) { Text("Vai al backup foto") }
+        }
+        state.error != null && state.months.isEmpty() ->
+            ErrorCard(state.error.orEmpty(), "Riprova", vm::pull)
+        state.loading && state.months.isEmpty() -> SkeletonGrid()
+        state.months.isEmpty() -> EmptyState(
+            icon = AppIcons.Image,
+            title = "Ancora nessuna foto",
+            text = "La cartella del backup è vuota: le foto arrivano con il prossimo backup.",
+        )
+        state.shown.isEmpty() && state.kind == null -> EmptyState(
+            icon = AppIcons.Folder,
+            title = "Album vuoto",
+            text = "Per riempirlo seleziona delle foto nella Galleria o in un altro album e premi «Sposta in un album».",
+        )
+        state.shown.isEmpty() -> EmptyState(
+            icon = state.kind?.icon ?: AppIcons.Categories,
+            title = if (state.kind == PhotoKind.Video) "Nessun video" else "Nessuna foto in «${state.kind?.label}»",
+            text = if (state.sorting > 0) "Le altre arrivano man mano che le divido." else null,
+        ) {
+            SecondaryButton(onClick = { vm.setKind(null) }) { Text("Mostra tutte le foto") }
+        }
+        else -> PullToRefreshBox(
+            isRefreshing = state.pulling,
+            onRefresh = vm::pull,
+            modifier = Modifier.fillMaxSize(),
+            content = { photos() },
         )
     }
+}
+
+/* Asks before photos leave the NAS. */
+@Composable
+private fun DeletePhotosDialog(photos: List<RemoteEntry>, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    ConfirmDialog(
+        title = if (photos.size == 1) "Eliminare «${photos[0].name}» dal NAS?" else "Eliminare ${photos.size} foto dal NAS?",
+        text = "Verranno eliminate dalla cartella del backup. Le foto sul telefono restano dove sono e il backup " +
+            "non le caricherà di nuovo.",
+        confirm = "Elimina",
+        danger = true,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 @Composable
@@ -318,8 +399,8 @@ private fun PhotoGrid(
     onLongPress: (RemoteEntry) -> Unit,
 ) {
     val c = Arancio.colors
-    // index of each photo in the flat list, so a tap opens the viewer on the right one
-    val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+    // index of each photo in the flat list, so a tap opens the viewer on the right one; worked out once per change
+    val offsets = remember(months) { months.runningFold(0) { acc, m -> acc + m.photos.size } }
     val state = rememberLazyGridState()
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
@@ -342,26 +423,7 @@ private fun PhotoGrid(
                             .background(c.surface, RoundedCornerShape(4.dp))
                             .pressable(onClick = { onTap(photo, offsets[m] + i) }, onLongClick = { onLongPress(photo) }),
                     ) {
-                        AsyncImage(
-                            model = Thumb(photo),
-                            contentDescription = photo.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(if (isSelected) 8.dp else 0.dp)
-                                .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
-                        )
-                        if (photo.isVideo) {
-                            VideoFrameCycle(
-                                photo,
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(if (isSelected) 8.dp else 0.dp)
-                                    .clip(RoundedCornerShape(if (isSelected) 6.dp else 0.dp)),
-                            )
-                        }
-                        if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
-                        if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                        PhotoTile(photo, isSelected, TILE_SQUARE)
                     }
                 }
             }
@@ -515,26 +577,7 @@ private fun PhotoMosaic(
                                     .background(c.surface, RoundedCornerShape(4.dp))
                                     .pressable(onClick = { onTap(photo, row.first + i) }, onLongClick = { onLongPress(photo) }),
                             ) {
-                                AsyncImage(
-                                    model = Thumb(photo),
-                                    contentDescription = photo.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(if (isSelected) 8.dp else 0.dp)
-                                        .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
-                                )
-                                if (photo.isVideo) {
-                                    VideoFrameCycle(
-                                        photo,
-                                        Modifier
-                                            .fillMaxSize()
-                                            .padding(if (isSelected) 8.dp else 0.dp)
-                                            .clip(RoundedCornerShape(if (isSelected) 6.dp else 4.dp)),
-                                    )
-                                }
-                                if (photo.isVideo) VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
-                                if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+                                PhotoTile(photo, isSelected, TILE_ROUNDED)
                             }
                         }
                     }
@@ -570,7 +613,7 @@ private fun PhotoList(
     onSwipe: (RemoteEntry) -> Boolean,
 ) {
     val c = Arancio.colors
-    val offsets = months.runningFold(0) { acc, m -> acc + m.photos.size }
+    val offsets = remember(months) { months.runningFold(0) { acc, m -> acc + m.photos.size } }
     val state = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = state, contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
@@ -699,5 +742,35 @@ private fun MonthHeader(group: MonthGroup, first: Boolean) {
 private fun Modifier.pressable(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
     combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
+/**
+ * monthName() - the Italian name of a month
+ * @param month 1 for January to 12 for December
+ *
+ * Return: the name, capitalised.
+ */
 internal fun monthName(month: Int): String =
     DateFormatSymbols(Locale.getDefault()).months[month - 1].replaceFirstChar { it.titlecase(Locale.getDefault()) }
+
+/* Shapes of the tiles, made once instead of at every recomposition of every tile. */
+private val TILE_SQUARE = RoundedCornerShape(0.dp)
+private val TILE_ROUNDED = RoundedCornerShape(4.dp)
+private val TILE_SELECTED = RoundedCornerShape(6.dp)
+private val TILE_SELECTED_INSET = 8.dp
+
+/*
+ * The picture of one tile of the grid or the mosaic: the thumbnail, the moving frames of a video, its badge and the
+ * tick of the selection. A selected photo shrinks inside its tile with rounder corners.
+ */
+@Composable
+private fun BoxScope.PhotoTile(photo: RemoteEntry, isSelected: Boolean, shape: Shape) {
+    val picture = Modifier
+        .fillMaxSize()
+        .padding(if (isSelected) TILE_SELECTED_INSET else 0.dp)
+        .clip(if (isSelected) TILE_SELECTED else shape)
+    AsyncImage(model = Thumb(photo), contentDescription = photo.name, contentScale = ContentScale.Crop, modifier = picture)
+    if (photo.isVideo) {
+        VideoFrameCycle(photo, picture)
+        VideoBadge(Modifier.align(Alignment.BottomEnd).padding(6.dp))
+    }
+    if (isSelected) SelectedMark(Modifier.align(Alignment.TopStart).padding(4.dp))
+}

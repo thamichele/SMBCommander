@@ -1,3 +1,11 @@
+/*
+ * GalleryViewModel.kt - state and actions of the gallery
+ *
+ * Shows at once what the phone knows, then walks the backup folder for what changed; deletes, moves to albums and
+ * shares. Only the backup folder of the main NAS is shown.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.gallery
 
 import android.app.Application
@@ -85,7 +93,7 @@ data class GalleryState(
     val albumsOpen: Boolean = false,
 ) {
     /** All photos in display order, newest first. */
-    val photos: List<RemoteEntry> get() = months.flatMap { it.photos }
+    val photos: List<RemoteEntry> by lazy { months.flatMap { it.photos } }
 
     /** The photos on screen in display order, as the viewer swipes through them. */
     val shownPhotos: List<RemoteEntry> by lazy { shown.flatMap { it.photos } }
@@ -183,7 +191,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Shows the gallery: from the phone at once, then a refresh when the last one is old or the folder changed. */
+    /**
+     * ensureLoaded() - shows the gallery: from the phone at once, then a refresh when the last one is old or the
+     * folder changed
+     *
+     * Return: nothing.
+     */
     fun ensureLoaded() {
         val folder = app.backupSettings.load().destination
         val current = _state.value
@@ -208,7 +221,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (folder != null && !_state.value.loading && System.currentTimeMillis() - lastWalk > AUTO_REFRESH_MS) refresh()
     }
 
-    /** Shows only the photos of [kind], or all of them with null. */
+    /**
+     * setKind() - shows only one category of photos
+     * @param kind the category, or null for all of them
+     *
+     * Return: nothing.
+     */
     fun setKind(kind: PhotoKind?) {
         app.galleryPrefs.kind = kind
         if (needsSorting(kind)) sortWanted.value = true
@@ -244,14 +262,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private fun kindOf(e: RemoteEntry): PhotoKind? =
         kinds[e] ?: app.photoSorter.known(e)?.also { kinds[e] = it }
 
+    /**
+     * setView() - chooses how the gallery shows the photos, and remembers it
+     * @param view grid, mosaic or list
+     *
+     * Return: nothing.
+     */
     fun setView(view: GalleryView) {
         app.galleryPrefs.view = view
         _state.update { it.copy(view = view) }
     }
 
-    /** Pull to refresh or the button: like [refresh], with the spinner. */
+    /**
+     * pull() - pull to refresh or the button: like [refresh], with the spinner
+     *
+     * Return: nothing.
+     */
     fun pull() = refresh(pulling = true)
 
+    /**
+     * refresh() - walks the backup folder again for what changed on the NAS
+     * @param pulling shows the spinner of the pull to refresh
+     *
+     * Return: nothing; the gallery changes only where the NAS changed.
+     */
     fun refresh(pulling: Boolean = false) {
         val folder = _state.value.folder ?: app.backupSettings.load().destination ?: return
         if (folder != _state.value.folder) return ensureLoaded()
@@ -338,14 +372,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun publish() {
-        dirty = false
-        val months = index.all()
+    /* The months worked out from one version of the index: a change of tab, album or category only filters them. */
+    private class Grouped(val index: GalleryIndex, val version: Long, val months: List<MonthGroup>)
+
+    @Volatile
+    private var grouped: Grouped? = null
+
+    /* The photos by month, newest first; sorted again only when the index changed since the last time. */
+    private fun months(): List<MonthGroup> {
+        val idx = index
+        val version = idx.version
+        grouped?.takeIf { it.index === idx && it.version == version }?.let { return it.months }
+        val months = idx.all()
             .groupBy { taken(it).let { t -> t.year to t.month } }
             .map { (ym, list) ->
                 MonthGroup(ym.first, ym.second, list.sortedWith(compareByDescending<RemoteEntry> { taken(it).sortKey }.thenByDescending { it.name }))
             }
             .sortedWith(compareByDescending<MonthGroup> { it.year }.thenByDescending { it.month })
+        grouped = Grouped(idx, version, months)
+        return months
+    }
+
+    private fun publish() {
+        dirty = false
+        val months = months()
         val counts = HashMap<PhotoKind, Int>()
         for (m in months) for (p in m.photos) kindOf(p)?.let { counts[it] = (counts[it] ?: 0) + 1 }
         val folders = index.folders()
@@ -553,7 +603,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         /** Notices waiting for the screen: more than a few at once would be noise anyway. */
         const val NOTICE_BUFFER = 4
 
-        /** Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots. */
+        /**
+         * hidden() - tells whether a name is left out of the gallery
+         * @param name a file or folder name
+         *
+         * Hidden files and the NAS's own folders: recycle bins, thumbnail caches, snapshots, temporary office files.
+         *
+         * Return: true when it is left out.
+         */
         fun hidden(name: String) = name.startsWith(".") || name.startsWith("@") || name.startsWith("#") ||
             name.equals("Thumbs.db", ignoreCase = true) || name.startsWith("~")
     }

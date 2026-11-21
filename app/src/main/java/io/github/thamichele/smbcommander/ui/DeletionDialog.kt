@@ -1,3 +1,10 @@
+/*
+ * DeletionDialog.kt - the window of a deletion of several files, one at a time
+ *
+ * Shows the file being deleted, the bar and the outcome of each file; the deletion itself is the view model's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.animation.AnimatedContent
@@ -55,9 +62,16 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlinx.coroutines.delay
 
 /**
- * A deletion of several files, one at a time: the file being deleted slides in, the bar fills, and each file gets its
- * outcome in the list below (deleted, skipped because it was no longer on the NAS, or not deleted). It closes on its
+ * DeletionDialog() - the window of a deletion of several files, one at a time
+ * @param deletion how far the deletion is
+ * @param onStop stops it after the file being deleted now
+ * @param onClose closes the window
+ *
+ * The file being deleted slides in, the bar fills, and each file gets its outcome in the list below. It closes on its
  * own when everything went well; otherwise it stays open on the summary.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) {
@@ -66,7 +80,7 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
         deletion.steps.all { it.outcome == DeletionStep.Outcome.Deleted }
     LaunchedEffect(deletion.finished, allGood) {
         if (allGood) {
-            delay(1500)
+            delay(CLOSE_DELAY_MS)
             onClose()
         }
     }
@@ -100,23 +114,7 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
                 style = MaterialTheme.typography.titleLarge,
             )
 
-            // the file being deleted now: each new one slides in from below
-            AnimatedContent(
-                targetState = deletion.current,
-                transitionSpec = {
-                    (slideInVertically(tween(220)) { it / 2 } + fadeIn(tween(220))) togetherWith
-                        (slideOutVertically(tween(180)) { -it / 2 } + fadeOut(tween(180)))
-                },
-                contentKey = { it?.let { e -> e.share + "/" + e.path } },
-                label = "current file",
-            ) { entry ->
-                when {
-                    entry != null -> CurrentFile(entry)
-                    deletion.preparing != null -> Status(AppIcons.Delete, c.textSecondary, "Preparo l'eliminazione…", progressText(deletion))
-                    deletion.finished -> Summary(deletion)
-                    else -> Status(AppIcons.Delete, c.textSecondary, "Un attimo…", null)
-                }
-            }
+            CurrentStep(deletion)
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 ArancioProgress(fraction, color = if (deletion.finished && !allGood) c.textSecondary else c.accent)
@@ -128,17 +126,7 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
                 )
             }
 
-            if (deletion.steps.isNotEmpty()) {
-                // newest first, so the confirmation of the file just deleted is always in sight
-                LazyColumn(
-                    Modifier.fillMaxWidth().heightIn(max = 220.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(deletion.steps.asReversed(), key = { it.entry.share + "/" + it.entry.path }) { step ->
-                        StepRow(step, Modifier.animateItem())
-                    }
-                }
-            }
+            if (deletion.steps.isNotEmpty()) StepList(deletion.steps)
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 if (deletion.finished) {
@@ -152,6 +140,44 @@ fun DeletionDialog(deletion: Deletion, onStop: () -> Unit, onClose: () -> Unit) 
         }
     }
 }
+
+/* The file being deleted now, each new one sliding in from below; then the summary. */
+@Composable
+private fun CurrentStep(deletion: Deletion) {
+    val c = Arancio.colors
+    AnimatedContent(
+        targetState = deletion.current,
+        transitionSpec = {
+            (slideInVertically(tween(220)) { it / 2 } + fadeIn(tween(220))) togetherWith
+                (slideOutVertically(tween(180)) { -it / 2 } + fadeOut(tween(180)))
+        },
+        contentKey = { it?.let { e -> e.share + "/" + e.path } },
+        label = "current file",
+    ) { entry ->
+        when {
+            entry != null -> CurrentFile(entry)
+            deletion.preparing != null -> Status(AppIcons.Delete, c.textSecondary, "Preparo l'eliminazione…", progressText(deletion))
+            deletion.finished -> Summary(deletion)
+            else -> Status(AppIcons.Delete, c.textSecondary, "Un attimo…", null)
+        }
+    }
+}
+
+/* The outcome of each file, newest first, so the confirmation of the file just deleted is always in sight. */
+@Composable
+private fun StepList(steps: List<DeletionStep>) {
+    LazyColumn(
+        Modifier.fillMaxWidth().heightIn(max = 220.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(steps.asReversed(), key = { it.entry.share + "/" + it.entry.path }) { step ->
+            StepRow(step, Modifier.animateItem())
+        }
+    }
+}
+
+/** How long a deletion that went well stays on screen before the window closes. */
+private const val CLOSE_DELAY_MS = 1500L
 
 private fun progressText(deletion: Deletion): String? =
     if (deletion.preparingTotal > 0) "${deletion.preparing} di ${deletion.preparingTotal}" else null

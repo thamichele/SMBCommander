@@ -1,3 +1,11 @@
+/*
+ * SmbCommanderApp.kt - the application object: builds the shared stores and caches once, at start
+ *
+ * Owns the NAS repository, the caches of thumbnails and video frames, the stores of settings and the transfer queue,
+ * and the image loader Coil uses. Screens and workers reach them from here; nothing in it draws or talks to the user.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander
 
 import android.app.Activity
@@ -148,7 +156,12 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
 
 /** A folder of the NAS whose content just changed. */
 data class NasChange(val share: String, val path: String) {
-    /** True when the change is inside [folder], or moved or replaced a folder that contains it. */
+    /**
+     * affects() - tells whether a change on the NAS concerns a folder
+     * @param folder the folder shown
+     *
+     * Return: true when the change is inside [folder], or moved or replaced a folder that contains it.
+     */
     fun affects(folder: SavedFolder): Boolean {
         if (share != folder.share) return false
         val changed = RemotePath.normalize(path)

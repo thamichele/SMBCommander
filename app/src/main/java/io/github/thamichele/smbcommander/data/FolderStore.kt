@@ -1,3 +1,10 @@
+/*
+ * FolderStore.kt - the folders the user added to the app, kept on the phone
+ *
+ * The start screen shows only these: nothing of the NAS appears on its own. No NAS access.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context
@@ -49,7 +56,12 @@ data class SavedFolder(val share: String, val path: String) {
     }
 
     companion object {
-        /** "Multimedia/Foto", "\\Backup$\vecchi" or "smb://nas/Backup$" -> share + path; null when empty. */
+        /**
+         * parse() - reads a folder typed by the user
+         * @param input "Multimedia/Foto", "\\Backup$\vecchi" or "smb://nas/Backup$"
+         *
+         * Return: share and path, or null when the input is empty.
+         */
         fun parse(input: String): SavedFolder? {
             var text = input.trim()
             // a full "smb://host/share/..." address: drop scheme and host
@@ -66,6 +78,11 @@ class FolderStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("folders", Context.MODE_PRIVATE)
 
+    /**
+     * all() - the folders the user added
+     *
+     * Return: them, in the order they were added.
+     */
     fun all(): List<SavedFolder> {
         val json = prefs.getString(KEY, null) ?: return emptyList()
         return runCatching {
@@ -77,14 +94,36 @@ class FolderStore(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * add() - adds a folder
+     * @param folder the folder
+     *
+     * Return: the updated list.
+     */
     fun add(folder: SavedFolder): List<SavedFolder> =
         all().filterNot { it.fullPath.equals(folder.fullPath, ignoreCase = true) }.plus(folder).also(::save)
 
+    /**
+     * remove() - removes a folder from the app; nothing changes on the NAS
+     * @param folder the folder
+     *
+     * Return: the updated list.
+     */
     fun remove(folder: SavedFolder): List<SavedFolder> = all().filterNot { it == folder }.also(::save)
 
-    /** Drops every folder of the other NAS [nasId], its own folder included: that NAS was removed. */
+    /**
+     * removeNas() - drops every folder of another NAS, its own folder included
+     * @param nasId the NAS that was removed
+     *
+     * Return: the updated list.
+     */
     fun removeNas(nasId: String): List<SavedFolder> = all().filterNot { NasShares.nasOf(it.share) == nasId }.also(::save)
 
+    /**
+     * clear() - forgets every folder
+     *
+     * Return: nothing.
+     */
     fun clear() {
         prefs.edit().clear().apply()
     }

@@ -216,7 +216,13 @@ class SmbDataSource(private val repository: NasRepository) : BaseDataSource(true
         /** How many videos are being read by the player right now: other NAS work waits while it is not zero. */
         val playing: StateFlow<Int> = _playing.asStateFlow()
 
-        /** "nas://share/folder/video.mp4", with each part escaped, for the player's MediaItem. */
+        /**
+         * uri() - the address of a NAS file for the player's MediaItem
+         * @param share the share
+         * @param path the file
+         *
+         * Return: "nas://share/folder/video.mp4", with each part escaped.
+         */
         fun uri(share: String, path: String): Uri = Uri.Builder().scheme(SCHEME).authority("").apply {
             appendPath(share)
             path.split('/').filter { it.isNotEmpty() }.forEach { appendPath(it) }

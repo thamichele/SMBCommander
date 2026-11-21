@@ -1,3 +1,10 @@
+/*
+ * TransferCard.kt - the card of the transfer queue: the job running, those waiting, those failed
+ *
+ * Draws only; the queue is TransferQueue's.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import androidx.compose.foundation.background
@@ -22,7 +29,22 @@ import io.github.thamichele.smbcommander.data.TransferJob
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
-/** The copy, move and upload queue: the job running now, how many wait, and the ones that failed. */
+/**
+ * TransferCard() - the card of the transfer queue
+ * @param jobs the jobs, running, waiting and ended
+ * @param paused the queue is held
+ * @param onCancel stops everything
+ * @param onPause holds the queue
+ * @param onResume lets it run again
+ * @param onRetry runs a failed job again
+ * @param onClose closes the card once everything ended
+ * @param modifier placement
+ *
+ * The job running now, how many wait, and the ones that failed.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun TransferCard(
     jobs: List<TransferJob>,
@@ -49,34 +71,7 @@ fun TransferCard(
             .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        when {
-            running?.state == TransferJob.State.Retrying -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Connessione al NAS persa: riprovo tra ${running.retryIn} s, da dove si era fermato",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.accentText,
-                )
-                ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
-            }
-            running != null -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall)
-                if (running.current.isNotEmpty()) {
-                    Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                }
-                ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
-            }
-            paused -> {
-                Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
-                pausedJob?.let {
-                    Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                }
-            }
-            !active -> Text(
-                if (failed.isEmpty()) "Trasferimenti completati" else "Trasferimenti terminati con errori",
-                style = MaterialTheme.typography.titleSmall,
-            )
-        }
+        TransferStatus(running, pausedJob, paused, active, failedAny = failed.isNotEmpty())
         failed.forEach { job ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -108,7 +103,48 @@ fun TransferCard(
     }
 }
 
-/** Some names are already in the destination: replace them, leave them alone or keep both. */
+/* The headline of the card: the job running, the pause, or how everything ended. */
+@Composable
+private fun TransferStatus(running: TransferJob?, pausedJob: TransferJob?, paused: Boolean, active: Boolean, failedAny: Boolean) {
+    val c = Arancio.colors
+    when {
+        running?.state == TransferJob.State.Retrying -> {
+            Text(running.label, style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Connessione al NAS persa: riprovo tra ${running.retryIn} s, da dove si era fermato",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.accentText,
+            )
+            ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
+        }
+        running != null -> {
+            Text(running.label, style = MaterialTheme.typography.titleSmall)
+            if (running.current.isNotEmpty()) {
+                Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+            ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
+        }
+        paused -> {
+            Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
+            pausedJob?.let {
+                Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+        }
+        !active -> Text(
+            if (failedAny) "Trasferimenti terminati con errori" else "Trasferimenti completati",
+            style = MaterialTheme.typography.titleSmall,
+        )
+    }
+}
+
+/**
+ * ConflictDialog() - asks what to do with names already in the destination
+ * @param ask the names and how many elements go there
+ * @param onChoice replace, leave alone or keep both; null when the user gives up
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ConflictDialog(ask: ConflictAsk, onChoice: (Conflict?) -> Unit) {
     val c = Arancio.colors

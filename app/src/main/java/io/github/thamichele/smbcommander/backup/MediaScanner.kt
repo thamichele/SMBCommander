@@ -1,3 +1,10 @@
+/*
+ * MediaScanner.kt - the albums, photos and videos of the phone, read through MediaStore
+ *
+ * Read only: it never changes or deletes anything on the phone.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.backup
 
 import android.content.ContentUris
@@ -20,6 +27,12 @@ data class MediaItem(
 /** Reads the phone's gallery through MediaStore. */
 class MediaScanner(private val context: Context) {
 
+    /**
+     * albums() - the albums of the phone
+     * @param includeVideos count the videos too
+     *
+     * Return: the albums with how many photos each holds.
+     */
     fun albums(includeVideos: Boolean): List<Album> {
         val counts = LinkedHashMap<String, Pair<String, Int>>()
         for (collection in collections(includeVideos)) {
@@ -32,10 +45,22 @@ class MediaScanner(private val context: Context) {
             .sortedWith(compareByDescending<Album> { it.name.equals("Camera", true) }.thenByDescending { it.count })
     }
 
-    /** The camera album, the usual default for a backup. */
+    /**
+     * cameraAlbum() - the camera album, the usual default for a backup
+     * @param albums the albums of the phone
+     *
+     * Return: it, or null when none looks like the camera's.
+     */
     fun cameraAlbum(albums: List<Album>): Album? =
         albums.firstOrNull { it.name.equals("Camera", ignoreCase = true) || it.name.equals("Fotocamera", ignoreCase = true) }
 
+    /**
+     * items() - the photos (and videos) of some albums
+     * @param albums the MediaStore bucket ids
+     * @param includeVideos the videos too
+     *
+     * Return: the media, empty files left out.
+     */
     fun items(albums: Set<String>, includeVideos: Boolean): List<MediaItem> {
         val result = ArrayList<MediaItem>()
         for (collection in collections(includeVideos)) {

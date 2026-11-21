@@ -113,6 +113,5 @@ class MultiNasFileSystem(
 
     companion object {
         const val ROOT_READ_ONLY = "Qui ci sono solo le cartelle condivise del NAS: apri una di loro"
-        private const val UNKNOWN_SIZE = -1L
     }
 }

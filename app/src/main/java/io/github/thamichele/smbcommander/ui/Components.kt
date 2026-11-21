@@ -1,3 +1,11 @@
+/*
+ * Components.kt - the shared pieces of every screen: header, buttons, cards, dialogs, fields
+ *
+ * Built on the Arancio Mix tokens of the theme, so every screen looks the same. Stateless where possible: the screens
+ * hold the state.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.ui
 
 import android.text.format.DateUtils
@@ -70,6 +78,12 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -260,10 +274,23 @@ class CollapsingHeaderState {
         offset = 0f
     }
 
+    /**
+     * report() - tells the state how many pixels a part can give when it shrinks
+     * @param part the part, as rememberCollapsingPart gave it
+     * @param pixels its full height
+     *
+     * Return: nothing; an unchanged height does not recompose.
+     */
     internal fun report(part: Any, pixels: Int) {
         if (parts[part] != pixels) parts[part] = pixels
     }
 
+    /**
+     * forget() - takes away a part that left the screen
+     * @param part the part
+     *
+     * Return: nothing.
+     */
     internal fun forget(part: Any) {
         parts.remove(part)
     }
@@ -454,6 +481,38 @@ fun ToolButton(
 }
 
 /**
+ * PasswordField() - the password field of a NAS, with the eye that shows or hides what is typed
+ * @param value the text typed
+ * @param onChange called with the new text
+ * @param isSaved a password is already saved: an empty field keeps it, and the label says so
+ *
+ * Context: composable; whether the password shows survives a rotation.
+ * Return: nothing.
+ */
+@Composable
+fun PasswordField(value: String, onChange: (String) -> Unit, isSaved: Boolean) {
+    var isShown by rememberSaveable { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(if (isSaved) "Password (vuota = quella salvata)" else "Password") },
+        singleLine = true,
+        shape = ArancioShape.control,
+        colors = arancioFieldColors(),
+        visualTransformation = if (isShown) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+        trailingIcon = {
+            FieldButton(
+                if (isShown) AppIcons.EyeOff else AppIcons.Eye,
+                if (isShown) "Nascondi password" else "Mostra password",
+                { isShown = !isShown },
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
  * FieldButton() - the icon button inside a text field (clear, show password)
  * @param icon what the button shows
  * @param label what the button does, read aloud by TalkBack
@@ -499,7 +558,15 @@ fun ButtonBar(modifier: Modifier = Modifier, content: @Composable RowScope.() ->
     )
 }
 
-/** Filter chip of the kit: filled with the text colour when selected, outlined panel otherwise, corners of 10. */
+/**
+ * Pill() - filter chip of the kit: filled when selected, outlined panel otherwise
+ * @param text the label
+ * @param selected the chip is on
+ * @param onClick called on a tap
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
@@ -522,21 +589,14 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Small label as a pill: accent at 16% with the accent label colour, or [tint] at 16%. */
-@Composable
-fun Tag(text: String, tint: Color? = null, modifier: Modifier = Modifier) {
-    val c = Arancio.colors
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = tint ?: c.accentLabel,
-        modifier = modifier
-            .background((tint ?: c.accent).copy(alpha = 0.16f), ArancioShape.pill)
-            .padding(horizontal = 10.dp, vertical = 3.dp),
-    )
-}
-
-/** Uppercase heading over a group of cards or settings. */
+/**
+ * SectionLabel() - uppercase heading over a group of cards or settings
+ * @param text the heading
+ * @param modifier placement
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -547,7 +607,17 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Card or panel at level 0: no shadow, 1dp border, corners of 12. */
+/**
+ * Panel() - card or panel at level 0: no shadow, thin border
+ * @param modifier placement
+ * @param raised on the raised ground instead of the panel ground
+ * @param padding space inside
+ * @param spacing space between the children
+ * @param content the children, in a column
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun Panel(
     modifier: Modifier = Modifier,
@@ -568,13 +638,23 @@ fun Panel(
     )
 }
 
-/** Dialog panel at level 2: raised ground, strong border, deeper shadow. */
+/**
+ * dialogPanel() - the look of a dialog at level 2: raised ground, strong border, deeper shadow
+ * @param colors the tokens of the theme
+ *
+ * Return: the modifier with background, border and shadow.
+ */
 fun Modifier.dialogPanel(colors: ArancioColors): Modifier = this
     .shadow(16.dp, ArancioShape.card, ambientColor = colors.shadow, spotColor = colors.shadow)
     .background(colors.surfaceRaised, ArancioShape.card)
     .border(1.dp, colors.borderStrong, ArancioShape.card)
 
-/** Floating card at level 1 (toasts, transfer progress): raised ground, strong border, small shadow. */
+/**
+ * floating() - the look of a floating card at level 1 (toasts, transfer progress)
+ * @param colors the tokens of the theme
+ *
+ * Return: the modifier with raised ground, strong border and small shadow.
+ */
 fun Modifier.floating(colors: ArancioColors): Modifier = this
     .shadow(6.dp, ArancioShape.card, ambientColor = colors.shadow, spotColor = colors.shadow)
     .background(colors.surfaceRaised, ArancioShape.card)
@@ -583,9 +663,18 @@ fun Modifier.floating(colors: ArancioColors): Modifier = this
 enum class ButtonKind { Primary, Secondary, Ghost, Danger, Tinted }
 
 /**
- * Button of the kit: corners of 4, 40dp high (48dp touch target), pressed at scale 0.97 for 80ms,
- * disabled at half opacity. Primary is filled with the main colour, Secondary is the raised grey with a border,
- * Ghost has no ground, Danger is the soft red with a red border, Tinted the soft main colour ("Ask AI").
+ * ArancioButton() - button of the kit, in one of its kinds
+ * @param onClick called on a tap
+ * @param modifier placement
+ * @param kind Primary, Secondary, Ghost or Danger
+ * @param enabled false draws it at half opacity and ignores taps
+ * @param contentPadding space inside, or null for the kit's own
+ * @param content icon and label, in a row
+ *
+ * Pressed at a slightly smaller scale; at least 48dp of touch target.
+ *
+ * Context: composable.
+ * Return: nothing.
  */
 @Composable
 fun ArancioButton(
@@ -630,18 +719,58 @@ fun ArancioButton(
     }
 }
 
+/**
+ * PrimaryButton() - the filled button of the main action
+ * @param onClick called on a tap
+ * @param modifier placement
+ * @param enabled false ignores taps
+ * @param content icon and label
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun PrimaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     ArancioButton(onClick, modifier, ButtonKind.Primary, enabled, content = content)
 
+/**
+ * SecondaryButton() - the raised grey button of a second action
+ * @param onClick called on a tap
+ * @param modifier placement
+ * @param enabled false ignores taps
+ * @param content icon and label
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun SecondaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     ArancioButton(onClick, modifier, ButtonKind.Secondary, enabled, content = content)
 
+/**
+ * GhostButton() - the button without ground, for minor actions
+ * @param onClick called on a tap
+ * @param modifier placement
+ * @param enabled false ignores taps
+ * @param content icon and label
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun GhostButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     ArancioButton(onClick, modifier, ButtonKind.Ghost, enabled, content = content)
 
+/**
+ * DangerButton() - the red button of an action that deletes
+ * @param onClick called on a tap
+ * @param modifier placement
+ * @param enabled false ignores taps
+ * @param content icon and label
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun DangerButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
     ArancioButton(onClick, modifier, ButtonKind.Danger, enabled, content = content)
@@ -696,7 +825,15 @@ fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: M
     }
 }
 
-/** Dropdown menu at level 1: raised ground, strong border, corners of 8, small shadow. */
+/**
+ * ArancioMenu() - dropdown menu at level 1: raised ground, strong border, small shadow
+ * @param expanded the menu is open
+ * @param onDismissRequest called when the user taps outside
+ * @param content the entries
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ArancioMenu(expanded: Boolean, onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val c = Arancio.colors
@@ -712,7 +849,17 @@ fun ArancioMenu(expanded: Boolean, onDismissRequest: () -> Unit, content: @Compo
     )
 }
 
-/** Menu entry: the active one on the main colour at 10% with accent text, destructive ones in red. */
+/**
+ * ArancioMenuItem() - one entry of an [ArancioMenu]
+ * @param icon the icon, or null
+ * @param label the text
+ * @param danger a destructive entry, in red
+ * @param active the entry in use, on the main colour
+ * @param onClick called on a tap
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ArancioMenuItem(icon: ImageVector?, label: String, danger: Boolean = false, active: Boolean = false, onClick: () -> Unit) {
     val c = Arancio.colors
@@ -738,7 +885,14 @@ fun ArancioMenuItem(icon: ImageVector?, label: String, danger: Boolean = false, 
     )
 }
 
-/** Toasts of the kit: raised card from the bottom, strong border, corners of 8. */
+/**
+ * ArancioSnackbarHost() - the toasts of the kit: a raised card from the bottom
+ * @param state the host state the screens post messages to
+ * @param modifier placement
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ArancioSnackbarHost(state: SnackbarHostState, modifier: Modifier = Modifier) {
     val c = Arancio.colors
@@ -758,7 +912,15 @@ fun ArancioSnackbarHost(state: SnackbarHostState, modifier: Modifier = Modifier)
     }
 }
 
-/** Progress bar of the kit: 6dp, round ends, on the border grey. Without [fraction] it runs indeterminate. */
+/**
+ * ArancioProgress() - progress bar of the kit: round ends, on the border grey
+ * @param fraction how much is done, 0..1; null runs indeterminate
+ * @param modifier placement
+ * @param color the colour of the bar
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ArancioProgress(fraction: Float?, modifier: Modifier = Modifier, color: Color = Arancio.colors.accent) {
     val c = Arancio.colors
@@ -778,6 +940,12 @@ fun ArancioProgress(fraction: Float?, modifier: Modifier = Modifier, color: Colo
     }
 }
 
+/**
+ * arancioSwitchColors() - the colours of a switch of the kit
+ *
+ * Context: composable.
+ * Return: the colours, the main one when on.
+ */
 @Composable
 fun arancioSwitchColors() = SwitchDefaults.colors(
     checkedTrackColor = Arancio.colors.accent,
@@ -788,7 +956,12 @@ fun arancioSwitchColors() = SwitchDefaults.colors(
     uncheckedBorderColor = Arancio.colors.borderStrong,
 )
 
-/** Loading placeholder: the slow 1.2s sheen of the kit, the only looping animation it allows. */
+/**
+ * rememberShimmer() - the slow sheen of a loading placeholder, the only looping animation the kit allows
+ *
+ * Context: composable.
+ * Return: the brush to paint the grey bars with.
+ */
 @Composable
 fun rememberShimmer(): Brush {
     val c = Arancio.colors
@@ -806,7 +979,14 @@ fun rememberShimmer(): Brush {
     )
 }
 
-/** Rows of a list that is still loading: tile, name and details as grey bars. */
+/**
+ * SkeletonList() - rows of a list that is still loading: tile, name and details as grey bars
+ * @param modifier placement
+ * @param rows how many rows
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 8) {
     val brush = rememberShimmer()
@@ -827,7 +1007,15 @@ fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 8) {
     }
 }
 
-/** Squares of a photo grid that is still loading. */
+/**
+ * SkeletonGrid() - squares of a photo grid that is still loading
+ * @param modifier placement
+ * @param columns squares per row
+ * @param rows how many rows
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun SkeletonGrid(modifier: Modifier = Modifier, columns: Int = 4, rows: Int = 6) {
     val brush = rememberShimmer()
@@ -841,7 +1029,17 @@ fun SkeletonGrid(modifier: Modifier = Modifier, columns: Int = 4, rows: Int = 6)
     }
 }
 
-/** Empty screen or list: icon on a bordered tile, a title, a line of help and maybe one action. */
+/**
+ * EmptyState() - empty screen or list: icon on a bordered tile, a title, a line of help and maybe one action
+ * @param icon the icon
+ * @param title what is empty
+ * @param text a line of help, or null
+ * @param modifier placement
+ * @param action a button, or null
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun EmptyState(
     icon: ImageVector,
@@ -879,7 +1077,17 @@ enum class NoticeKind { Info, Success, Warning, Error }
 
 private class NoticeStyle(val icon: ImageVector, val tint: Color, val ground: Color, val edge: Color)
 
-/** Notice of the kit: icon, bold line and explanation on a tinted ground with a tinted border, corners of 10. */
+/**
+ * Notice() - notice of the kit: icon, bold line and explanation on a tinted ground
+ * @param kind info, success, warning or error
+ * @param title the bold line
+ * @param text the explanation, or null
+ * @param modifier placement
+ * @param action a button, or null
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun Notice(
     kind: NoticeKind,
@@ -916,7 +1124,15 @@ fun Notice(
     }
 }
 
-/** Square tile with the icon of the entry's kind, tinted by category. */
+/**
+ * KindTile() - square tile with the icon of an entry's kind, tinted by category
+ * @param entry the file or folder
+ * @param size side of the tile
+ * @param iconSize side of the icon
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun KindTile(entry: RemoteEntry, size: Dp, iconSize: Dp = 22.dp) {
     val (icon, tint) = kindOf(entry)
@@ -928,6 +1144,12 @@ fun KindTile(entry: RemoteEntry, size: Dp, iconSize: Dp = 22.dp) {
     }
 }
 
+/**
+ * kindOf() - the icon and the colour of an entry's kind
+ * @param entry the file or folder
+ *
+ * Return: the icon and its tint.
+ */
 @Composable
 fun kindOf(entry: RemoteEntry): Pair<ImageVector, Color> {
     val c = Arancio.colors
@@ -951,6 +1173,13 @@ private val DOCUMENT = setOf(
     "json", "xml", "html", "log", "ini", "conf", "yml", "yaml",
 )
 
+/**
+ * entryDetails() - the grey line under an entry's name
+ * @param entry the file or folder
+ *
+ * Context: composable.
+ * Return: size and date for a file, the date alone for a folder.
+ */
 @Composable
 fun entryDetails(entry: RemoteEntry): String {
     val context = LocalContext.current
@@ -966,7 +1195,15 @@ fun entryDetails(entry: RemoteEntry): String {
     return listOf(kind, date).filter { it.isNotEmpty() }.joinToString(" · ")
 }
 
-/** Card for an error with a way out. */
+/**
+ * ErrorCard() - card for an error with a way out
+ * @param text what went wrong
+ * @param action the label of the button
+ * @param onAction called on a tap of the button
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ErrorCard(text: String, action: String, onAction: () -> Unit) {
     Notice(NoticeKind.Error, text, modifier = Modifier.padding(16.dp)) {
@@ -974,7 +1211,12 @@ fun ErrorCard(text: String, action: String, onAction: () -> Unit) {
     }
 }
 
-/** Fields of the kit: ground colour inside, strong grey border, main colour when focused, corners of 4. */
+/**
+ * arancioFieldColors() - the colours of a text field of the kit: main colour when focused
+ *
+ * Context: composable.
+ * Return: the colours.
+ */
 @Composable
 fun arancioFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = Arancio.colors.accent,
@@ -995,7 +1237,19 @@ fun arancioFieldColors() = OutlinedTextFieldDefaults.colors(
     selectionColors = TextSelectionColors(handleColor = Arancio.colors.accent, backgroundColor = Arancio.colors.accent.copy(alpha = 0.30f)),
 )
 
-/** Dialog asking for a file or folder name; the part before the extension is preselected. */
+/**
+ * NameDialog() - dialog asking for a file or folder name
+ * @param title the title
+ * @param initial the name to start from
+ * @param confirm the label of the button
+ * @param onDismiss called when the user gives up
+ * @param onConfirm called with the name typed
+ *
+ * The part before the extension is preselected.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     val stem = initial.lastIndexOf('.').takeIf { it > 0 } ?: initial.length
@@ -1026,6 +1280,18 @@ fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () ->
     )
 }
 
+/**
+ * ConfirmDialog() - dialog asking to confirm an action
+ * @param title the question
+ * @param text what will happen
+ * @param confirm the label of the button
+ * @param danger the action deletes: the button is red
+ * @param onDismiss called when the user gives up
+ * @param onConfirm called when the user confirms
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun ConfirmDialog(
     title: String,
@@ -1047,7 +1313,14 @@ fun ConfirmDialog(
     )
 }
 
-/** Tick in the corner of a selected entry. */
+/**
+ * SelectedMark() - tick in the corner of a selected entry
+ * @param modifier placement
+ * @param size side of the mark
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun SelectedMark(modifier: Modifier, size: Dp = 22.dp) {
     val c = Arancio.colors
@@ -1056,7 +1329,14 @@ fun SelectedMark(modifier: Modifier, size: Dp = 22.dp) {
     }
 }
 
-/** Small play mark on the thumbnail of a video. */
+/**
+ * VideoBadge() - small play mark on the thumbnail of a video
+ * @param modifier placement
+ * @param size side of the mark
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
 fun VideoBadge(modifier: Modifier = Modifier, size: Dp = 22.dp) {
     Box(modifier.size(size).background(Color.Black.copy(alpha = 0.55f), CircleShape), contentAlignment = Alignment.Center) {

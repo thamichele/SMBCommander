@@ -1,3 +1,11 @@
+/*
+ * ShareCache.kt - the temporary copies handed to other apps with Condividi
+ *
+ * They live only in the app's private cache and are deleted soon after, also by a cleanup that runs a few minutes
+ * later.
+ *
+ * Version: 1.28.6
+ */
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context
@@ -19,12 +27,21 @@ class ShareCache(private val context: Context) {
 
     private val root = File(context.cacheDir, DIR)
 
-    /** A new, empty folder for the copies of one share. */
+    /**
+     * newFolder() - a new, empty folder for the copies of one share
+     *
+     * Return: the folder, in the private cache.
+     */
     fun newFolder(): File = File(root, UUID.randomUUID().toString()).apply { mkdirs() }
 
     /**
-     * Deletes the copies made more than [olderThanMs] ago. The receiving app reads the file while the user is in it:
-     * a short grace period covers apps that read it a moment after the user came back.
+     * clean() - deletes the copies made some time ago
+     * @param olderThanMs the age, in milliseconds, of the copies to delete
+     *
+     * The receiving app reads the file while the user is in it: a short grace period covers apps that read it a
+     * moment after the user came back.
+     *
+     * Return: nothing.
      */
     fun clean(olderThanMs: Long) {
         val now = System.currentTimeMillis()
@@ -33,11 +50,20 @@ class ShareCache(private val context: Context) {
         }
     }
 
+    /**
+     * cleanAll() - deletes every copy
+     *
+     * Return: nothing.
+     */
     fun cleanAll() {
         root.deleteRecursively()
     }
 
-    /** Makes sure the copies go away even if the app is never opened again. */
+    /**
+     * scheduleCleanup() - makes sure the copies go away even if the app is never opened again
+     *
+     * Return: nothing; a WorkManager job runs a few minutes later.
+     */
     fun scheduleCleanup() {
         val request = OneTimeWorkRequestBuilder<ShareCleanupWorker>()
             .setInitialDelay(CLEANUP_DELAY_MINUTES, TimeUnit.MINUTES)
