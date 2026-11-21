@@ -1,3 +1,12 @@
+/*
+ * GalleryIndex.kt - what the gallery knows about the backup folder, and when each photo was taken
+ *
+ * GalleryIndex holds the photos and videos of each folder below the backup folder and changes only where the NAS
+ * changed; GalleryDates works out the month of a photo from its folders, its name or its date. Walking the NAS and
+ * storing the index on the phone are the app's job: this file does no I/O.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.core
 
 import java.util.Calendar
@@ -21,8 +30,12 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
     }
 
     /**
-     * Sets the media found directly in [dir]; true when that changed anything. [isEmptyAlbum] says the folder holds
-     * neither media nor other folders, so it stays known as an album to fill.
+     * replace() - sets the media found directly in a folder
+     * @param dir the folder
+     * @param media what it holds now
+     * @param isEmptyAlbum the folder holds neither media nor other folders: it stays known as an album to fill
+     *
+     * Return: true when that changed anything.
      */
     @Synchronized
     fun replace(dir: String, media: List<RemoteEntry>, isEmptyAlbum: Boolean = false): Boolean {
@@ -35,8 +48,11 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
     }
 
     /**
-     * After a full walk: drops the folders that were not seen, unless they lie in a folder that failed to list
-     * (their state is unknown, so they stay as they were). True when something was dropped.
+     * retain() - after a full walk, drops the folders that were not seen
+     * @param seen the folders the walk listed
+     * @param failed the folders the walk could not list: what lies in them is unknown, so it stays as it was
+     *
+     * Return: true when something was dropped.
      */
     @Synchronized
     fun retain(seen: Set<String>, failed: Set<String>): Boolean {
@@ -46,6 +62,12 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
         return emptyDirs.removeAll(isGone) || gone.isNotEmpty()
     }
 
+    /**
+     * remove() - forgets the media that match, after they were deleted or moved away
+     * @param predicate true for the media to forget
+     *
+     * Return: nothing.
+     */
     @Synchronized
     fun remove(predicate: (RemoteEntry) -> Boolean) {
         for (dir in byDir.keys.toList()) {
@@ -91,6 +113,11 @@ class GalleryIndex(initial: Collection<RemoteEntry> = emptyList()) {
         emptyDirs -= dir
     }
 
+    /**
+     * all() - every photo and video known
+     *
+     * Return: a new list, in no particular order.
+     */
     @Synchronized
     fun all(): List<RemoteEntry> = byDir.values.flatten()
 
@@ -135,6 +162,12 @@ object GalleryDates {
 
     data class Taken(val year: Int, val month: Int, /** For ordering inside the month, newest first. */ val sortKey: Long)
 
+    /**
+     * of() - when a photo or video was taken
+     * @param entry the photo or video
+     *
+     * Return: its year and month, and a key "yyyyMMddHHmmss" to order it inside the month.
+     */
     fun of(entry: RemoteEntry): Taken {
         val parts = entry.path.split('/')
         val name = parts.last()

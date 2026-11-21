@@ -1,3 +1,12 @@
+/*
+ * EditSync.kt - opening a NAS file in another app and bringing the changes back safely
+ *
+ * Decides whether a file edited on the phone can simply be uploaded, or changed on the NAS meanwhile, or vanished
+ * from it. Holds the safe upload every feature uses (temporary name, read back, SHA-256 check, one rename) and the
+ * choice of free names ("name (2).ext"). Downloading the file and asking the user are the app's job.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.core
 
 import java.io.File
@@ -32,8 +41,23 @@ sealed interface SyncDecision {
     data object RemoteMissing : SyncDecision
 }
 
+/** The rules that bring an edited file back to the NAS without losing anybody's changes. */
 object EditSync {
 
+    /* A failed check of an upload is tried once more before it is reported. */
+    private const val UPLOAD_ATTEMPTS = 2
+
+    /* The first number a taken name gets: "name (2).ext". */
+    private const val FIRST_FREE_NUMBER = 2
+
+    /**
+     * decide() - what to do with a file edited on the phone
+     * @param session the file as it was when it was opened
+     * @param localHash SHA-256 of the local copy now
+     * @param remote the file on the NAS now, or null when it is gone
+     *
+     * Return: the decision; only [SyncDecision.Upload] can be carried out without asking the user.
+     */
     fun decide(session: EditSession, localHash: String, remote: RemoteEntry?): SyncDecision = when {
         localHash == session.baseHash -> SyncDecision.Unchanged
         remote == null -> SyncDecision.RemoteMissing
@@ -42,17 +66,35 @@ object EditSync {
     }
 
     /**
-     * Uploads [local] to [path] without ever leaving a half-written file there: the data goes to a hidden temporary
-     * file in the same folder, which then replaces the target in one rename.
-     * Returns the target as the NAS now reports it.
+     * safeOverwrite() - uploads a local file over [path] without ever leaving a half-written file there
+     * @param fs the file system
+     * @param share the share
+     * @param path the file to write
+     * @param local the bytes to send
+     * @param progress bytes sent so far and the total
+     *
+     * The data goes to a hidden temporary file in the same folder, which then replaces the target in one rename.
+     *
+     * Context: blocking.
+     * Return: the target as the NAS now reports it.
      */
     fun safeOverwrite(fs: NasFileSystem, share: String, path: String, local: File, progress: Progress = { _, _ -> }): RemoteEntry =
         safeUpload(fs, share, path, local.length(), { local.inputStream() }, progress)
 
     /**
-     * Like [safeOverwrite], for content that is not a local file (a document picked from another app).
+     * safeUpload() - like [safeOverwrite], for content that is not a local file (a document picked from another app)
+     * @param fs the file system
+     * @param share the share
+     * @param path the file to write
+     * @param length bytes expected, or [UNKNOWN_SIZE]
+     * @param open opens the content; called again for the second attempt
+     * @param progress bytes sent so far and the total
+     *
      * Before the rename the temporary file is read back from the NAS: only when its SHA-256 equals the hash of the
      * bytes sent does it replace the target. A mismatch is retried once, then reported; the target is never touched.
+     *
+     * Context: blocking.
+     * Return: the target as the NAS now reports it.
      */
     fun safeUpload(
         fs: NasFileSystem,
@@ -76,7 +118,7 @@ object EditSync {
                     break
                 }
                 runCatching { fs.delete(share, temp) }
-                if (attempt++ >= 2) throw Integrity.mismatch(name, "il contenuto arrivato sul NAS è diverso")
+                if (attempt++ >= UPLOAD_ATTEMPTS) throw Integrity.mismatch(name, "il contenuto arrivato sul NAS è diverso")
             } catch (e: Exception) {
                 runCatching { fs.delete(share, temp) }
                 throw e
@@ -85,12 +127,31 @@ object EditSync {
         return fs.stat(share, path) ?: throw NasException("Il file caricato non risulta sul NAS")
     }
 
-    /** [path] itself when free, else the first free "name (2).ext", "name (3).ext"... */
+    /**
+     * freePath() - a name that nothing on the NAS uses yet
+     * @param fs the file system
+     * @param share the share
+     * @param path the name wanted
+     *
+     * Return: [path] itself when free, else the first free "name (2).ext", "name (3).ext"...
+     */
     fun freePath(fs: NasFileSystem, share: String, path: String): String {
         if (fs.stat(share, path) == null) return path
+        return nextFreePath(fs, share, path)
+    }
+
+    /**
+     * nextFreePath() - like [freePath] for a [path] already known to be taken, sparing one look on the NAS
+     * @param fs the file system
+     * @param share the share
+     * @param path the name wanted, already taken
+     *
+     * Return: the first free "name (2).ext", "name (3).ext"...
+     */
+    fun nextFreePath(fs: NasFileSystem, share: String, path: String): String {
         val parent = RemotePath.parent(path)
         val name = RemotePath.name(path)
-        var n = 2
+        var n = FIRST_FREE_NUMBER
         while (true) {
             val candidate = RemotePath.child(parent, RemotePath.withSuffix(name, n.toString()))
             if (fs.stat(share, candidate) == null) return candidate
@@ -98,7 +159,15 @@ object EditSync {
         }
     }
 
-    /** First free "name (suffix).ext", "name (suffix 2).ext"... next to [path]. */
+    /**
+     * freeCopyPath() - a free name for a copy kept next to [path]
+     * @param fs the file system
+     * @param share the share
+     * @param path the original
+     * @param suffix what tells the copy apart, such as "modificato"
+     *
+     * Return: the first free "name (suffix).ext", "name (suffix 2).ext"...
+     */
     fun freeCopyPath(fs: NasFileSystem, share: String, path: String, suffix: String): String {
         val parent = RemotePath.parent(path)
         val name = RemotePath.name(path)
@@ -110,5 +179,11 @@ object EditSync {
         }
     }
 
+    /**
+     * sha256() - the SHA-256 of a local file
+     * @param file the file
+     *
+     * Return: the hash in lowercase hex.
+     */
     fun sha256(file: File): String = file.inputStream().use { Integrity.sha256(it) }
 }

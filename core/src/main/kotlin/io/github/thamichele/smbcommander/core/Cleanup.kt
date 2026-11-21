@@ -1,6 +1,14 @@
+/*
+ * Cleanup.kt - the rules of the quick cleanup of the gallery, its list of kept photos and its bin
+ *
+ * Picks the photos and videos worth a second look (screenshots, messaging apps, bursts, copies) from their names,
+ * folders and sizes alone, keeps on the NAS the list of those the user chose to keep, and moves the discarded ones
+ * into a hidden bin inside the backup folder. Looking at the pixels is PhotoKinds' job; the screens are the app's.
+ *
+ * Version: 1.28.3
+ */
 package io.github.thamichele.smbcommander.core
 
-import java.io.ByteArrayInputStream
 import java.util.Calendar
 
 /**
@@ -25,6 +33,7 @@ data class CleanupReason(val kind: Kind, val detail: String = "") {
     val text: String get() = if (detail.isEmpty()) kind.label else "${kind.label}: $detail"
 }
 
+/** Which photos and videos the quick cleanup shows, and which ones are copies of each other. */
 object CleanupRules {
 
     private val SCREENSHOT = Regex("""screen[ _-]?shot|schermata|bildschirmfoto|captura de pantalla|capture d.?.cran""", RegexOption.IGNORE_CASE)
@@ -45,8 +54,20 @@ object CleanupRules {
     private const val TINY_IMAGE = 60L * 1024
     private const val SHORT_VIDEO = 2L * 1024 * 1024
     private const val BURST_SECONDS = 2
+    private const val MIN_BURST = 2
+    private const val SMALL_ANIMATION = 512L * 1024
+    private const val MILLIS_PER_SECOND = 1000L
 
-    /** The media of [root] (the backup folder) that should be checked, each with the reason it was picked. */
+    /* Digits of a sort key "yyyyMMddHHmmss" from GalleryDates. */
+    private const val SORT_KEY_LENGTH = 14
+
+    /**
+     * classify() - the media of the backup folder that should be checked
+     * @param media every photo and video of the folder
+     * @param root the backup folder
+     *
+     * Return: the media picked, each with the reason it was picked, in the order of [media].
+     */
     fun classify(media: List<RemoteEntry>, root: String): Map<RemoteEntry, CleanupReason> {
         val result = LinkedHashMap<RemoteEntry, CleanupReason>()
         for (e in media) single(e, root)?.let { result[e] = it }
@@ -58,7 +79,7 @@ object CleanupRules {
             for (i in 1..timed.size) {
                 if (i < timed.size && timed[i].second - timed[i - 1].second <= BURST_SECONDS) continue
                 val burst = timed.subList(start, i)
-                if (burst.size >= 2) burst.forEach { (e, _) -> result[e] = CleanupReason(CleanupReason.Kind.Burst, "${burst.size} foto in pochi secondi") }
+                if (burst.size >= MIN_BURST) burst.forEach { (e, _) -> result[e] = CleanupReason(CleanupReason.Kind.Burst, "${burst.size} foto in pochi secondi") }
                 start = i
             }
         }
@@ -66,10 +87,15 @@ object CleanupRules {
     }
 
     /**
+     * duplicates() - groups of copies of the same photo or video
+     * @param media every photo and video of the backup folder
+     *
      * Copies of the same photo or video: the same name, or the same name with a different ending ("IMG_1234 (1)",
      * "IMG_1234_2", "IMG_1234 - Copia", "IMG_1234.HEIC" next to "IMG_1234.JPG"), in one folder or in two. Each group
      * comes with the likeliest original first: the shortest path, then the biggest file. Names too short or too common
      * to tell anything ("foto_1", forty "Screenshot (n)") are left out.
+     *
+     * Return: the groups, each with two to [MAX_GROUP] elements.
      */
     fun duplicates(media: List<RemoteEntry>): List<List<RemoteEntry>> =
         media.groupBy { (if (it.extension in VIDEO) "v:" else "p:") + stem(it.name) }
@@ -77,7 +103,13 @@ object CleanupRules {
             .values
             .map { group -> group.sortedWith(compareBy<RemoteEntry> { it.path.count { c -> c == '/' } }.thenByDescending { it.size }.thenBy { it.path }) }
 
-    /** The name without extension and without the endings copies get, lowercase: "IMG_1234 (2).jpg" -> "img_1234". */
+    /**
+     * stem() - the part of a name that copies of one file share
+     * @param name the file name
+     *
+     * Return: the name without extension and without the endings copies get, lowercase:
+     * "IMG_1234 (2).jpg" -> "img_1234".
+     */
     fun stem(name: String): String {
         var s = name.substringBeforeLast('.', name).lowercase().trim()
         s = COPY_PREFIX.replace(s, "")
@@ -113,7 +145,7 @@ object CleanupRules {
                 CleanupReason.Kind.Messaging,
                 folders.firstNotNullOf { f -> MESSAGING_DIR.entries.firstOrNull { f.contains(it.key, ignoreCase = true) }?.value },
             )
-            e.extension == "gif" || (e.extension == "webp" && e.size < 512 * 1024) -> CleanupReason(CleanupReason.Kind.Animated)
+            e.extension == "gif" || (e.extension == "webp" && e.size < SMALL_ANIMATION) -> CleanupReason(CleanupReason.Kind.Animated)
             !video && e.size in 1 until TINY_IMAGE -> CleanupReason(CleanupReason.Kind.Tiny)
             folders.any { DOWNLOAD_DIR.matches(it) } || GENERATED_NAME.containsMatchIn(name) -> CleanupReason(CleanupReason.Kind.Downloaded)
             EDITED.containsMatchIn(name) -> CleanupReason(CleanupReason.Kind.Edited)
@@ -125,15 +157,22 @@ object CleanupRules {
     /** When it was taken, to the second, from the name ("IMG_20261029_101500"), else the file date. */
     private fun seconds(e: RemoteEntry): Long? {
         val key = GalleryDates.of(e).sortKey.toString()
-        if (key.length != 14) return null
+        if (key.length != SORT_KEY_LENGTH) return null
         val cal = Calendar.getInstance().apply {
             clear()
             set(key.substring(0, 4).toInt(), key.substring(4, 6).toInt() - 1, key.substring(6, 8).toInt(),
                 key.substring(8, 10).toInt(), key.substring(10, 12).toInt(), key.substring(12, 14).toInt())
         }
-        return cal.timeInMillis / 1000
+        return cal.timeInMillis / MILLIS_PER_SECOND
     }
 
+    /**
+     * relative() - a path seen from inside a folder
+     * @param path the path inside the share
+     * @param root the folder
+     *
+     * Return: [path] below [root], "" for [root] itself, or [path] unchanged when [root] is the top of the share.
+     */
     fun relative(path: String, root: String): String {
         val r = RemotePath.normalize(root)
         val p = RemotePath.normalize(path)
@@ -160,17 +199,44 @@ class KeptPhotos(lines: Collection<String> = emptyList()) {
 
     val lines: Set<String> @Synchronized get() = byPath.toSet()
 
+    /**
+     * contains() - tells whether a photo was kept, here or before it was moved
+     * @param entry the photo
+     * @param root the backup folder
+     *
+     * Return: true when its path, or its name and size, are in the list.
+     */
     @Synchronized
     fun contains(entry: RemoteEntry, root: String): Boolean =
         line(entry, root) in byPath || "${entry.size}\t${entry.name.lowercase()}" in byName
 
-    /** Kept at this very path: a copy with the same name elsewhere does not count. */
+    /**
+     * containsPath() - tells whether a photo was kept at this very path
+     * @param entry the photo
+     * @param root the backup folder
+     *
+     * Return: true only for this path: a copy with the same name elsewhere does not count.
+     */
     @Synchronized
     fun containsPath(entry: RemoteEntry, root: String): Boolean = line(entry, root) in byPath
 
+    /**
+     * add() - adds a photo to the list
+     * @param entry the photo
+     * @param root the backup folder
+     *
+     * Return: nothing.
+     */
     @Synchronized
     fun add(entry: RemoteEntry, root: String) = addLine(line(entry, root))
 
+    /**
+     * remove() - takes a photo out of the list
+     * @param entry the photo
+     * @param root the backup folder
+     *
+     * Return: nothing.
+     */
     @Synchronized
     fun remove(entry: RemoteEntry, root: String) {
         val l = line(entry, root)
@@ -193,20 +259,43 @@ class KeptPhotos(lines: Collection<String> = emptyList()) {
     companion object {
         const val FILE_NAME = ".smbcommander-tenute.txt"
 
+        /**
+         * read() - reads the list from the backup folder
+         * @param fs the file system
+         * @param share share of the backup folder
+         * @param folder the backup folder
+         *
+         * Context: blocking.
+         * Return: the list; empty when the file does not exist yet.
+         */
         fun read(fs: NasFileSystem, share: String, folder: String): KeptPhotos {
-            val path = RemotePath.child(folder, FILE_NAME)
-            if (fs.stat(share, path) == null) return KeptPhotos()
-            return KeptPhotos(fs.openRead(share, path).use { it.readBytes() }.decodeToString().lines().filter { it.isNotBlank() })
+            val text = fs.readText(share, RemotePath.child(folder, FILE_NAME)) ?: return KeptPhotos()
+            return KeptPhotos(text.lines().filter { it.isNotBlank() })
         }
 
-        /** Writes the list, merged with what another phone may have added meanwhile. */
+        /**
+         * write() - writes the list, merged with what another phone may have added meanwhile
+         * @param fs the file system
+         * @param share share of the backup folder
+         * @param folder the backup folder
+         * @param kept the list as this phone knows it
+         * @param removed lines this phone took out, which must not come back from the merge
+         *
+         * Context: blocking.
+         * Return: nothing.
+         */
         fun write(fs: NasFileSystem, share: String, folder: String, kept: KeptPhotos, removed: Collection<String> = emptyList()) {
             val merged = read(fs, share, folder).lines - removed.toSet() + kept.lines
-            val bytes = merged.sorted().joinToString("\n", postfix = "\n").toByteArray()
-            EditSync.safeUpload(fs, share, RemotePath.child(folder, FILE_NAME), bytes.size.toLong(), { ByteArrayInputStream(bytes) })
+            fs.writeText(share, RemotePath.child(folder, FILE_NAME), merged.sorted().joinToString("\n", postfix = "\n"))
         }
 
-        /** The line [entry] has in the file: its size and its path inside the backup folder. */
+        /**
+         * lineOf() - the line a photo has in the file
+         * @param entry the photo
+         * @param root the backup folder
+         *
+         * Return: its size and its path inside the backup folder, separated by a tab.
+         */
         fun lineOf(entry: RemoteEntry, root: String) = "${entry.size}\t${CleanupRules.relative(entry.path, root)}"
     }
 }
@@ -219,24 +308,46 @@ object CleanupTrash {
 
     const val DIR = ".smbcommander-cestino"
 
-    /** Moves [entry] into the bin and returns where it went. */
+    /**
+     * discard() - moves a photo into the bin, keeping its place inside the backup folder
+     * @param fs the file system
+     * @param entry the photo
+     * @param root the backup folder
+     *
+     * Return: where it went.
+     */
     fun discard(fs: NasFileSystem, entry: RemoteEntry, root: String): String {
         val target = RemotePath.child(RemotePath.child(RemotePath.normalize(root), DIR), CleanupRules.relative(entry.path, root))
-        ensureDirs(fs, entry.share, RemotePath.parent(target))
+        fs.makeDirs(entry.share, RemotePath.parent(target))
         val free = EditSync.freePath(fs, entry.share, target)
         fs.rename(entry.share, entry.path, free, replace = false)
         return free
     }
 
-    /** Puts a file from the bin back at [original] (or next to it, if that name was taken meanwhile). */
+    /**
+     * restore() - puts a file from the bin back where it was
+     * @param fs the file system
+     * @param share share of the backup folder
+     * @param inTrash the file in the bin
+     * @param original where it was
+     *
+     * Return: [original], or a path next to it if that name was taken meanwhile.
+     */
     fun restore(fs: NasFileSystem, share: String, inTrash: String, original: String): String {
-        ensureDirs(fs, share, RemotePath.parent(original))
+        fs.makeDirs(share, RemotePath.parent(original))
         val free = EditSync.freePath(fs, share, original)
         fs.rename(share, inTrash, free, replace = false)
         return free
     }
 
-    /** Everything in the bin, files only. */
+    /**
+     * contents() - everything in the bin
+     * @param fs the file system
+     * @param share share of the backup folder
+     * @param root the backup folder
+     *
+     * Return: the files, at every level; folders are left out.
+     */
     fun contents(fs: NasFileSystem, share: String, root: String): List<RemoteEntry> {
         val dir = RemotePath.child(RemotePath.normalize(root), DIR)
         if (fs.stat(share, dir) == null) return emptyList()
@@ -248,7 +359,13 @@ object CleanupTrash {
         return found
     }
 
-    /** Where a file of the bin came from. */
+    /**
+     * originalOf() - where a file of the bin came from
+     * @param inTrash its path in the bin
+     * @param root the backup folder
+     *
+     * Return: its old path.
+     */
     fun originalOf(inTrash: String, root: String): String {
         val r = RemotePath.normalize(root)
         val rel = CleanupRules.relative(inTrash, RemotePath.child(r, DIR))
@@ -256,8 +373,14 @@ object CleanupTrash {
     }
 
     /**
-     * Deletes the bin for good, file by file: one that is already gone (deleted or moved from another device) is
-     * skipped. Returns the paths of the skipped ones.
+     * empty() - deletes the bin for good, file by file
+     * @param fs the file system
+     * @param share share of the backup folder
+     * @param root the backup folder
+     *
+     * A file already gone (deleted or moved from another device) is skipped.
+     *
+     * Return: the paths of the skipped files.
      */
     fun empty(fs: NasFileSystem, share: String, root: String): List<String> {
         val skipped = contents(fs, share, root).filterNot { delete(fs, share, it.path) }
@@ -265,23 +388,29 @@ object CleanupTrash {
         return skipped.map { it.path }
     }
 
-    /** Deletes one file of the bin; false when it was no longer there. */
+    /**
+     * delete() - deletes one file of the bin for good
+     * @param fs the file system
+     * @param share share of the backup folder
+     * @param path the file in the bin
+     *
+     * Return: false when it was no longer there.
+     */
     fun delete(fs: NasFileSystem, share: String, path: String): Boolean = fs.unlessGone(share, path) { fs.delete(share, path) } != null
 
     /**
-     * Takes away the bin's folders once no file is left in them. Best effort: an empty hidden folder that the NAS does
-     * not let go yet (a file still closing) does no harm and goes the next time.
+     * removeFolders() - takes away the bin's folders once no file is left in them
+     * @param fs the file system
+     * @param share share of the backup folder
+     * @param root the backup folder
+     *
+     * Best effort: an empty hidden folder that the NAS does not let go yet (a file still closing) does no harm and
+     * goes the next time.
+     *
+     * Return: nothing.
      */
     fun removeFolders(fs: NasFileSystem, share: String, root: String) {
         val dir = RemotePath.child(RemotePath.normalize(root), DIR)
         runCatching { if (fs.stat(share, dir) != null && contents(fs, share, root).isEmpty()) fs.delete(share, dir) }
-    }
-
-    private fun ensureDirs(fs: NasFileSystem, share: String, dir: String) {
-        var current = ""
-        for (part in RemotePath.normalize(dir).split('/').filter { it.isNotEmpty() }) {
-            current = RemotePath.child(current, part)
-            if (fs.stat(share, current) == null) fs.createDirectory(share, current)
-        }
     }
 }
