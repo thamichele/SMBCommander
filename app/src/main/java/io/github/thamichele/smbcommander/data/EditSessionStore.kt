@@ -18,6 +18,11 @@ class EditSessionStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("edit_sessions", Context.MODE_PRIVATE)
 
+    /**
+     * all() - the files opened for editing that are not brought back yet
+     *
+     * Return: the sessions; a damaged entry is left out.
+     */
     fun all(): List<EditSession> = prefs.all.values.mapNotNull { value ->
         runCatching {
             val o = JSONObject(value as String)
@@ -34,6 +39,12 @@ class EditSessionStore(context: Context) {
         }.getOrNull()
     }
 
+    /**
+     * put() - keeps a session
+     * @param session the file opened for editing
+     *
+     * Return: nothing.
+     */
     fun put(session: EditSession) {
         val o = JSONObject()
             .put("id", session.id)
@@ -47,7 +58,12 @@ class EditSessionStore(context: Context) {
         prefs.edit().putString(session.id, o.toString()).apply()
     }
 
-    /** Forgets the session and deletes its local copy. */
+    /**
+     * remove() - forgets a session and deletes its local copy
+     * @param session the file opened for editing
+     *
+     * Return: nothing.
+     */
     fun remove(session: EditSession) {
         prefs.edit().remove(session.id).apply()
         session.localFile.parentFile?.deleteRecursively()

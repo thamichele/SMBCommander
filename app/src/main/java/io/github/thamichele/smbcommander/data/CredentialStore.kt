@@ -1,7 +1,8 @@
 /*
  * CredentialStore.kt - the NAS connection settings kept on the phone, password encrypted
  *
- * The password is encrypted with an AES key that never leaves the Android Keystore. Connecting is NasRepository's job;
+ * The password is encrypted with an AES key that never leaves the Android Keystore. Connecting is NasRepository's
+ * job;
  * this file only stores.
  *
  * Version: 1.28.3
@@ -39,15 +40,39 @@ class CredentialStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("server", Context.MODE_PRIVATE)
 
-    /** Cheap check, without decrypting the password. */
+    /**
+     * hasServer() - tells whether a main NAS is saved
+     *
+     * Cheap check, without decrypting the password.
+     *
+     * Return: true when address and password are stored.
+     */
     fun hasServer(): Boolean = prefs.contains(KEY_HOST) && prefs.contains(KEY_PASSWORD)
 
-    /** The address alone, for screens that only show it: no Keystore round trip for the password. */
+    /**
+     * host() - the address of the main NAS alone
+     *
+     * For screens that only show it: no Keystore round trip for the password.
+     *
+     * Return: the address, or null when nothing is saved.
+     */
     fun host(): String? = prefs.getString(KEY_HOST, null)
 
-    /** The saved user name alone: unlike [load] it decrypts nothing, so it costs nothing on the main thread. */
+    /**
+     * user() - the saved user name alone
+     *
+     * Unlike [load] it decrypts nothing, so it costs nothing on the main thread.
+     *
+     * Return: the user, "" when nothing is saved.
+     */
     fun user(): String = prefs.getString(KEY_USER, "").orEmpty()
 
+    /**
+     * load() - the settings of the main NAS, password decrypted
+     *
+     * Context: blocking: asks the Android Keystore.
+     * Return: the settings, or null when nothing is saved or the password cannot be decrypted.
+     */
     fun load(): NasServer? {
         val host = prefs.getString(KEY_HOST, null) ?: return null
         val password = prefs.getString(KEY_PASSWORD, null)?.let { runCatching { decrypt(it) }.getOrNull() } ?: return null
@@ -60,6 +85,12 @@ class CredentialStore(context: Context) {
         )
     }
 
+    /**
+     * save() - keeps the settings of the main NAS, password encrypted
+     * @param server the settings
+     *
+     * Return: nothing.
+     */
     fun save(server: NasServer) {
         prefs.edit()
             .putString(KEY_HOST, server.host)
@@ -70,11 +101,21 @@ class CredentialStore(context: Context) {
             .apply()
     }
 
-    /** Remembers the identity of the NAS, learnt at the first connection after an update. */
+    /**
+     * savePairing() - remembers the identity of the main NAS, learnt at its first connection
+     * @param serverId the identity, see ServerIdentity
+     *
+     * Return: nothing.
+     */
     fun savePairing(serverId: String) {
         prefs.edit().putString(KEY_SERVER_ID, serverId).apply()
     }
 
+    /**
+     * clear() - forgets the main NAS and every other NAS
+     *
+     * Return: nothing.
+     */
     fun clear() {
         prefs.edit().clear().apply()
         others.edit().clear().apply()
@@ -98,7 +139,13 @@ class CredentialStore(context: Context) {
         return (0 until array.length()).mapNotNull { i -> readOther(array.getJSONObject(i)) }
     }
 
-    /** Names of the other NAS by id, without decrypting any password: what the screens need. */
+    /**
+     * otherNames() - the names of the other NAS by id
+     *
+     * Without decrypting any password: what the screens need.
+     *
+     * Return: a map from id to name.
+     */
     fun otherNames(): Map<String, String> {
         val json = others.getString(KEY_LIST, null) ?: return emptyMap()
         val array = runCatching { JSONArray(json) }.getOrNull() ?: return emptyMap()
@@ -118,16 +165,34 @@ class CredentialStore(context: Context) {
         writeOthers(list)
     }
 
-    /** Remembers the identity of another NAS, learnt at its first connection. */
+    /**
+     * saveOtherPairing() - remembers the identity of another NAS, learnt at its first connection
+     * @param id the NAS
+     * @param serverId its identity
+     *
+     * Return: nothing.
+     */
     fun saveOtherPairing(id: String, serverId: String) {
         otherNas().find { it.id == id }?.let { saveOther(it.copy(server = it.server.copy(serverId = serverId))) }
     }
 
+    /**
+     * removeOther() - forgets another NAS
+     * @param id the NAS
+     *
+     * Return: nothing.
+     */
     fun removeOther(id: String) {
         writeOthers(otherNas().filterNot { it.id == id })
     }
 
-    /** A fresh id: one more than the highest ever given, so a removed NAS never hands its id to a new one. */
+    /**
+     * newOtherId() - a fresh id for another NAS
+     *
+     * One more than the highest ever given, so a removed NAS never hands its id to a new one.
+     *
+     * Return: the id, digits only.
+     */
     fun newOtherId(): String {
         val next = others.getInt(KEY_NEXT_ID, FIRST_OTHER_ID)
         others.edit().putInt(KEY_NEXT_ID, next + 1).apply()

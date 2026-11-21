@@ -90,7 +90,11 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BackupProgress(false, 0, 0))
 
-    /** Reads albums once the gallery permission is there. */
+    /**
+     * loadAlbums() - reads the albums of the phone once the gallery permission is there
+     *
+     * Return: the job reading them.
+     */
     fun loadAlbums() = viewModelScope.launch {
         if (!PhotoBackupWorker.hasMediaPermission(app)) return@launch
         val scanner = MediaScanner(app)
@@ -103,29 +107,76 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * setEnabled() - turns the backup on or off
+     * @param on the new state
+     *
+     * Return: nothing.
+     */
     fun setEnabled(on: Boolean) {
         update(_settings.value.copy(enabled = on))
         if (on) runNow()
     }
 
+    /**
+     * setDestination() - chooses the folder of the NAS the photos go to
+     * @param folder the folder
+     *
+     * Return: nothing.
+     */
     fun setDestination(folder: SavedFolder) = update(_settings.value.copy(destination = folder))
 
+    /**
+     * toggleAlbum() - adds an album of the phone to the backup, or takes it out
+     * @param id the MediaStore bucket id
+     *
+     * Return: nothing.
+     */
     fun toggleAlbum(id: String) {
         val current = _settings.value.albums
         update(_settings.value.copy(albums = if (id in current) current - id else current + id))
     }
 
+    /**
+     * setIncludeVideos() - also saves the videos, or not
+     * @param on the new state
+     *
+     * Return: nothing.
+     */
     fun setIncludeVideos(on: Boolean) {
         update(_settings.value.copy(includeVideos = on))
         loadAlbums()
     }
 
+    /**
+     * setByMonth() - sorts the photos into "2026/10" subfolders, or not
+     * @param on the new state
+     *
+     * Return: nothing.
+     */
     fun setByMonth(on: Boolean) = update(_settings.value.copy(byMonth = on))
 
+    /**
+     * setChargingOnly() - runs the backup only while charging, or not
+     * @param on the new state
+     *
+     * Return: nothing.
+     */
     fun setChargingOnly(on: Boolean) = update(_settings.value.copy(chargingOnly = on))
 
+    /**
+     * setStatusNotification() - shows the backup status notification, or not
+     * @param on the new state
+     *
+     * Return: nothing.
+     */
     fun setStatusNotification(on: Boolean) = update(_settings.value.copy(statusNotification = on))
 
+    /**
+     * runNow() - starts a run right away
+     *
+     * Return: nothing.
+     */
     fun runNow() = BackupScheduler.runNow(app, _settings.value)
 
     private val _freeSpace = MutableStateFlow<FreeSpace>(FreeSpace.Idle)
@@ -133,8 +184,12 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private var freeJob: Job? = null
 
     /**
-     * Finds the photos of the chosen albums that are safely on the NAS: a file in the backup folder with the same size
-     * and the same SHA-256. The ledger alone is not proof, as the file may have been moved or deleted on the NAS since.
+     * checkFreeSpace() - finds the photos of the chosen albums that are safely on the NAS
+     *
+     * A file in the backup folder with the same size and the same SHA-256. The ledger alone is not proof, as the file
+     * may have been moved or deleted on the NAS.
+     *
+     * Return: nothing; the result arrives in [freeSpace].
      */
     fun checkFreeSpace() {
         val settings = _settings.value
@@ -171,8 +226,11 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private var freedBytes = 0L
 
     /**
-     * The system dialog that deletes the next batch from the phone. Batches keep the request small enough for Android;
-     * after each confirmed one the screen asks for the next.
+     * deleteRequest() - the system dialog that deletes the next batch from the phone
+     *
+     * Batches keep the request small enough for Android; after each confirmed one the screen asks for the next.
+     *
+     * Return: the request to show, or null when nothing is left.
      */
     fun deleteRequest(): IntentSender? {
         val ready = _freeSpace.value as? FreeSpace.Ready ?: return null
@@ -182,7 +240,12 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         return MediaStore.createDeleteRequest(app.contentResolver, batch).intentSender
     }
 
-    /** [deleted] is false when the user said no in the system dialog: then nothing is deleted. */
+    /**
+     * onDeleteResult() - takes the answer of the system dialog
+     * @param deleted false when the user said no: then nothing is deleted
+     *
+     * Return: nothing.
+     */
     fun onDeleteResult(deleted: Boolean) {
         val ready = _freeSpace.value as? FreeSpace.Ready ?: return
         if (!deleted) {
@@ -203,6 +266,11 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
         loadAlbums()
     }
 
+    /**
+     * resetFreeSpace() - closes "Libera spazio"
+     *
+     * Return: nothing.
+     */
     fun resetFreeSpace() {
         freeJob?.cancel()
         freedCount = 0

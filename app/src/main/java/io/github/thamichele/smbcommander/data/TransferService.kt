@@ -163,7 +163,14 @@ class TransferService : Service() {
         private const val ACTION_RESUME = "resume"
         private const val ACTION_CANCEL = "cancel"
 
-        /** Called when the queue gets work; Android may refuse it from the background, and then the app carries on as before. */
+        /**
+         * start() - starts the service when the queue gets work
+         * @param context any context of the app
+         *
+         * Android may refuse it from the background, and then the app carries on as before.
+         *
+         * Return: nothing.
+         */
         fun start(context: Context) {
             runCatching { ContextCompat.startForegroundService(context, Intent(context, TransferService::class.java)) }
         }

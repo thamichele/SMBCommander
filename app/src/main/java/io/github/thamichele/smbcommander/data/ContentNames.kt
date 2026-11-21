@@ -13,8 +13,13 @@ import android.provider.OpenableColumns
 import io.github.thamichele.smbcommander.core.RemotePath
 
 /**
- * Name and size of a document picked or shared from another app, as its provider reports them (-1 when the size is
- * unknown). The name comes from that app, so it must be a plain file name: anything else becomes "file".
+ * describe() - name and size of a document picked or shared from another app
+ * @param uri the document
+ *
+ * The name comes from that app, so it must be a plain file name: anything else becomes "file".
+ *
+ * Context: blocking, asks the providing app.
+ * Return: the name and the size in bytes, -1 when the size is unknown.
  */
 fun ContentResolver.describe(uri: Uri): Pair<String, Long> {
     runCatching {

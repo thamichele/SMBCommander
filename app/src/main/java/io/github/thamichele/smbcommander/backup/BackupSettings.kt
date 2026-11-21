@@ -38,6 +38,11 @@ class BackupSettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("backup", Context.MODE_PRIVATE)
 
+    /**
+     * load() - reads the backup settings
+     *
+     * Return: them; the defaults when nothing is saved.
+     */
     fun load(): BackupSettings {
         val share = prefs.getString("dest_share", null)
         return BackupSettings(
@@ -51,6 +56,12 @@ class BackupSettingsStore(context: Context) {
         )
     }
 
+    /**
+     * save() - keeps the backup settings
+     * @param settings the settings
+     *
+     * Return: nothing.
+     */
     fun save(settings: BackupSettings) {
         prefs.edit()
             .putBoolean("enabled", settings.enabled)
@@ -64,6 +75,11 @@ class BackupSettingsStore(context: Context) {
             .apply()
     }
 
+    /**
+     * status() - how the last runs went
+     *
+     * Return: the outcome of the last run and the totals.
+     */
     fun status(): BackupStatus = BackupStatus(
         lastRun = prefs.getLong("last_run", 0),
         lastUploaded = prefs.getInt("last_uploaded", 0),
@@ -72,6 +88,14 @@ class BackupSettingsStore(context: Context) {
         pending = prefs.getInt("pending", -1),
     )
 
+    /**
+     * recordRun() - remembers how a run went
+     * @param uploaded photos saved in this run
+     * @param error the last error, or null
+     * @param pending photos still to save
+     *
+     * Return: nothing.
+     */
     fun recordRun(uploaded: Int, error: String?, pending: Int) {
         prefs.edit()
             .putInt("pending", pending)
@@ -82,6 +106,11 @@ class BackupSettingsStore(context: Context) {
             .apply()
     }
 
+    /**
+     * clear() - forgets the settings and the outcomes
+     *
+     * Return: nothing.
+     */
     fun clear() {
         prefs.edit().clear().apply()
     }

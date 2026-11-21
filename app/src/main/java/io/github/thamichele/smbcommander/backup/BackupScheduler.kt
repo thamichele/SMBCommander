@@ -22,7 +22,15 @@ object BackupScheduler {
     const val PERIODIC = "photo-backup"
     const val NOW = "photo-backup-now"
 
-    /** Hourly check while enabled, only on Wi-Fi (the NAS is reachable at home only) and with enough battery. */
+    /**
+     * apply() - schedules or cancels the backup as the settings say
+     * @param context any context of the app
+     * @param settings the backup settings
+     *
+     * Hourly check while enabled, only on Wi-Fi (the NAS is reachable at home only) and with enough battery.
+     *
+     * Return: nothing.
+     */
     fun apply(context: Context, settings: BackupSettings) {
         val wm = WorkManager.getInstance(context)
         if (!settings.enabled || settings.destination == null) {
@@ -39,7 +47,16 @@ object BackupScheduler {
         )
     }
 
-    /** A run right away (still waiting for Wi-Fi), e.g. from the "Esegui ora" button or when the app opens. */
+    /**
+     * runNow() - a run right away, still waiting for Wi-Fi
+     * @param context any context of the app
+     * @param settings the backup settings
+     * @param respectCharging also wait for the charger when the settings ask for it
+     *
+     * From the "Esegui ora" button or when the app opens.
+     *
+     * Return: nothing.
+     */
     fun runNow(context: Context, settings: BackupSettings, respectCharging: Boolean = false) {
         if (!settings.enabled || settings.destination == null) return
         WorkManager.getInstance(context).enqueueUniqueWork(

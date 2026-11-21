@@ -304,6 +304,12 @@ class NasDocumentsProvider : DocumentsProvider() {
             Document.COLUMN_LAST_MODIFIED, Document.COLUMN_FLAGS, Document.COLUMN_SUMMARY,
         )
 
+        /**
+         * mimeOf() - the MIME type of a file, from its name
+         * @param name the file name
+         *
+         * Return: the type Android knows for its extension, or "application/octet-stream".
+         */
         fun mimeOf(name: String): String =
             MimeTypeMap.getSingleton().getMimeTypeFromExtension(RemotePath.extension(name).lowercase()) ?: "application/octet-stream"
 

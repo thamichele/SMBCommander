@@ -166,7 +166,14 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
         /** The periodic run and a manual "run now" must never upload the same photo twice. */
         private val runLock = Mutex()
 
-        /** The NAS folder of [item]: the destination, or its "2026/10" subfolder. */
+        /**
+         * folderFor() - the NAS folder of a photo
+         * @param base the backup folder
+         * @param item the photo
+         * @param byMonth sort into "2026/10" subfolders
+         *
+         * Return: the backup folder, or its subfolder for the month the photo was taken.
+         */
         fun folderFor(base: String, item: MediaItem, byMonth: Boolean): String {
             if (!byMonth) return base
             val cal = Calendar.getInstance().apply { timeInMillis = item.taken }
@@ -174,11 +181,26 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             return RemotePath.child(RemotePath.child(base, cal.get(Calendar.YEAR).toString()), month)
         }
 
-        /** The file name on the NAS; the name comes from whichever app saved the photo, so it must not pick a folder. */
+        /**
+         * remoteName() - the file name of a photo on the NAS
+         * @param item the photo
+         *
+         * The name comes from whichever app saved the photo, so it must not pick a folder.
+         *
+         * Return: a plain file name.
+         */
         fun remoteName(item: MediaItem): String =
             item.name.takeIf { RemotePath.isValidName(it) } ?: "media_${item.key.substringAfter(':').substringBefore(':')}"
 
-        /** The bytes as uploaded: with the GPS position, which Android strips from the plain URI. */
+        /**
+         * openOriginal() - the bytes of a photo as uploaded
+         * @param context to reach MediaStore
+         * @param item the photo
+         *
+         * With the GPS position, which Android strips from the plain URI.
+         *
+         * Return: a stream the caller closes.
+         */
         fun openOriginal(context: Context, item: MediaItem): InputStream {
             val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_MEDIA_LOCATION) ==
@@ -189,6 +211,11 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             return context.contentResolver.openInputStream(uri) ?: throw IllegalStateException("file non leggibile")
         }
 
+        /**
+         * mediaPermissions() - the permissions to read the photos of the phone on this Android version
+         *
+         * Return: the permission names.
+         */
         fun mediaPermissions(): Array<String> = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
                 Manifest.permission.READ_MEDIA_IMAGES,
@@ -203,6 +230,12 @@ class PhotoBackupWorker(context: Context, params: WorkerParameters) : CoroutineW
             else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
+        /**
+         * hasMediaPermission() - tells whether the app may read the photos of the phone
+         * @param context any context
+         *
+         * Return: true when every permission of [mediaPermissions] is granted.
+         */
         fun hasMediaPermission(context: Context): Boolean {
             val needed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Manifest.permission.READ_MEDIA_IMAGES

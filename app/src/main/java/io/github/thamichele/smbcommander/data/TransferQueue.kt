@@ -118,6 +118,13 @@ class TransferQueue(
         }
     }
 
+    /**
+     * enqueue() - adds a job at the end of the queue
+     * @param label what the card shows, such as "Copia «Foto» in Archivio"
+     * @param work the job itself
+     *
+     * Return: the id of the job.
+     */
     fun enqueue(label: String, work: TransferWork): Long {
         val id = ids.incrementAndGet()
         works[id] = work
@@ -126,7 +133,11 @@ class TransferQueue(
         return id
     }
 
-    /** Stops the job running now, keeping what it did, and holds the queue until [resume]. */
+    /**
+     * pause() - stops the job running now, keeping what it did, and holds the queue until [resume]
+     *
+     * Return: nothing.
+     */
     fun pause() {
         if (_jobs.value.none { it.busy }) return
         _paused.value = true
@@ -135,20 +146,34 @@ class TransferQueue(
         running?.cancel()
     }
 
+    /**
+     * resume() - lets the queue run again after [pause]
+     *
+     * Return: nothing.
+     */
     fun resume() {
         _paused.value = false
         _jobs.update { list -> list.map { if (it.state == TransferJob.State.Paused) it.copy(state = TransferJob.State.Waiting) else it } }
         wake.trySend(Unit)
     }
 
-    /** Runs a failed job again: it carries on from where it stopped. */
+    /**
+     * retry() - runs a failed job again: it carries on from where it stopped
+     * @param id the job
+     *
+     * Return: nothing.
+     */
     fun retry(id: Long) {
         if (works[id] == null) return
         set(id) { if (it.state == TransferJob.State.Failed) it.copy(state = TransferJob.State.Waiting, error = null) else it }
         wake.trySend(Unit)
     }
 
-    /** Stops the job running now and drops the waiting and paused ones. */
+    /**
+     * cancelAll() - stops the job running now and drops the waiting and paused ones
+     *
+     * Return: nothing.
+     */
     fun cancelAll() {
         pauseRequested = false
         _paused.value = false
@@ -158,7 +183,11 @@ class TransferQueue(
         running?.cancel()
     }
 
-    /** Forgets the jobs that ended, so the queue card can close. */
+    /**
+     * clearFinished() - forgets the jobs that ended, so the queue card can close
+     *
+     * Return: nothing.
+     */
     fun clearFinished() {
         _jobs.value.filter { it.finished }.forEach { works.remove(it.id) }
         _jobs.update { list -> list.filterNot { it.finished } }

@@ -31,6 +31,12 @@ object BackupNotifier {
     private const val CHANNEL = "backup_status"
     private const val NOTIFICATION_ID = 43
 
+    /**
+     * update() - shows, changes or hides the backup status notification
+     * @param context any context of the app
+     *
+     * Return: nothing.
+     */
     fun update(context: Context) {
         val app = context.applicationContext as SmbCommanderApp
         val settings = app.backupSettings.load()

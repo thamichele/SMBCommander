@@ -36,12 +36,25 @@ class BackupWidget : AppWidgetProvider() {
     }
 
     companion object {
-        /** Redraws every widget, e.g. after a backup run changed the status line. */
+        /**
+         * updateAll() - redraws every widget, e.g. after a backup run changed the status line
+         * @param context any context of the app
+         *
+         * Return: nothing.
+         */
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             manager.getAppWidgetIds(ComponentName(context, BackupWidget::class.java)).forEach { update(context, manager, it) }
         }
 
+        /**
+         * update() - draws one widget
+         * @param context any context of the app
+         * @param manager the widget manager
+         * @param id the widget
+         *
+         * Return: nothing.
+         */
         fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val app = context.applicationContext as SmbCommanderApp
             val folder: SavedFolder? = WidgetPrefs(context).folder(id)
@@ -105,11 +118,24 @@ class BackupNowReceiver : BroadcastReceiver() {
 class WidgetPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("widgets", Context.MODE_PRIVATE)
 
+    /**
+     * folder() - the folder a widget opens
+     * @param id the widget
+     *
+     * Return: the folder, or null when none was chosen.
+     */
     fun folder(id: Int): SavedFolder? {
         val share = prefs.getString("$id.share", null) ?: return null
         return SavedFolder(share, prefs.getString("$id.path", "").orEmpty())
     }
 
+    /**
+     * set() - chooses the folder a widget opens
+     * @param id the widget
+     * @param folder the folder, or null to forget it
+     *
+     * Return: nothing.
+     */
     fun set(id: Int, folder: SavedFolder?) {
         val edit = prefs.edit()
         if (folder == null) edit.remove("$id.share").remove("$id.path")
@@ -117,5 +143,11 @@ class WidgetPrefs(context: Context) {
         edit.apply()
     }
 
+    /**
+     * remove() - forgets a widget that was taken away
+     * @param id the widget
+     *
+     * Return: nothing.
+     */
     fun remove(id: Int) = set(id, null)
 }

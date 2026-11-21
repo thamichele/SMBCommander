@@ -122,7 +122,12 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
 
 /** A folder of the NAS whose content just changed. */
 data class NasChange(val share: String, val path: String) {
-    /** True when the change is inside [folder], or moved or replaced a folder that contains it. */
+    /**
+     * affects() - tells whether a change on the NAS concerns a folder
+     * @param folder the folder shown
+     *
+     * Return: true when the change is inside [folder], or moved or replaced a folder that contains it.
+     */
     fun affects(folder: SavedFolder): Boolean {
         if (share != folder.share) return false
         val changed = RemotePath.normalize(path)

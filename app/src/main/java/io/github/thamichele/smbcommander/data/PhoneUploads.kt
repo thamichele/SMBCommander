@@ -33,19 +33,45 @@ object PhoneUploads {
 
     data class FolderItem(val tree: Uri, val documentId: String, override val name: String) : Item
 
+    /**
+     * file() - a document picked with the system picker
+     * @param resolver to ask its name and size
+     * @param uri the document
+     *
+     * Return: the item to send.
+     */
     fun file(resolver: ContentResolver, uri: Uri): FileItem {
         val (name, size) = resolver.describe(uri)
         return FileItem(uri, name, size)
     }
 
-    /** The folder picked with the system folder picker. */
+    /**
+     * folder() - a folder picked with the system folder picker
+     * @param resolver to ask its name
+     * @param tree the folder
+     *
+     * Return: the item to send.
+     */
     fun folder(resolver: ContentResolver, tree: Uri): FolderItem {
         val id = DocumentsContract.getTreeDocumentId(tree)
         val name = resolver.describe(DocumentsContract.buildDocumentUriUsingTree(tree, id)).first
         return FolderItem(tree, id, name)
     }
 
-    /** Sends [items] into the folder [dir] of [share]; returns a note on the files left alone, if any. */
+    /**
+     * send() - sends files and folders of the phone into a folder of the NAS
+     * @param resolver to read them
+     * @param fs the file system
+     * @param items what to send
+     * @param share the share of the destination
+     * @param dir the destination folder
+     * @param conflict what to do with names already taken
+     * @param log what an earlier run of the same job already did
+     * @param progress the file being sent and its bytes
+     *
+     * Context: blocking; stops with InterruptedException when the thread is interrupted.
+     * Return: a note on the files left alone, or null when none.
+     */
     fun send(
         resolver: ContentResolver,
         fs: NasFileSystem,

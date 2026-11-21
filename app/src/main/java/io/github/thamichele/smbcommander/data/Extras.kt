@@ -1,7 +1,8 @@
 /*
  * Extras.kt - the optional functions, all off until turned on in the settings
  *
- * App lock, Wake-on-LAN, finding the NAS again, videos that start by themselves, and the like. Kept on the phone only.
+ * App lock, Wake-on-LAN, finding the NAS again, videos that start by themselves, and the like. Kept on the phone
+ * only.
  *
  * Version: 1.28.3
  */
@@ -23,7 +24,8 @@ import java.net.InetAddress
 
 /**
  * The optional functions, all off until turned on in the settings: app lock, Wake-on-LAN, finding the NAS again
- * when its address changes, videos that start by themselves. Kept on the phone only, outside the backups like the rest of the settings.
+ * when its address changes, videos that start by themselves. Kept on the phone only, outside the backups like the
+ * rest of the settings.
  */
 class Extras(context: Context) {
 
@@ -39,7 +41,12 @@ class Extras(context: Context) {
         get() = prefs.getLong("last_unlocked", 0)
         set(value) = prefs.edit().putLong("last_unlocked", value).apply()
 
-    /** True when other apps may use the NAS through the file picker: always without the lock, else shortly after. */
+    /**
+     * pickerOpen() - tells whether other apps may use the NAS through the file picker
+     * @param now the time to check against
+     *
+     * Return: true always without the lock, else only shortly after the app was unlocked.
+     */
     fun pickerOpen(now: Long = System.currentTimeMillis()) = !lock || now - lastUnlocked < PICKER_WINDOW_MS
 
     var wakeOnLan: Boolean
@@ -66,6 +73,11 @@ class Extras(context: Context) {
         get() = prefs.getBoolean(KEY_SHOW_NAS_ON_FOLDERS, false)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_NAS_ON_FOLDERS, value).apply()
 
+    /**
+     * clear() - turns every optional function off again
+     *
+     * Return: nothing.
+     */
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
@@ -78,7 +90,12 @@ class Extras(context: Context) {
 /** Wakes a NAS that sleeps or is off, with the "magic packet" most NAS (QNAP included) understand. */
 object WakeOnLan {
 
-    /** Bytes of [mac], or null when it is not six hex pairs. */
+    /**
+     * parseMac() - reads a MAC address typed by the user
+     * @param mac six hex pairs, with or without separators
+     *
+     * Return: its six bytes, or null when it is not a MAC address.
+     */
     fun parseMac(mac: String): ByteArray? {
         val parts = mac.trim().split(':', '-', '.').filter { it.isNotEmpty() }
         val hex = if (parts.size == 1) parts[0].chunked(2) else parts
@@ -86,7 +103,16 @@ object WakeOnLan {
         return runCatching { ByteArray(6) { hex[it].toInt(16).toByte() } }.getOrNull()
     }
 
-    /** Sends the packet to the whole network and to the NAS's own subnet, on the two usual ports. */
+    /**
+     * wake() - sends the Wake-on-LAN packet to the NAS
+     * @param mac the MAC address of the NAS
+     * @param host its address, to reach its own subnet too; null when unknown
+     *
+     * Sent to the whole network and to the NAS's own subnet, on the two usual ports.
+     *
+     * Context: suspends on Dispatchers.IO.
+     * Return: nothing.
+     */
     suspend fun wake(mac: String, host: String?) = withContext(Dispatchers.IO) {
         val bytes = parseMac(mac) ?: throw NasException("Indirizzo MAC non valido: scrivilo come 00:11:22:33:44:55")
         val packet = ByteArray(6 + 16 * 6)
@@ -122,6 +148,14 @@ object NasFinder {
 
     private val TYPES = listOf("_smb._tcp.", "_qdiscover._tcp.", "_afpovertcp._tcp.")
 
+    /**
+     * discover() - looks for NAS on the local network
+     * @param context for the network service discovery of Android
+     * @param seconds how long to listen
+     *
+     * Context: suspends while listening.
+     * Return: the NAS found, each once.
+     */
     @Suppress("DEPRECATION")
     suspend fun discover(context: Context, seconds: Int = 5): List<FoundNas> {
         val nsd = context.getSystemService(NsdManager::class.java) ?: return emptyList()

@@ -1,7 +1,8 @@
 /*
  * MainActivity.kt - the single activity of the app: the screens, the app lock and the links opened from outside
  *
- * Hosts AppRoot, covers it while the optional app lock waits for the owner, and turns the intents of the widget and of
+ * Hosts AppRoot, covers it while the optional app lock waits for the owner, and turns the intents of the widget and
+ * of
  * other apps into screens. Keeps no data of its own: everything lives in AppViewModel and SmbCommanderApp.
  *
  * Version: 1.28.3
@@ -125,10 +126,30 @@ class MainActivity : FragmentActivity() {
         private fun base(context: Context) = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+        /**
+         * open() - the intent that opens the app as it was
+         * @param context any context
+         *
+         * Return: the intent.
+         */
         fun open(context: Context): Intent = base(context)
 
+        /**
+         * openBackup() - the intent that opens the app on the backup settings
+         * @param context any context
+         *
+         * Return: the intent.
+         */
         fun openBackup(context: Context): Intent = base(context).putExtra(EXTRA_OPEN, OPEN_BACKUP)
 
+        /**
+         * openFolder() - the intent that opens the app on a folder of the NAS
+         * @param context any context
+         * @param share the share
+         * @param path the folder
+         *
+         * Return: the intent.
+         */
         fun openFolder(context: Context, share: String, path: String): Intent = base(context)
             .putExtra(EXTRA_OPEN, OPEN_FOLDER)
             .putExtra(EXTRA_SHARE, share)
