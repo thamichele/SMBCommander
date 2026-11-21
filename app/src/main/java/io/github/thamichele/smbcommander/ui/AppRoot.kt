@@ -214,6 +214,10 @@ fun AppRoot(vm: AppViewModel, onExit: () -> Unit) {
     }
 }
 
+/** Pill behind the icon of the active section, sized for the same 28dp icons as the buttons. */
+private val NAV_PILL_WIDTH = 64.dp
+private val NAV_PILL_HEIGHT = 36.dp
+
 /** The sections of the app, as in the kit's bottom bar: pill behind the active icon. */
 @Composable
 private fun BottomNav(screen: Screen, vm: AppViewModel) {
@@ -243,12 +247,12 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, onClick: 
     ) {
         Box(
             Modifier
-                .width(56.dp)
-                .height(30.dp)
+                .width(NAV_PILL_WIDTH)
+                .height(NAV_PILL_HEIGHT)
                 .background(pill, ArancioShape.pill),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = if (active) c.text else c.textSecondary, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = if (active) c.text else c.textSecondary, modifier = Modifier.size(TOOL_ICON_SIZE))
         }
         Text(
             label,

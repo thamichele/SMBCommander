@@ -162,11 +162,10 @@ fun SetupScreen(vm: AppViewModel) {
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
                 trailingIcon = {
-                    ToolButton(
+                    FieldButton(
                         if (showPassword) AppIcons.EyeOff else AppIcons.Eye,
                         if (showPassword) "Nascondi password" else "Mostra password",
                         { showPassword = !showPassword },
-                        tint = Arancio.colors.textSecondary,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),

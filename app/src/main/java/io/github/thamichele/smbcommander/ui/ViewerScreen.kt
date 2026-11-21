@@ -2,12 +2,13 @@
 /*
  * ViewerScreen.kt - photos and videos of a folder, one per page
  *
- * Holds the pages, the top bar with the actions on the file, and the rules
+ * Holds the pages, the top bar with the name, the bar at the bottom with the
+ * actions on the file (the same big buttons as the bar of a video), and the rules
  * for what happens to the video when the page turns. A photo is drawn here;
  * a video page is drawn by VideoPage.kt with the player of VideoPlayerState.kt.
  * It reads the NAS only through the image loader and the player.
  *
- * Version: 1.21.0
+ * Version: 1.22.0
  */
 package io.github.thamichele.smbcommander.ui
 
@@ -15,6 +16,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -22,6 +24,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,6 +63,7 @@ import io.github.thamichele.smbcommander.data.ImageSize
 import io.github.thamichele.smbcommander.data.Thumb
 import io.github.thamichele.smbcommander.data.isVideo
 import io.github.thamichele.smbcommander.ui.theme.Arancio
+import io.github.thamichele.smbcommander.ui.theme.ArancioTheme
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlinx.coroutines.delay
 
@@ -147,23 +151,43 @@ fun ViewerScreen(vm: AppViewModel, screen: Screen.Viewer) {
             onInteraction = { interactions++ },
         )
     }
+    val areBarsShown = isChromeVisible && !isFullscreen
+    // a video keeps its own bar above the actions, never under them
+    val videoRoom by animateDpAsState(if (areBarsShown) BUTTON_BAR_HEIGHT else 0.dp, label = "video-room")
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(state = pager, beyondViewportPageCount = 1, modifier = Modifier.fillMaxSize()) { page ->
             val entry = screen.images[page]
             if (!entry.isVideo) {
                 ZoomableImage(entry, onTap = { isChromeVisible = !isChromeVisible })
             } else {
-                VideoPage(entry, video, pageState, pageActions)
+                Box(Modifier.fillMaxSize().padding(bottom = videoRoom)) {
+                    VideoPage(entry, video, pageState, pageActions)
+                }
             }
         }
-        AnimatedVisibility(visible = isChromeVisible && !isFullscreen, enter = fadeIn(), exit = fadeOut()) {
-            ViewerTopBar(
-                vm = vm,
-                entry = current,
-                position = "${pager.currentPage + 1} di ${screen.images.size}",
-                onBack = { if (video.entry != null) video.stop() else vm.back() },
-            )
-        }
+        ViewerBars(
+            vm = vm,
+            entry = current,
+            position = "${pager.currentPage + 1} di ${screen.images.size}",
+            isShown = areBarsShown,
+            onBack = { if (video.entry != null) video.stop() else vm.back() },
+        )
+    }
+}
+
+/* Private: the name on top and the actions at the bottom, shown and hidden together. entry is the page on screen. */
+@Composable
+private fun BoxScope.ViewerBars(vm: AppViewModel, entry: RemoteEntry, position: String, isShown: Boolean, onBack: () -> Unit) {
+    AnimatedVisibility(visible = isShown, enter = fadeIn(), exit = fadeOut()) {
+        ViewerTopBar(entry, position, onBack)
+    }
+    AnimatedVisibility(
+        visible = isShown,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter),
+    ) {
+        ViewerActionBar(vm, entry)
     }
 }
 
@@ -206,9 +230,28 @@ private fun ChromeTimeout(isCounting: Boolean, interactions: Int, onTimeout: () 
     }
 }
 
-/* Private: name of the file, its place in the list and the actions on it. entry is the page on screen. */
+/* Private: back, name of the file and its place in the list; the actions are in ViewerActionBar(). */
 @Composable
-private fun ViewerTopBar(vm: AppViewModel, entry: RemoteEntry, position: String, onBack: () -> Unit) {
+private fun ViewerTopBar(entry: RemoteEntry, position: String, onBack: () -> Unit) {
+    val white = Color.White
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = TOP_BAR_SCRIM_ALPHA))
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ToolButton(AppIcons.Back, "Indietro", onBack, tint = white)
+        ViewerTitle(entry, position, Modifier.weight(1f).padding(start = 4.dp))
+    }
+}
+
+/*
+ * Private: the actions on the file on screen, in a bar at the bottom like the
+ * one under a video, with the same big buttons. entry is the page on screen.
+ */
+@Composable
+private fun ViewerActionBar(vm: AppViewModel, entry: RemoteEntry) {
     var pendingDownload by remember { mutableStateOf<RemoteEntry?>(null) }
     var confirmDelete by remember { mutableStateOf<RemoteEntry?>(null) }
     var info by remember { mutableStateOf<RemoteEntry?>(null) }
@@ -217,29 +260,18 @@ private fun ViewerTopBar(vm: AppViewModel, entry: RemoteEntry, position: String,
         pendingDownload = null
         if (uri != null && wanted != null) vm.downloadTo(wanted, uri)
     }
-    val white = Color.White
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black.copy(alpha = TOP_BAR_SCRIM_ALPHA))
-            .padding(horizontal = 4.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ToolButton(AppIcons.Back, "Indietro", onBack, tint = white)
-        ViewerTitle(entry, position, Modifier.weight(1f).padding(start = 4.dp))
-        ToolButton(AppIcons.Info, "Informazioni", { info = entry }, tint = white)
-        ToolButton(AppIcons.Share, "Condividi", { vm.share(listOf(entry)) }, tint = white)
-        ToolButton(AppIcons.OpenWith, "Apri l'originale", { vm.open(entry, edit = false) }, tint = white)
-        ToolButton(
-            AppIcons.Download,
-            "Salva l'originale sul telefono",
-            {
+    // dark tokens whatever the theme, like the bar of the video: the viewer is always black
+    ArancioTheme(dark = true) {
+        ButtonBar {
+            ToolButton(AppIcons.Info, "Informazioni", { info = entry })
+            ToolButton(AppIcons.Share, "Condividi", { vm.share(listOf(entry)) })
+            ToolButton(AppIcons.OpenWith, "Apri l'originale", { vm.open(entry, edit = false) })
+            ToolButton(AppIcons.Download, "Salva l'originale sul telefono", {
                 pendingDownload = entry
                 saveFile.launch(entry.name)
-            },
-            tint = white,
-        )
-        ToolButton(AppIcons.Delete, "Elimina dal NAS", { confirmDelete = entry }, tint = white)
+            })
+            ToolButton(AppIcons.Delete, "Elimina dal NAS", { confirmDelete = entry }, tint = Arancio.colors.danger)
+        }
     }
     info?.let { InfoDialog(it, onDismiss = { info = null }) }
     confirmDelete?.let { doomed ->

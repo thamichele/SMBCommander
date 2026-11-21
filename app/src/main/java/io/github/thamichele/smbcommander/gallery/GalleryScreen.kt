@@ -174,10 +174,11 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             }
             if (state.folder != null && albumTitle == null) GalleryTabs(albumsOpen = false, vm)
         } else {
-            // a short title: four buttons leave little room next to it
+            // only the number as title: four big buttons leave little room next to it
+            val chosen = if (selected.size == 1) "selezionata" else "selezionate"
             PageHeader(
-                context = albumTitle ?: "Galleria",
-                title = if (selected.size == 1) "1 selezionata" else "${selected.size} selezionate",
+                context = "${albumTitle ?: "Galleria"} · $chosen",
+                title = "${selected.size}",
                 navigation = { ToolButton(AppIcons.Close, "Annulla selezione", { selected = emptySet() }) },
             ) {
                 if (selected.size == 1) {

@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,10 +75,23 @@ fun MiniPlayer(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (open) PlayerButton(AppIcons.Previous, "Brano precedente", onPrevious)
-            PlayerButton(if (music.playing) AppIcons.Pause else AppIcons.Play, if (music.playing) "Pausa" else "Riproduci", onToggle)
-            PlayerButton(AppIcons.Next, "Brano successivo", onNext)
-            if (open) PlayerButton(AppIcons.Close, "Chiudi il lettore", onClose)
+            if (!open) {
+                PlayButton(music.playing, onToggle)
+                ToolButton(AppIcons.Next, "Brano successivo", onNext)
+            }
+        }
+        // opened: the four buttons get a row of their own, so the title keeps its room
+        if (open) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ToolButton(AppIcons.Previous, "Brano precedente", onPrevious)
+                PlayButton(music.playing, onToggle)
+                ToolButton(AppIcons.Next, "Brano successivo", onNext)
+                ToolButton(AppIcons.Close, "Chiudi il lettore", onClose)
+            }
         }
         val fraction = if (music.duration > 0) (music.position.toFloat() / music.duration).coerceIn(0f, 1f) else 0f
         if (open && music.duration > 0) {
@@ -106,8 +118,14 @@ fun MiniPlayer(
     }
 }
 
+/* Private: play or pause, filled with the main colour like the Play of the video player. */
 @Composable
-private fun PlayerButton(icon: ImageVector, label: String, onClick: () -> Unit) = ToolButton(icon, label, onClick)
+private fun PlayButton(isPlaying: Boolean, onToggle: () -> Unit) = ToolButton(
+    if (isPlaying) AppIcons.Pause else AppIcons.Play,
+    if (isPlaying) "Pausa" else "Riproduci",
+    onToggle,
+    isPrimary = true,
+)
 
 private fun time(ms: Long): String {
     val s = ms / 1000

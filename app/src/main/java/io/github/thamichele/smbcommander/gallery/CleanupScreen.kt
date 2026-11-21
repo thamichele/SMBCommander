@@ -82,6 +82,7 @@ import io.github.thamichele.smbcommander.ui.PageHeader
 import io.github.thamichele.smbcommander.ui.Pill
 import io.github.thamichele.smbcommander.ui.PrimaryButton
 import io.github.thamichele.smbcommander.ui.SecondaryButton
+import io.github.thamichele.smbcommander.ui.TOOL_BUTTON_SIZE
 import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
@@ -416,7 +417,7 @@ private fun Done(
 @Composable
 private fun RoundButton(icon: ImageVector, label: String, tint: Color, enabled: Boolean, big: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
-    val size = if (big) 64.dp else 48.dp
+    val size = if (big) 64.dp else TOOL_BUTTON_SIZE
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
