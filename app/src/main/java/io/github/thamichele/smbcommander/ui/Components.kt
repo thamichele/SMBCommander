@@ -82,6 +82,10 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.coerceIn
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -274,13 +278,48 @@ fun CollapsibleBox(state: CollapsingHeaderState, content: @Composable () -> Unit
     }
 }
 
-/** Size of every button with an icon only, the same as the bar of the video player: easy to hit at arm's length. */
+/** Largest size of a button with an icon only, the same as the bar of the video player: easy to hit at arm's length. */
 val TOOL_BUTTON_SIZE = 56.dp
-val TOOL_ICON_SIZE = 28.dp
 
-/** Room around the buttons of a [ButtonBar], and the bar's whole height. */
+/** Smallest size of the same button, on a narrow or much zoomed screen: still comfortable to touch. */
+private val TOOL_BUTTON_MIN_SIZE = 40.dp
+
+/** The icon takes half of its button. */
+private const val TOOL_ICON_SHARE = 0.5f
+
+/** How many buttons of the largest size a screen must hold side by side before they stop shrinking. */
+private const val TOOL_BUTTONS_PER_WIDTH = 7.2f
+
+/** Room around the buttons of a [ButtonBar]. */
 private val BUTTON_BAR_PADDING = 4.dp
-val BUTTON_BAR_HEIGHT = TOOL_BUTTON_SIZE + BUTTON_BAR_PADDING * 2
+
+/**
+ * toolButtonSize() - the size of the icon buttons on this screen
+ *
+ * The buttons follow the room there is: a narrow screen, a large display zoom
+ * (which makes the screen narrower in dp) or a large text size (which makes the
+ * titles next to them wider) all make them smaller, between 40 and 56 dp.
+ *
+ * Context: composable.
+ * Return: the side of a [ToolButton].
+ */
+@Composable
+@ReadOnlyComposable
+fun toolButtonSize(): Dp {
+    val width = LocalConfiguration.current.screenWidthDp
+    val textScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    return (width / TOOL_BUTTONS_PER_WIDTH / textScale).dp.coerceIn(TOOL_BUTTON_MIN_SIZE, TOOL_BUTTON_SIZE)
+}
+
+/**
+ * buttonBarHeight() - the whole height of a [ButtonBar] on this screen
+ *
+ * Context: composable.
+ * Return: the height, buttons and room around them.
+ */
+@Composable
+@ReadOnlyComposable
+fun buttonBarHeight(): Dp = toolButtonSize() + BUTTON_BAR_PADDING * 2
 
 /** Inside a text field the button fits the field's own slot instead. */
 private val FIELD_BUTTON_SIZE = 48.dp
@@ -303,7 +342,8 @@ private const val TOOL_PRESS_MS = 80
  * @param isPrimary dark tinted background with a border in the main colour: the one action that matters most (Play)
  * @param caption a short word under the icon ("10 s"), or null
  *
- * 56dp with a 28dp icon and corners of 4 everywhere: in the headers, in the
+ * [toolButtonSize] wide (56dp where there is room, down to 40dp on a narrow or
+ * zoomed screen) with an icon of half that and corners of 4 everywhere: in the headers, in the
  * viewer of photos and videos, in the rows of the lists and in the mini player.
  * The background stays dark; only the icon takes the main colour.
  *
@@ -331,9 +371,12 @@ fun ToolButton(
         isPressed -> colors.surfaceRaised
         else -> Color.Transparent
     }
+    val size = toolButtonSize()
     Column(
         Modifier
-            .size(TOOL_BUTTON_SIZE)
+            // a caption may need more height than a shrunk button has: the button grows, never cuts it
+            .width(size)
+            .heightIn(min = size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(background)
@@ -354,7 +397,7 @@ fun ToolButton(
             icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(TOOL_ICON_SIZE),
+            modifier = Modifier.size(size * TOOL_ICON_SHARE),
         )
         if (caption != null) {
             Text(caption, style = ArancioType.data, color = colors.textSecondary, maxLines = 1)
