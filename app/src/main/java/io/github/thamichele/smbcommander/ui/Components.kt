@@ -487,7 +487,7 @@ fun ButtonBar(modifier: Modifier = Modifier, content: @Composable RowScope.() ->
     )
 }
 
-/** Filter chip of the kit: filled with the text colour when selected, outlined panel otherwise, corners of 14. */
+/** Filter chip of the kit: filled with the text colour when selected, outlined panel otherwise, corners of 10. */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors

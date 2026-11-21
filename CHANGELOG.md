@@ -3,6 +3,9 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.1 — 2026-11-21
+- Modificato: angoli di pulsanti e campi a 10 invece di 14, come nell'ultima versione della Specifica «Arancio Mix»
+
 ## 1.28.0 — 2026-11-21
 - Modificato: aspetto secondo la nuova Specifica «Arancio Mix». Il tema chiaro è quello normale e quello scuro si
   accende da Impostazioni › Aspetto › Tema, senza più seguire il telefono. Angoli più morbidi (pulsanti e campi 14,

@@ -214,9 +214,9 @@ object ArancioType {
     val figure = style(22, FontWeight.Medium, 28, -0.01, JetBrainsMono)
 }
 
-/** Corners of the kit: buttons and fields 14, menus and toasts 8, cards, panels and dialogs 20, tags as pills. */
+/** Corners of the kit: buttons and fields 10, menus and toasts 8, cards, panels and dialogs 20, tags as pills. */
 object ArancioShape {
-    val control = RoundedCornerShape(14.dp)
+    val control = RoundedCornerShape(10.dp)
     val menu = RoundedCornerShape(8.dp)
     val card = RoundedCornerShape(20.dp)
     val pill = RoundedCornerShape(999.dp)
