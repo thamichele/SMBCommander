@@ -4,7 +4,7 @@
  * Copies new photos (and videos, if chosen) from the chosen albums to the NAS, each one verified by SHA-256; skips
  * those deleted on purpose from the gallery. Never deletes anything on the phone.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

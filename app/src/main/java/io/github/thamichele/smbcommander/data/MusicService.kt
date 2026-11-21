@@ -3,7 +3,7 @@
  *
  * Streams like the videos: nothing is saved on the phone. Notification and lock screen controls come from Media3.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

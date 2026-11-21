@@ -3,7 +3,7 @@
  *
  * Reads and writes SharedPreferences only; scheduling the backup is BackupScheduler's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

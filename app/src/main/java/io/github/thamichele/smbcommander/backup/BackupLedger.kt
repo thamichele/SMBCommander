@@ -5,7 +5,7 @@
  * stopped. It does not know the NAS: a reinstall starts it empty and BackupPlacement recognises what is already
  * there.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

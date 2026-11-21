@@ -5,7 +5,7 @@
  * by the file browser, the gallery and the cleanup's bin, which before kept three copies of the same code. What to
  * delete, and how, stays with each of them.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

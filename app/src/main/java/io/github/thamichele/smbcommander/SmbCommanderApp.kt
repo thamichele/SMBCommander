@@ -4,7 +4,7 @@
  * Owns the NAS repository, the caches of thumbnails and video frames, the stores of settings and the transfer queue,
  * and the image loader Coil uses. Screens and workers reach them from here; nothing in it draws or talks to the user.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander
 

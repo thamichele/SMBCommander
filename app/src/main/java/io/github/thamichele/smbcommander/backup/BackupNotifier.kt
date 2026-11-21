@@ -4,7 +4,7 @@
  * Says how many photos are still to save, how the last run went and the error, if any; quiet when there is nothing to
  * say. Running the backup is PhotoBackupWorker's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

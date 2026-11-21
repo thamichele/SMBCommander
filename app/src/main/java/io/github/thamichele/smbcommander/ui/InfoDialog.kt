@@ -3,7 +3,7 @@
  *
  * Its path, ready to copy, size and dates, and what photos and videos say about themselves (read by MediaDetails).
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

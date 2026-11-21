@@ -3,7 +3,7 @@
  *
  * Off unless turned on in the settings; asks Android's biometric prompt and covers the app until it answers.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

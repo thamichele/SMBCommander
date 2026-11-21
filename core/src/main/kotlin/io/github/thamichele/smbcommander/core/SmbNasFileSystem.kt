@@ -5,7 +5,7 @@
  * Every message is signed and, with SMB 3, encrypted; the NAS must show the identity it was paired with before the
  * login is sent (see ServerIdentity). Routing between several NAS is MultiNasFileSystem's job, not this file's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

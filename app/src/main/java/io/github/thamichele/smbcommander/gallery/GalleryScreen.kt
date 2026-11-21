@@ -3,7 +3,7 @@
  *
  * Draws the months, the selection and the swipe to delete; the content and every action are GalleryViewModel's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

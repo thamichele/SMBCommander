@@ -5,7 +5,7 @@
  * reinstalled app recognises the photos already sent and a different photo with a taken name is never skipped.
  * Reading the photo on the phone is the caller's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

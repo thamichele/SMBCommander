@@ -3,7 +3,7 @@
  *
  * Shown by Android when the widget is placed.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.widget
 

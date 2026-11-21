@@ -3,7 +3,7 @@
  *
  * 24x24, stroke 1.75, round caps and joins, as in the Arancio UI kit.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

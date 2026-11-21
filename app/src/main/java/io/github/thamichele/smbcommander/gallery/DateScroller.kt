@@ -3,7 +3,7 @@
  *
  * Works on any lazy list or grid through ScrollPosition; it only moves the list, it changes nothing.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

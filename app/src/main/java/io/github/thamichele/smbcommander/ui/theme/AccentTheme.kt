@@ -3,7 +3,7 @@
  *
  * Only the main colour changes: greys, layout and status colours stay the same.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui.theme
 

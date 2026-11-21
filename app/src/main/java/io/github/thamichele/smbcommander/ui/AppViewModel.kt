@@ -4,7 +4,7 @@
  * Navigation, folders, file operations, editing, transfers, the bin and the settings. The NAS work itself is done by
  * the core module and by the stores of SmbCommanderApp.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

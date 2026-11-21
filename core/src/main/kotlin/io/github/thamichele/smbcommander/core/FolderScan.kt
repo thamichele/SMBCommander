@@ -4,7 +4,7 @@
  * Breadth first, so nearer folders come first and a stop leaves a useful partial result. A subfolder that cannot be
  * read is skipped; only the folder asked for must be readable. Showing the results is the app's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

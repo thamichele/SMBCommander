@@ -3,7 +3,7 @@
  *
  * Shows the file being deleted, the bar and the outcome of each file; the deletion itself is the view model's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

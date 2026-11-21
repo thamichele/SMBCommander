@@ -4,7 +4,7 @@
  * Chooses which screen to draw from AppViewModel.screen and shows the transfer card, the mini player and the prompts.
  * It holds no state of its own beyond the animations.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

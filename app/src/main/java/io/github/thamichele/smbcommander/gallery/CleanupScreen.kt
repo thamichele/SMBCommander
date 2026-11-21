@@ -3,7 +3,7 @@
  *
  * Draws the cards, the tabs and the duplicates side by side; every decision is CleanupViewModel's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

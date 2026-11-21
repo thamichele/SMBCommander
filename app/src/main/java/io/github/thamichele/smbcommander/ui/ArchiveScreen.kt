@@ -4,7 +4,7 @@
  * A file opens after extracting just that file to the phone; Estrai puts files into the NAS folder of the archive.
  * Reading the archive is ZipArchive's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

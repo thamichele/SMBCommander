@@ -4,7 +4,7 @@
  * Looks at the thumbnails with Android's face detector and PhotoKinds; nothing leaves the phone. Each photo is looked
  * at once and the outcome is kept in a small file.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

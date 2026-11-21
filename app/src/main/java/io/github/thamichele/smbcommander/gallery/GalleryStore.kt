@@ -4,7 +4,7 @@
  * One small JSON file per backup folder: opening the gallery shows it at once, and a refresh only corrects what
  * changed on the NAS since. A file that cannot be read counts as empty; walking the NAS is GalleryViewModel's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

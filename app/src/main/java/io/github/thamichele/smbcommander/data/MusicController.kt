@@ -3,7 +3,7 @@
  *
  * Starts and controls MusicService and turns its state into what the mini player shows.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

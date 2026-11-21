@@ -5,7 +5,7 @@
  * changed; GalleryDates works out the month of a photo from its folders, its name or its date. Walking the NAS and
  * storing the index on the phone are the app's job: this file does no I/O.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

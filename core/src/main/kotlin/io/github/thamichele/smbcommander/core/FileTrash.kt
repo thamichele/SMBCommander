@@ -5,7 +5,7 @@
  * exactly there; slots older than KEEP_DAYS days are deleted for good. It never mixes with the cleanup's bin of the
  * gallery (CleanupTrash). Asking the user and showing the bin are the app's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

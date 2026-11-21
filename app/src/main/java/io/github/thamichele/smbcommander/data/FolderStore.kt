@@ -3,7 +3,7 @@
  *
  * The start screen shows only these: nothing of the NAS appears on its own. No NAS access.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

@@ -3,7 +3,7 @@
  *
  * Every screen reads its colours and shapes from here, never from literal values.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui.theme
 

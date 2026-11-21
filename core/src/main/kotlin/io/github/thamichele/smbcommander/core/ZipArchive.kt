@@ -5,7 +5,7 @@
  * deflated entries, ZIP64 included; encrypted ones and other methods are refused with a clear message. Names that
  * would climb out of the archive ("../") are dropped. Creating archives is not supported.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

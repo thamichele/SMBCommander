@@ -3,7 +3,7 @@
  *
  * Opens the folder in the app or starts the backup; it reads the status, it does not run the backup itself.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.widget
 

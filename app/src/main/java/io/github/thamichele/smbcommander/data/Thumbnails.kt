@@ -5,7 +5,7 @@
  * every later view loads it from the phone. Video frames, song covers and the first page of a PDF become pictures the
  * same way. The originals stay on the NAS and are never changed. Animated video previews are VideoFrames' job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

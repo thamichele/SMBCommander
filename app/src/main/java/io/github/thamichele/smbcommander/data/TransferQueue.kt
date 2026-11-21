@@ -4,7 +4,7 @@
  * Runs the jobs in order, with pause, resume and cancel, and carries a job on after a dropped connection. The copying
  * itself is Transfers' and PhoneUploads' job; keeping the app alive is TransferService's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

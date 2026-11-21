@@ -4,7 +4,7 @@
  * They live only in the app's private cache and are deleted soon after, also by a cleanup that runs a few minutes
  * later.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

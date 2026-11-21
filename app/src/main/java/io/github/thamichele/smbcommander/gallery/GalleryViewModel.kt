@@ -4,7 +4,7 @@
  * Shows at once what the phone knows, then walks the backup folder for what changed; deletes, moves to albums and
  * shares. Only the backup folder of the main NAS is shown.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

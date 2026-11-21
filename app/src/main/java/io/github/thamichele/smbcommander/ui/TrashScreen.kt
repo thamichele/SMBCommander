@@ -3,7 +3,7 @@
  *
  * Each element goes back where it was or goes for good; the bin itself is FileTrash's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

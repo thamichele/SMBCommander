@@ -3,7 +3,7 @@
  *
  * Reads only what the providing app reports and accepts only plain file names. No NAS access.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

@@ -4,7 +4,7 @@
  * Saves the settings, reschedules the backup and checks which phone photos are verified on the NAS before offering to
  * delete them from the phone. The deletion itself is asked to Android, which shows its own confirmation.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

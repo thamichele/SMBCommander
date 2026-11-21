@@ -3,7 +3,7 @@
  *
  * Draws the form and the NAS found on the network; connecting is AppViewModel's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

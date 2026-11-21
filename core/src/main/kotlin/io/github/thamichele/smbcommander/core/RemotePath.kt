@@ -4,7 +4,7 @@
  * Every path of the app goes through here: forward slashes, no leading or trailing slash, never "..". Also the names
  * the app makes (numbered copies, temporary upload names) and the check of a name typed by the user. No I/O.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

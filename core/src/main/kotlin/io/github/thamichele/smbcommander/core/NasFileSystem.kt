@@ -9,7 +9,7 @@
  * The extension functions at the end are the steps many features repeat (create a chain of folders, read or write a
  * small list kept on the NAS, drop a folder left empty), written once here.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

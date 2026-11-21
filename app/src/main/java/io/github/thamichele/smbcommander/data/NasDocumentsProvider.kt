@@ -4,7 +4,7 @@
  * Shows only the folders added in the app. Reading streams from the NAS; writing goes through a private copy uploaded
  * with the usual checks when the other app closes it.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

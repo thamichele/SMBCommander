@@ -4,7 +4,7 @@
  * Lets the mosaic of the gallery lay photos out by their real shape without asking the NAS anything. Making the
  * thumbnails is ThumbnailCache's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

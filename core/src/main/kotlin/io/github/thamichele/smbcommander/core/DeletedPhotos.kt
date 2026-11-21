@@ -4,7 +4,7 @@
  * A hidden file inside the backup folder, one "size sha256" per line. It lives on the NAS, not on the phone, so the
  * backup still skips those photos after the app is reinstalled. Hashing the photos is the caller's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

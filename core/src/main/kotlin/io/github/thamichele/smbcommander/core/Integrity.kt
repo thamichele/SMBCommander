@@ -4,7 +4,7 @@
  * Hashes streams on their way (HashingInputStream), whole NAS files, and downloads with a check of their length.
  * Deciding what to do when a check fails is the caller's job: this file only measures and reports.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

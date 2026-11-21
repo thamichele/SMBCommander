@@ -4,7 +4,7 @@
  * In the direction the gallery is scrolling, so they are ready before they come into view. It only loads: nothing is
  * drawn here.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

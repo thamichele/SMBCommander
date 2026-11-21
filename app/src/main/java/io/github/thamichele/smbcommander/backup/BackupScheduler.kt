@@ -4,7 +4,7 @@
  * Turns the backup settings into WorkManager work, and cancels it when the backup is off. The backup itself is
  * PhotoBackupWorker.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

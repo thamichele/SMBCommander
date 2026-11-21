@@ -3,6 +3,17 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.6 — 2026-11-21
+- Pulizia del codice, senza cambiamenti in quello che vedi: ogni file ha la sua intestazione e ogni funzione
+  pubblica la sua descrizione, nessuna funzione supera le 80 righe (le schermate più lunghe sono divise in parti),
+  numeri senza nome sostituiti da costanti
+- Tolto il codice doppio: un solo modo di creare cartelle, leggere e scrivere i file di testo sul NAS, scegliere il
+  nome di una copia, calcolare le chiavi della cache e mostrare l'avanzamento delle eliminazioni (File, Galleria e
+  cestino della Pulizia rapida); campo password e riquadro delle foto condivisi tra le schermate
+- Più leggera: la Galleria riordina i mesi solo quando le foto cambiano, non a ogni cambio di scheda o categoria; le
+  miniature calcolano la loro chiave una volta sola; i download leggono la dimensione del file senza una richiesta in
+  più al NAS
+
 ## 1.28.5 — 2026-11-21
 - Sicurezza: con lo sblocco con impronta attivo, anche «Salva sul NAS» (Condividi da un'altra app) e la scelta della
   cartella del widget chiedono lo sblocco, se l'app non è stata sbloccata da poco; e l'elenco delle app recenti non

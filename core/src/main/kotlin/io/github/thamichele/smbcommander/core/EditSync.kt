@@ -5,7 +5,7 @@
  * from it. Holds the safe upload every feature uses (temporary name, read back, SHA-256 check, one rename) and the
  * choice of free names ("name (2).ext"). Downloading the file and asking the user are the app's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

@@ -3,7 +3,7 @@
  *
  * Each file goes through EditSync.safeUpload with its SHA-256 check; a job run again skips what is already sent.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

@@ -4,7 +4,7 @@
  * Built on the Arancio Mix tokens of the theme, so every screen looks the same. Stateless where possible: the screens
  * hold the state.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

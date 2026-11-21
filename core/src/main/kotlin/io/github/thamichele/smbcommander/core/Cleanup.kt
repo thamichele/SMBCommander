@@ -5,7 +5,7 @@
  * folders and sizes alone, keeps on the NAS the list of those the user chose to keep, and moves the discarded ones
  * into a hidden bin inside the backup folder. Looking at the pixels is PhotoKinds' job; the screens are the app's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

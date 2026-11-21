@@ -5,7 +5,7 @@
  * of
  * other apps into screens. Keeps no data of its own: everything lives in AppViewModel and SmbCommanderApp.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander
 

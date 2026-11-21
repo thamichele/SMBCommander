@@ -6,7 +6,7 @@
  * a transfer cut short carry on where it stopped. Running the jobs in the background, with notifications and pause,
  * is the app's TransferQueue, not this file.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

@@ -4,7 +4,7 @@
  * Picks the photos to look at, keeps the choices on the NAS, moves the discarded ones to the bin and empties it. The
  * rules are CleanupRules' and PhotoKinds'.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.gallery
 

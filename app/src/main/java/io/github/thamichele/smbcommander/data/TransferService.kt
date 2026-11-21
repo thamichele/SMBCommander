@@ -4,7 +4,7 @@
  * A notification with progress, Pausa and Annulla; holds CPU and Wi-Fi only while a transfer runs and stops itself
  * when the queue is empty or paused.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

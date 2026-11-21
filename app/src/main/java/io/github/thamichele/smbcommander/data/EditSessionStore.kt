@@ -4,7 +4,7 @@
  * The editor may outlive the app's process: the sessions are kept in SharedPreferences so the changes are still
  * brought back. Deciding what to upload is EditSync's job.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 

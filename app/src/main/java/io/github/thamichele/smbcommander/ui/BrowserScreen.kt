@@ -3,7 +3,7 @@
  *
  * Draws the list or grid, the selection, the search and the dialogs; every action is AppViewModel's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.ui
 

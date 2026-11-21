@@ -4,7 +4,7 @@
  * Draws the switch, the destination folder, the free space, the albums and "Libera spazio"; the state and every action
  * are BackupViewModel's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.backup
 

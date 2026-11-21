@@ -5,7 +5,7 @@
  * on any phone. Counting faces is the caller's job (Android's own face detector), and so is decoding the thumbnail.
  * Raise VERSION whenever a threshold changes, so the photos already sorted are looked at again.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.core
 

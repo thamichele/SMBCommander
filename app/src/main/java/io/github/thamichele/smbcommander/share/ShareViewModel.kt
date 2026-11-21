@@ -3,7 +3,7 @@
  *
  * Browses the user's folders and uploads the shared files with the usual checks.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.share
 

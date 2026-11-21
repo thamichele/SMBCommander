@@ -3,7 +3,7 @@
  *
  * Draws only; the folder list and the upload are ShareViewModel's.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.share
 

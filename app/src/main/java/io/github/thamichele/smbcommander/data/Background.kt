@@ -4,7 +4,7 @@
  * Lowering the priority of the current thread while a thumbnail, a video frame or a photo sort is being made, and
  * the short hash that names files in the caches. No state, no I/O.
  *
- * Version: 1.28.3
+ * Version: 1.28.6
  */
 package io.github.thamichele.smbcommander.data
 
