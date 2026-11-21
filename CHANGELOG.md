@@ -3,6 +3,18 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.24.0 — 2026-11-21
+- Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
+  rimpicciolisce: il titolo sparisce e resta solo la riga dei pulsanti; torna intera appena scorri in su
+- Modificato: intestazioni più basse. Il titolo va a capo accanto ai pulsanti invece di spingerli su una riga sotto;
+  succede solo se nemmeno la parola più lunga del titolo ci sta
+- Modificato: nella Galleria i quattro pulsanti (categorie, visualizzazione, Pulizia rapida, Aggiorna) restano
+  separati e stanno sulla riga delle schede Foto/Album; il titolo ha una riga sua e non viene mai tagliato
+- Modificato: barra di navigazione in basso più bassa, con icone più piccole e meno spazio vuoto; la pastiglia
+  colorata scivola da una sezione all'altra allungandosi, e l'icona attiva si ingrandisce appena
+- Corretto: anche il pulsante delle categorie della Galleria ha l'icona nel colore principale; con una categoria
+  scelta il pulsante ha il fondo colorato scuro, per vedere subito che c'è un filtro
+
 ## 1.23.0 — 2026-11-21
 - Corretto: nessuna scritta viene più tagliata con i puntini, con qualsiasi dimensione dello schermo, zoom o grandezza
   del carattere. I titoli in alto vanno a capo; se titolo e pulsanti non stanno sulla stessa riga, i pulsanti passano

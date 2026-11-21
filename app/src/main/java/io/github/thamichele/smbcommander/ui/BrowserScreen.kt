@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -123,8 +124,11 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
     )
     val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
 
+    // while the files scroll down the header of the folder shrinks to its buttons, and grows back scrolling up
+    val collapse = rememberCollapsingHeaderState()
+    LaunchedEffect(screen.path, selected.isEmpty(), state.searching) { collapse.show() }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
             if (selected.isNotEmpty()) {
                 PageHeader(
                     // only the number as title: four big buttons leave little room next to it
@@ -164,6 +168,7 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     context = context,
                     title = title,
                     navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+                    collapse = collapse,
                 ) {
                     ToolButton(AppIcons.Search, "Cerca in questa cartella", { vm.setSearching(true) })
                     ToolButton(if (state.grid) AppIcons.List else AppIcons.Grid, if (state.grid) "Vista elenco" else "Vista griglia", vm::toggleGrid)
