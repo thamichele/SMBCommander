@@ -61,10 +61,7 @@ class NasDocumentsProvider : DocumentsProvider() {
     private fun allowed(share: String, path: String): Boolean {
         val p = RemotePath.normalize(path)
         if (p.split('/').any { it == ".." } || FileTrash.isInside(p)) return false
-        return app.folders.all().any { folder ->
-            val dir = RemotePath.normalize(folder.path)
-            folder.share.equals(share, ignoreCase = true) && (dir.isEmpty() || p == dir || p.startsWith("$dir/"))
-        }
+        return app.folders.all().any { it.contains(share, p) }
     }
 
     private fun isSavedFolder(share: String, path: String) =
@@ -115,8 +112,9 @@ class NasDocumentsProvider : DocumentsProvider() {
                     add(Document.COLUMN_DOCUMENT_ID, idOf(folder.share, folder.path))
                     add(Document.COLUMN_DISPLAY_NAME, folder.name)
                     add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR)
-                    add(Document.COLUMN_FLAGS, Document.FLAG_DIR_SUPPORTS_CREATE)
-                    add(Document.COLUMN_SUMMARY, folder.fullPath)
+                    // the folder of a whole other NAS only lists its shares: nothing can be created in it
+                    add(Document.COLUMN_FLAGS, if (folder.isNas) 0 else Document.FLAG_DIR_SUPPORTS_CREATE)
+                    add(Document.COLUMN_SUMMARY, folder.shown)
                 }
             }
             return cursor
@@ -137,7 +135,8 @@ class NasDocumentsProvider : DocumentsProvider() {
     }
 
     private fun addRow(cursor: MatrixCursor, e: RemoteEntry) {
-        val saved = e.isDirectory && isSavedFolder(e.share, e.path)
+        // a whole share (listed inside the folder of another NAS) is never deleted or renamed from here
+        val saved = e.isDirectory && (e.path.isEmpty() || isSavedFolder(e.share, e.path))
         val flags = if (e.isDirectory) {
             Document.FLAG_DIR_SUPPORTS_CREATE or if (saved) 0 else (Document.FLAG_SUPPORTS_DELETE or Document.FLAG_SUPPORTS_RENAME)
         } else {
@@ -248,7 +247,7 @@ class NasDocumentsProvider : DocumentsProvider() {
     /** Deleting from another app moves to the bin of the share, as deleting in the app does. */
     override fun deleteDocument(documentId: String) {
         val (share, path) = parse(documentId)
-        if (isSavedFolder(share, path)) throw FileNotFoundException("cartella salvata")
+        if (path.isEmpty() || isSavedFolder(share, path)) throw FileNotFoundException("cartella salvata")
         net { fs ->
             val entry = fs.stat(share, path) ?: throw FileNotFoundException(documentId)
             FileTrash.discard(fs, entry)
@@ -258,7 +257,7 @@ class NasDocumentsProvider : DocumentsProvider() {
 
     override fun renameDocument(documentId: String, displayName: String): String {
         val (share, path) = parse(documentId)
-        if (isSavedFolder(share, path)) throw FileNotFoundException("cartella salvata")
+        if (path.isEmpty() || isSavedFolder(share, path)) throw FileNotFoundException("cartella salvata")
         val name = displayName.trim()
         if (!RemotePath.isValidName(name)) throw FileNotFoundException("nome non valido")
         val target = RemotePath.child(RemotePath.parent(path), name)

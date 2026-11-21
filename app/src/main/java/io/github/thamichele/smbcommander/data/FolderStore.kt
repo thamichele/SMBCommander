@@ -1,14 +1,52 @@
 package io.github.thamichele.smbcommander.data
 
 import android.content.Context
+import io.github.thamichele.smbcommander.core.NasShares
 import io.github.thamichele.smbcommander.core.RemotePath
 import org.json.JSONArray
 import org.json.JSONObject
 
 /** A folder the user chose to manage from the app: a whole share or a folder inside one. */
 data class SavedFolder(val share: String, val path: String) {
-    val name: String get() = if (path.isEmpty()) share else RemotePath.name(path)
+    val name: String get() = if (path.isEmpty()) NasShares.shownName(share) else RemotePath.name(path)
+    /** Unique key of the folder; for another NAS it holds its internal "nas<id>:" name, see [shown]. */
     val fullPath: String get() = if (path.isEmpty()) share else "$share/$path"
+    /** Where the folder is, as the user reads it: "Multimedia / Foto", or "Ufficio / Musica" on another NAS. */
+    val shown: String get() = NasShares.display(share, path)
+    /** The folder that stands for a whole other NAS and lists its shares. */
+    val isNas: Boolean get() = NasShares.isRoot(share)
+    /** On the main NAS, the only one the backup and the gallery use. */
+    val onMainNas: Boolean get() = NasShares.nasOf(share) == null
+
+    /**
+     * contains() - true when [path] of [share] is this folder or inside it
+     * @param share any share name used by the app
+     * @param path a path inside that share
+     *
+     * The folder of a whole other NAS contains every share of that NAS.
+     *
+     * Return: true when the place is inside this folder.
+     */
+    fun contains(share: String, path: String): Boolean {
+        if (isNas) return NasShares.nasOf(share) == NasShares.nasOf(this.share)
+        if (!this.share.equals(share, ignoreCase = true)) return false
+        val dir = RemotePath.normalize(this.path)
+        val p = RemotePath.normalize(path)
+        return dir.isEmpty() || p == dir || p.startsWith("$dir/")
+    }
+
+    /**
+     * parent() - the folder one level up
+     *
+     * Above a share of another NAS there is the folder of that NAS, which lists its shares.
+     *
+     * Return: the folder above, or null at the top of a share of the main NAS or of a whole NAS.
+     */
+    fun parent(): SavedFolder? = when {
+        path.isNotEmpty() -> SavedFolder(share, RemotePath.parent(path))
+        isNas -> null
+        else -> NasShares.nasOf(share)?.let { SavedFolder(NasShares.root(it), "") }
+    }
 
     companion object {
         /** "Multimedia/Foto", "\\Backup$\vecchi" or "smb://nas/Backup$" -> share + path; null when empty. */
@@ -43,6 +81,9 @@ class FolderStore(context: Context) {
         all().filterNot { it.fullPath.equals(folder.fullPath, ignoreCase = true) }.plus(folder).also(::save)
 
     fun remove(folder: SavedFolder): List<SavedFolder> = all().filterNot { it == folder }.also(::save)
+
+    /** Drops every folder of the other NAS [nasId], its own folder included: that NAS was removed. */
+    fun removeNas(nasId: String): List<SavedFolder> = all().filterNot { NasShares.nasOf(it.share) == nasId }.also(::save)
 
     fun clear() {
         prefs.edit().clear().apply()

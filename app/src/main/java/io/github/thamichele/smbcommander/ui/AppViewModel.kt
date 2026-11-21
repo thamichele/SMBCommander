@@ -18,13 +18,16 @@ import io.github.thamichele.smbcommander.core.ZipArchive
 import io.github.thamichele.smbcommander.core.ZipExtract
 import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.Integrity
+import io.github.thamichele.smbcommander.core.MultiNasFileSystem
 import io.github.thamichele.smbcommander.core.NasServer
+import io.github.thamichele.smbcommander.core.NasShares
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.core.SyncDecision
 import io.github.thamichele.smbcommander.core.TransferLog
 import io.github.thamichele.smbcommander.core.Transfers
 import io.github.thamichele.smbcommander.core.unlessGone
+import io.github.thamichele.smbcommander.data.OtherNas
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.data.FoundNas
 import io.github.thamichele.smbcommander.data.MusicState
@@ -166,6 +169,8 @@ data class ExtrasState(
     val followNas: Boolean,
     /** A video opened from a list starts by itself. */
     val autoplayVideo: Boolean,
+    /** Each folder of File shows in small the NAS it is on and the user. */
+    val showNasOnFolders: Boolean = false,
 )
 
 /** The folder of a ZIP archive being shown. */
@@ -304,6 +309,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         listingCache.clear()
         _folders.value = emptyList()
+        _otherNas.value = emptyList()
         _screen.value = Screen.Setup
     }
 
@@ -355,13 +361,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- the user's folders ------------------------------------------------------------------------------------------
 
-    fun loadSuggestions() = viewModelScope.launch {
-        _suggestions.value = runCatching { repo.io { it.listShares() } }.getOrDefault(emptyList())
+    /** [nasId] null: the shares of the main NAS; otherwise those of that other NAS, by their own names. */
+    fun loadSuggestions(nasId: String? = null) = viewModelScope.launch {
+        _suggestions.value = emptyList()
+        _suggestions.value = runCatching {
+            repo.io { fs ->
+                if (nasId == null) fs.listShares()
+                else fs.list(NasShares.root(nasId), "").map { NasShares.localOf(it.share) }
+            }
+        }.getOrDefault(emptyList())
     }
 
-    /** Adds a folder typed by the user ("Multimedia/Foto", "Backup$") after checking it really opens. */
-    fun addFolder(input: String, onAdded: () -> Unit) {
-        val folder = SavedFolder.parse(input) ?: return message("Scrivi il nome di una cartella condivisa")
+    /**
+     * Adds a folder typed by the user ("Multimedia/Foto", "Backup$") after checking it really opens. [nasId] is the
+     * other NAS it is on, null for the main one.
+     */
+    fun addFolder(input: String, nasId: String? = null, onAdded: () -> Unit) {
+        val typed = SavedFolder.parse(input) ?: return message("Scrivi il nome di una cartella condivisa")
+        val folder = if (nasId == null) typed else typed.copy(share = NasShares.of(nasId, typed.share))
         viewModelScope.launch {
             _checkingFolder.value = true
             try {
@@ -369,12 +386,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     fs.list(folder.share, folder.path)
                     if (folder.path.isEmpty()) null else fs.stat(folder.share, folder.path)
                 }
-                if (entry != null && !entry.isDirectory) error("«${folder.fullPath}» è un file, non una cartella")
+                if (entry != null && !entry.isDirectory) error("«${folder.shown}» è un file, non una cartella")
                 _folders.value = app.folders.add(folder)
                 onAdded()
                 message("«${folder.name}» aggiunta alle tue cartelle")
             } catch (e: Exception) {
-                message("Non riesco ad aprire «${folder.fullPath}»: ${e.readable()}")
+                message("Non riesco ad aprire «${folder.shown}»: ${e.readable()}")
             } finally {
                 _checkingFolder.value = false
             }
@@ -384,6 +401,58 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun removeFolder(folder: SavedFolder) {
         _folders.value = app.folders.remove(folder)
         message("«${folder.name}» tolta dall'elenco (sul NAS non cambia nulla)")
+    }
+
+    // --- the other NAS ----------------------------------------------------------------------------------------------
+
+    private val _otherNas = MutableStateFlow(repo.otherNas())
+    /** The NAS added next to the main one; each shows as one more folder in File. */
+    val otherNas: StateFlow<List<OtherNas>> = _otherNas.asStateFlow()
+
+    private val _savingNas = MutableStateFlow(false)
+    val savingNas: StateFlow<Boolean> = _savingNas.asStateFlow()
+
+    /**
+     * saveOtherNas() - adds another NAS, or changes one, after really connecting to it
+     * @param id the NAS to change, or null for a new one
+     * @param name the name of its folder; the address is used when empty
+     * @param server address and credentials; an empty password keeps the saved one
+     * @param onSaved called once the NAS answered and was saved
+     *
+     * A new NAS gets its folder in File right away, at the bottom of the list.
+     *
+     * Return: nothing.
+     */
+    fun saveOtherNas(id: String?, name: String, server: NasServer, onSaved: () -> Unit) {
+        if (_savingNas.value) return
+        viewModelScope.launch {
+            _savingNas.value = true
+            try {
+                val nas = repo.saveOther(id, name.trim().ifEmpty { server.host }, server)
+                if (id == null) _folders.value = app.folders.add(SavedFolder(NasShares.root(nas.id), ""))
+                // a new name shows on the screens that collect this list
+                _otherNas.value = repo.otherNas()
+                listingCache.clear()
+                onSaved()
+                message(if (id == null) "«${nas.name}» aggiunto alle tue cartelle" else "«${nas.name}» salvato")
+            } catch (e: Exception) {
+                message("Non riesco a collegarmi: ${e.readable()}")
+            } finally {
+                _savingNas.value = false
+            }
+        }
+    }
+
+    /** Forgets another NAS and all its folders on this phone; nothing changes on the NAS itself. */
+    fun removeOtherNas(nas: OtherNas) {
+        repo.removeOther(nas.id)
+        _otherNas.value = repo.otherNas()
+        _folders.value = app.folders.removeNas(nas.id)
+        listingCache.clear()
+        _clipboard.update { clip -> clip?.takeIf { c -> c.entries.none { NasShares.nasOf(it.share) == nas.id } } }
+        val here = _screen.value
+        if (here is Screen.Browser && NasShares.nasOf(here.share) == nas.id) _screen.value = Screen.Shares
+        message("«${nas.name}» tolto da questo telefono (sul NAS non cambia nulla)")
     }
 
     /** Adds the folder being browsed to the start screen. */
@@ -403,9 +472,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openFromOutside(share: String, path: String) {
         if (!repo.isConfigured) return
         val dir = RemotePath.normalize(path)
-        val allowed = app.folders.all().any {
-            it.share.equals(share, ignoreCase = true) && (dir == RemotePath.normalize(it.path) || isInside(dir, it.path))
-        }
+        val allowed = app.folders.all().any { it.contains(share, dir) }
         if (allowed) navigate(share, dir)
     }
 
@@ -445,11 +512,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _selected.value = emptySet()
                 } else if (_browser.value.searching) {
                     setSearching(false)
-                } else if (s.path.isEmpty()) {
-                    listJob?.cancel()
-                    _screen.value = Screen.Shares
                 } else {
-                    navigate(s.share, RemotePath.parent(s.path))
+                    val up = SavedFolder(s.share, s.path).parent()
+                    if (up != null) {
+                        navigate(up.share, up.path)
+                    } else {
+                        listJob?.cancel()
+                        _screen.value = Screen.Shares
+                    }
                 }
                 return true
             }
@@ -535,7 +605,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         deepJob?.cancel()
         val s = _screen.value as? Screen.Browser ?: return
         val query = _browser.value.query.trim()
-        if (query.length < 2) {
+        // the folder of another NAS holds whole shares: searching all of them would walk entire disks
+        if (query.length < 2 || NasShares.isRoot(s.share)) {
             _browser.update { it.copy(deepResults = emptyList(), deepBusy = false) }
             return
         }
@@ -627,7 +698,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Puts the selection on the clipboard; it is pasted in whichever folder the user opens next. */
     fun cut(move: Boolean) {
         val entries = selectedEntries()
-        if (entries.isEmpty()) return
+        if (entries.isEmpty() || refusedAtNasRoot()) return
         _clipboard.value = Clipboard(entries, move)
         _selected.value = emptySet()
         message("Apri la cartella di destinazione e premi «Incolla qui»")
@@ -662,7 +733,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun paste() {
         val s = _screen.value as? Screen.Browser ?: return
         val clip = _clipboard.value ?: return
-        val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
+        if (refusedAtNasRoot()) return
+        val destination = if (s.path.isEmpty()) NasShares.shownName(s.share) else RemotePath.name(s.path)
         // what is already in this very folder is not a clash: a copy there is always a new copy, a move does nothing
         val here = { e: RemoteEntry -> e.share == s.share && RemotePath.parent(e.path) == RemotePath.normalize(s.path) }
         askIfTaken(clip.entries.filterNot(here).map { it.name }) { conflict ->
@@ -706,6 +778,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun deleteInBrowser(entries: List<RemoteEntry>) {
         val s = _screen.value as? Screen.Browser ?: return
+        if (refusedAtNasRoot()) return
         viewModelScope.launch {
             try {
                 // the bin itself, and shares as a whole, are deleted for good
@@ -906,7 +979,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun queueUpload(items: List<PhoneUploads.Item>, label: String) {
         val s = _screen.value as? Screen.Browser ?: return
-        val destination = if (s.path.isEmpty()) s.share else RemotePath.name(s.path)
+        if (refusedAtNasRoot()) return
+        val destination = if (s.path.isEmpty()) NasShares.shownName(s.share) else RemotePath.name(s.path)
         val resolver = getApplication<Application>().contentResolver
         askIfTaken(items.map { it.name }) { conflict ->
             val log = TransferLog()
@@ -948,7 +1022,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val extras: StateFlow<ExtrasState> = _extras.asStateFlow()
 
     private fun readExtras() = app.extras.let {
-        ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo)
+        ExtrasState(it.lock, it.wakeOnLan, it.wakeMac, it.followNas, it.autoplayVideo, it.showNasOnFolders)
     }
 
     fun setLock(on: Boolean) {
@@ -984,6 +1058,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setAutoplayVideo(on: Boolean) {
         app.extras.autoplayVideo = on
+        _extras.value = readExtras()
+    }
+
+    /**
+     * setShowNasOnFolders() - turns on or off the NAS and user shown under each folder of File
+     * @param on the new value of the setting
+     *
+     * Return: nothing.
+     */
+    fun setShowNasOnFolders(on: Boolean) {
+        app.extras.showNasOnFolders = on
         _extras.value = readExtras()
     }
 
@@ -1184,7 +1269,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val browsing = ((_screen.value as? Screen.Trash)?.returnTo as? Screen.Browser)?.share
-                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing)).distinctBy { it.lowercase() }
+                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing))
+                    .filterNot { NasShares.isRoot(it) }
+                    .distinctBy { it.lowercase() }
                 val items = repo.io { fs ->
                     shares.flatMap { share ->
                         runCatching { FileTrash.purge(fs, share) }
@@ -1435,8 +1522,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- helpers ----------------------------------------------------------------------------------------------------
 
+    /*
+     * The folder of another NAS only lists its shares: nothing can be created, pasted or deleted there. True, after
+     * telling the user, when the folder being browsed is one of those.
+     */
+    private fun refusedAtNasRoot(): Boolean {
+        val s = _screen.value as? Screen.Browser ?: return false
+        if (!NasShares.isRoot(s.share)) return false
+        message(MultiNasFileSystem.ROOT_READ_ONLY)
+        return true
+    }
+
     private fun folderOperation(done: String, block: suspend (share: String, dir: String) -> Unit) {
         val s = _screen.value as? Screen.Browser ?: return
+        if (refusedAtNasRoot()) return
         viewModelScope.launch {
             try {
                 block(s.share, s.path)

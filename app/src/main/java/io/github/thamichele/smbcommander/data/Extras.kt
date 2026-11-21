@@ -54,11 +54,17 @@ class Extras(context: Context) {
         get() = prefs.getBoolean(KEY_AUTOPLAY_VIDEO, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTOPLAY_VIDEO, value).apply()
 
+    /** Under each folder of File, in small: the NAS it is on and the user the app logs in with. */
+    var showNasOnFolders: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_NAS_ON_FOLDERS, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_NAS_ON_FOLDERS, value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
         const val PICKER_WINDOW_MS = 10 * 60_000L
         private const val KEY_AUTOPLAY_VIDEO = "autoplay_video"
+        private const val KEY_SHOW_NAS_ON_FOLDERS = "show_nas_on_folders"
     }
 }
 

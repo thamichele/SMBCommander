@@ -38,6 +38,7 @@ import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.core.DiskSpace
 import io.github.thamichele.smbcommander.core.FolderScan
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.NasShares
 import io.github.thamichele.smbcommander.core.RemotePath
 import io.github.thamichele.smbcommander.data.MediaDetails
 import io.github.thamichele.smbcommander.data.isImage
@@ -59,9 +60,15 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext as SmbCommanderApp
     val c = Arancio.colors
-    val host = remember { app.repository.host().orEmpty() }
-    val path = if (entry.path.isEmpty()) entry.share else "${entry.share}/${entry.path}"
-    val network = if (host.isEmpty()) null else "\\\\$host\\${entry.share}" + RemotePath.toSmb(entry.path).let { if (it.isEmpty()) "" else "\\$it" }
+    val host = remember(entry.share) { app.repository.hostOf(entry.share).orEmpty() }
+    val local = NasShares.localOf(entry.share)
+    // as it was before there were more NAS ("Multimedia/Foto/a.jpg"), with the name of another NAS in front
+    val inShare = if (entry.path.isEmpty()) local else "$local/${entry.path}"
+    val path = NasShares.label(entry.share)?.let { nas -> if (inShare.isEmpty()) nas else "$nas: $inShare" } ?: inShare
+    // the folder of a whole other NAS has no share: its network path is the NAS alone
+    val network = if (host.isEmpty()) null else "\\\\$host" + (if (local.isEmpty()) "" else "\\$local") +
+        RemotePath.toSmb(entry.path).let { if (it.isEmpty()) "" else "\\$it" }
+    val isNasRoot = NasShares.isRoot(entry.share)
 
     var details by remember(entry) { mutableStateOf<List<Pair<String, String>>?>(if (entry.isMedia) null else emptyList()) }
     LaunchedEffect(entry) {
@@ -70,14 +77,15 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
 
     // a folder: what it holds, all levels, counted while the dialog is open; the disk: how full it is
     var totals by remember(entry) { mutableStateOf<FolderScan.Totals?>(null) }
-    var counting by remember(entry) { mutableStateOf(entry.isDirectory) }
+    var counting by remember(entry) { mutableStateOf(entry.isDirectory && !isNasRoot) }
     var unreadable by remember(entry) { mutableStateOf(0) }
     var space by remember(entry) { mutableStateOf<DiskSpace?>(null) }
     LaunchedEffect(entry) {
         space = runCatching { app.repository.io { it.space(entry.share) } }.getOrNull()
     }
     LaunchedEffect(entry) {
-        if (!entry.isDirectory) return@LaunchedEffect
+        // the folder of another NAS holds its whole disks: counting them would take hours
+        if (!entry.isDirectory || isNasRoot) return@LaunchedEffect
         try {
             withContext(Dispatchers.IO) {
                 val fs = app.repository.fs()
@@ -116,7 +124,7 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
                             mono = true,
                         )
                     }
-                    if (entry.isDirectory) {
+                    if (entry.isDirectory && !isNasRoot) {
                         val t = totals
                         val value = when {
                             t == null && counting -> "Conto i file…"
@@ -136,7 +144,7 @@ fun InfoDialog(entry: RemoteEntry, onDismiss: () -> Unit) {
                     space?.let { d ->
                         val percent = if (d.total > 0) (d.used * 100 / d.total).toInt() else 0
                         InfoRow(
-                            "Spazio sul disco di ${entry.share}",
+                            "Spazio sul disco di ${NasShares.display(entry.share)}",
                             "${Formatter.formatFileSize(context, d.free)} liberi su ${Formatter.formatFileSize(context, d.total)} (pieno al $percent%)",
                         )
                         ArancioProgress(if (d.total > 0) d.used.toFloat() / d.total else 0f, color = if (percent >= 90) c.danger else c.accent)

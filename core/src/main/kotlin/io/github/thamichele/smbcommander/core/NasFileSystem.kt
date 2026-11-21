@@ -38,7 +38,7 @@ data class RemoteEntry(
     /** Last write time in epoch milliseconds. */
     val modified: Long,
 ) {
-    val name: String get() = RemotePath.name(path).ifEmpty { share }
+    val name: String get() = RemotePath.name(path).ifEmpty { NasShares.shownName(share) }
     val extension: String get() = if (isDirectory) "" else RemotePath.extension(name)
 }
 

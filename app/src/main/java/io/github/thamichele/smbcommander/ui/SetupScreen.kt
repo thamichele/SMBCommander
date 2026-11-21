@@ -211,6 +211,7 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
                 ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS")
                 }
+                OtherNasSection(vm)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -219,7 +220,7 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     if (confirmForget) {
         ConfirmDialog(
             title = "Dimenticare il NAS?",
-            text = "Indirizzo, utente, password e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
+            text = "Indirizzo, utente, password, gli altri NAS e l'elenco delle tue cartelle vengono cancellati da questo telefono. I file sul NAS non vengono toccati.",
             confirm = "Dimentica",
             danger = true,
             onDismiss = { confirmForget = false },
@@ -308,6 +309,13 @@ internal fun OptionalSection(vm: AppViewModel) {
             "quelli a cui arrivi scorrendo.",
         extras.autoplayVideo,
         vm::setAutoplayVideo,
+    )
+    OptionRow(
+        "Mostra NAS e utente sotto le cartelle",
+        "In File, sotto ogni cartella, in piccolo: l'indirizzo del NAS su cui si trova e l'utente con cui " +
+            "l'app vi accede. Utile con più NAS o più utenti.",
+        extras.showNasOnFolders,
+        vm::setShowNasOnFolders,
     )
 }
 
