@@ -185,7 +185,10 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                 CollapsibleBox(collapse) {
                     PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria")
                 }
-                if (state.folder != null) GalleryTabs(albumsOpen = false, vm, actions)
+                if (state.folder != null) {
+                    val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
+                    GalleryTabs(tab, vm, actions)
+                }
             }
         } else {
             // only the number as title: four big buttons leave little room next to it
@@ -256,7 +259,7 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
             )
             state.shown.isEmpty() -> EmptyState(
                 icon = state.kind?.icon ?: AppIcons.Categories,
-                title = "Nessuna foto in «${state.kind?.label}»",
+                title = if (state.kind == PhotoKind.Video) "Nessun video" else "Nessuna foto in «${state.kind?.label}»",
                 text = if (state.sorting > 0) "Le altre arrivano man mano che le divido." else null,
             ) {
                 SecondaryButton(onClick = { vm.setKind(null) }) { Text("Mostra tutte le foto") }

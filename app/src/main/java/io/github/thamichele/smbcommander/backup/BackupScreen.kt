@@ -64,13 +64,24 @@ import io.github.thamichele.smbcommander.ui.PageHeader
 import io.github.thamichele.smbcommander.ui.PrimaryButton
 import io.github.thamichele.smbcommander.ui.SecondaryButton
 import io.github.thamichele.smbcommander.ui.SectionLabel
+import io.github.thamichele.smbcommander.ui.ToolButton
 import io.github.thamichele.smbcommander.ui.arancioSwitchColors
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
+/**
+ * BackupScreen() - the "Backup" page of the settings: on or off, where to, free space, which albums
+ * @param onBack back to the list of the settings
+ * @param vm the settings and the state of the backup
+ *
+ * The switches of the backup are in [BackupOptions], on the "Opzioni" page.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
-fun BackupScreen(vm: BackupViewModel = viewModel()) {
+fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
     val context = LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
@@ -104,7 +115,13 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        item { PageHeader(context = "Dal telefono al NAS", title = "Backup foto") }
+        item {
+            PageHeader(
+                context = "Impostazioni",
+                title = "Backup foto",
+                navigation = { ToolButton(AppIcons.Back, "Indietro", onBack) },
+            )
+        }
 
         if (!permitted) {
             item {
@@ -206,23 +223,6 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
             }
         }
 
-        item { SectionTitle("Opzioni") }
-        item {
-            Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
-                Option("Includi i video", "I video occupano molto spazio sul NAS", settings.includeVideos, vm::setIncludeVideos)
-                Divider()
-                Option("Dividi per anno e mese", "Per esempio 2026/10", settings.byMonth, vm::setByMonth)
-                Divider()
-                Option("Solo quando è in carica", "Il backup aspetta che il telefono sia collegato", settings.chargingOnly, vm::setChargingOnly)
-                Divider()
-                Option(
-                    "Notifica dello stato",
-                    "Foto ancora da salvare, ultimo backup ed eventuali errori",
-                    settings.statusNotification,
-                    vm::setStatusNotification,
-                )
-            }
-        }
         item {
             Text(
                 "Il backup parte da solo ogni ora quando sei sul Wi-Fi di casa e il NAS risponde. " +
@@ -268,6 +268,32 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                 choosingFolder = false
                 vm.setDestination(it)
             },
+        )
+    }
+}
+
+/**
+ * BackupOptions() - the switches of the backup, for the "Opzioni" page of the settings
+ * @param vm the settings of the backup
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
+@Composable
+fun BackupOptions(vm: BackupViewModel = viewModel()) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp, margin = 0.dp) {
+        Option("Includi i video", "I video occupano molto spazio sul NAS", settings.includeVideos, vm::setIncludeVideos)
+        Divider()
+        Option("Dividi per anno e mese", "Per esempio 2026/10", settings.byMonth, vm::setByMonth)
+        Divider()
+        Option("Solo quando è in carica", "Il backup aspetta che il telefono sia collegato", settings.chargingOnly, vm::setChargingOnly)
+        Divider()
+        Option(
+            "Notifica dello stato",
+            "Foto ancora da salvare, ultimo backup ed eventuali errori",
+            settings.statusNotification,
+            vm::setStatusNotification,
         )
     }
 }
@@ -354,12 +380,13 @@ private fun Card(
     onClick: (() -> Unit)? = null,
     padding: PaddingValues = PaddingValues(16.dp),
     spacing: Dp = 12.dp,
+    margin: Dp = 16.dp,
     content: @Composable () -> Unit,
 ) {
     val c = Arancio.colors
     Column(
         Modifier
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = margin)
             .fillMaxWidth()
             .clip(ArancioShape.card)
             .background(c.surface)

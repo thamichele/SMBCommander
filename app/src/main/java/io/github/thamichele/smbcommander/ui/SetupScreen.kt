@@ -62,11 +62,18 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import io.github.thamichele.smbcommander.widget.BackupWidget
 
+/**
+ * SetupScreen() - address and user of the NAS: the first connection, and later the "NAS" page of the settings
+ * @param vm connects, forgets, searches the network
+ * @param onBack where the back button goes when a NAS is already saved
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
 @Composable
-fun SetupScreen(vm: AppViewModel) {
+fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
     val saved = remember { vm.savedServer() }
     val connecting by vm.connecting.collectAsStateWithLifecycle()
-    val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
     var host by rememberSaveable { mutableStateOf(saved?.host.orEmpty()) }
     var user by rememberSaveable { mutableStateOf(saved?.username.orEmpty()) }
     // the saved password is never shown again: left empty, the saved one is kept
@@ -82,15 +89,14 @@ fun SetupScreen(vm: AppViewModel) {
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
         if (saved != null) {
             PageHeader(
-                context = "SMBCommander",
-                title = "Impostazioni",
-                navigation = { ToolButton(AppIcons.Back, "Indietro", { vm.back() }) },
+                context = "Impostazioni",
+                title = "NAS",
+                navigation = { ToolButton(AppIcons.Back, "Indietro", onBack) },
             )
         } else {
             PageHeader(context = "SMBCommander", title = "Collega il NAS")
         }
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (saved != null) SectionLabel("NAS", Modifier.padding(top = 8.dp))
             Text(
                 "Indirizzo del NAS nella rete di casa e un utente che può accedere alle cartelle condivise. " +
                     "I dati restano cifrati su questo telefono.",
@@ -201,32 +207,7 @@ fun SetupScreen(vm: AppViewModel) {
                 ArancioButton(onClick = { confirmForget = true }, kind = ButtonKind.Danger, modifier = Modifier.fillMaxWidth()) {
                     Text("Scollega e dimentica questo NAS")
                 }
-                SectionLabel("Galleria", Modifier.padding(top = 20.dp))
-                Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
-                                    "dal NAS. Se è spento, prima chiede conferma.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Arancio.colors.textSecondary,
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = withoutConfirm,
-                            onCheckedChange = vm::setDeleteWithoutConfirm,
-                            colors = arancioSwitchColors(),
-                        )
-                    }
-                }
             }
-            if (saved != null) OptionalSection(vm)
-            AppearanceSection()
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -247,9 +228,38 @@ fun SetupScreen(vm: AppViewModel) {
     }
 }
 
+/** The one option of the Gallery: deleting with a swipe, with or without asking first. */
+@Composable
+internal fun GalleryOptions(vm: AppViewModel) {
+    val withoutConfirm by vm.deleteWithoutConfirm.collectAsStateWithLifecycle()
+    SectionLabel("Galleria", Modifier.padding(top = 20.dp))
+    Panel(padding = PaddingValues(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { vm.setDeleteWithoutConfirm(!withoutConfirm) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Elimina senza conferma", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Nell'elenco della Galleria, una foto fatta scorrere verso sinistra viene eliminata subito " +
+                        "dal NAS. Se è spento, prima chiede conferma.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Arancio.colors.textSecondary,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = withoutConfirm,
+                onCheckedChange = vm::setDeleteWithoutConfirm,
+                colors = arancioSwitchColors(),
+            )
+        }
+    }
+}
+
 /** Functions that not everyone wants: all off until turned on here. */
 @Composable
-private fun OptionalSection(vm: AppViewModel) {
+internal fun OptionalSection(vm: AppViewModel) {
     val extras by vm.extras.collectAsStateWithLifecycle()
     var mac by rememberSaveable { mutableStateOf(extras.wakeMac) }
     SectionLabel("Funzioni facoltative", Modifier.padding(top = 20.dp))
@@ -315,7 +325,7 @@ private fun OptionRow(title: String, detail: String, checked: Boolean, onChange:
 
 /** "Modalità colori" of the Arancio UI design: the main colour of the app, its widget and its launcher icon. */
 @Composable
-private fun AppearanceSection() {
+internal fun AppearanceSection() {
     val context = LocalContext.current
     val current by remember(context) { AccentStore.state(context) }.collectAsStateWithLifecycle()
     SectionLabel("Aspetto", Modifier.padding(top = 20.dp))
