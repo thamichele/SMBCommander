@@ -3,6 +3,10 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.2 — 2026-11-21
+- Corretto: la scritta sotto i pulsanti del lettore video («Adatta», «10 s») veniva tagliata dalla nuova forma tonda
+  dei pulsanti; ora il tondo fa solo da sfondo e la scritta resta sempre intera
+
 ## 1.28.1 — 2026-11-21
 - Modificato: angoli di pulsanti e campi a 10 invece di 14, come nell'ultima versione della Specifica «Arancio Mix»
 

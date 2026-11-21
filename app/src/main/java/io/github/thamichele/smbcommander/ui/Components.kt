@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -414,8 +415,8 @@ fun ToolButton(
             .width(size)
             .heightIn(min = size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape)
-            .background(background)
+            // the round ground is only painted, never used to cut: a caption wider than the circle stays whole
+            .background(background, shape)
             .then(if (isPrimary) Modifier.border(1.dp, colors.accentBorder, shape) else Modifier)
             .clickable(
                 interactionSource = interaction,
@@ -436,7 +437,14 @@ fun ToolButton(
             modifier = Modifier.size(size * TOOL_ICON_SHARE),
         )
         if (caption != null) {
-            Text(caption, style = ArancioType.data, color = colors.textSecondary, maxLines = 1)
+            Text(
+                caption,
+                style = ArancioType.data,
+                color = colors.textSecondary,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.wrapContentWidth(unbounded = true),
+            )
         }
     }
 }
