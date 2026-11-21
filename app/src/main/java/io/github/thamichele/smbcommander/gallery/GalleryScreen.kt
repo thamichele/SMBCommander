@@ -53,6 +53,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -74,6 +75,7 @@ import io.github.thamichele.smbcommander.ui.AppIcons
 import io.github.thamichele.smbcommander.ui.AppViewModel
 import io.github.thamichele.smbcommander.ui.ArancioMenu
 import io.github.thamichele.smbcommander.ui.ArancioMenuItem
+import io.github.thamichele.smbcommander.ui.CollapsingHeader
 import io.github.thamichele.smbcommander.ui.ConfirmDialog
 import io.github.thamichele.smbcommander.ui.EmptyState
 import io.github.thamichele.smbcommander.ui.ErrorCard
@@ -84,6 +86,7 @@ import io.github.thamichele.smbcommander.ui.SecondaryButton
 import io.github.thamichele.smbcommander.ui.SelectedMark
 import io.github.thamichele.smbcommander.ui.SkeletonGrid
 import io.github.thamichele.smbcommander.ui.ToolButton
+import io.github.thamichele.smbcommander.ui.rememberCollapsingHeaderState
 import io.github.thamichele.smbcommander.ui.VideoBadge
 import io.github.thamichele.smbcommander.ui.entryDetails
 import io.github.thamichele.smbcommander.ui.theme.Arancio
@@ -154,24 +157,31 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // the header slides away while the photos scroll down and comes back as soon as they scroll up
+    val collapse = rememberCollapsingHeaderState()
+    LaunchedEffect(selected.isEmpty(), albumTitle, state.kind) { collapse.show() }
+    Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
         if (selected.isEmpty()) {
-            PageHeader(
-                context = if (albumTitle != null) "Album" else state.folder?.fullPath ?: "Foto salvate sul NAS",
-                title = albumTitle ?: state.kind?.label ?: "Galleria",
-                navigation = if (albumTitle == null) null else {
-                    { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) }
-                },
-            ) {
-                if (state.folder != null) {
-                    KindMenu(state.kind, state.kindCounts, vm::setKind)
-                    ViewMenu(state.view, vm::setView)
-                    // the quick cleanup goes through the whole gallery, not one album
-                    if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
-                    ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
+            CollapsingHeader(collapse) {
+                PageHeader(
+                    context = if (albumTitle != null) "Album" else state.folder?.fullPath ?: "Foto salvate sul NAS",
+                    title = albumTitle ?: state.kind?.label ?: "Galleria",
+                    navigation = if (albumTitle == null) null else {
+                        { ToolButton(AppIcons.Back, "Torna agli album", { vm.leaveAlbums() }) }
+                    },
+                ) {
+                    if (state.folder != null) {
+                        KindMenu(state.kind, state.kindCounts, vm::setKind)
+                        ViewMenu(state.view, vm::setView)
+                        // the quick cleanup goes through the whole gallery, not one album
+                        GalleryMoreMenu(
+                            onCleanup = if (albumTitle == null) ({ appVm.openCleanup() }) else null,
+                            onRefresh = { vm.pull() },
+                        )
+                    }
                 }
+                if (state.folder != null && albumTitle == null) GalleryTabs(albumsOpen = false, vm)
             }
-            if (state.folder != null && albumTitle == null) GalleryTabs(albumsOpen = false, vm)
         } else {
             // only the number as title: four big buttons leave little room next to it
             val chosen = if (selected.size == 1) "selezionata" else "selezionate"
@@ -357,7 +367,8 @@ private fun KindMenu(current: PhotoKind?, counts: Map<PhotoKind, Int>, onPick: (
             current?.icon ?: AppIcons.Categories,
             "Categorie: ${current?.label ?: "tutte le foto"}",
             { open = true },
-            tint = if (current != null) Arancio.colors.accentText else Arancio.colors.text,
+            // a category chosen: the tinted button, so the filter is seen at once
+            isPrimary = current != null,
         )
         ArancioMenu(expanded = open, onDismissRequest = { open = false }) {
             val choices: List<PhotoKind?> = listOf(null) + PhotoKind.entries
@@ -380,6 +391,27 @@ private val PhotoKind.icon: ImageVector
         PhotoKind.Photo -> AppIcons.Image
         PhotoKind.Video -> AppIcons.Video
     }
+
+/** The actions used less often, behind one button: the header stays one line high. onCleanup null hides it. */
+@Composable
+private fun GalleryMoreMenu(onCleanup: (() -> Unit)?, onRefresh: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ToolButton(AppIcons.More, "Altre azioni", { open = true })
+        ArancioMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (onCleanup != null) {
+                ArancioMenuItem(AppIcons.Broom, "Pulizia rapida") {
+                    open = false
+                    onCleanup()
+                }
+            }
+            ArancioMenuItem(AppIcons.Refresh, "Aggiorna") {
+                open = false
+                onRefresh()
+            }
+        }
+    }
+}
 
 /** The three ways of showing the gallery, from the button with the current one's icon. */
 @Composable
