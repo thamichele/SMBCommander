@@ -132,104 +132,19 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
         }
 
         if (!permitted) {
-            item {
-                Card {
-                    Text("Per salvare le foto serve il permesso di leggere la galleria.", style = MaterialTheme.typography.bodyLarge)
-                    PrimaryButton(
-                        onClick = { askPermission.launch(PhotoBackupWorker.mediaPermissions()) },
-                    ) { Text("Consenti l'accesso alle foto") }
-                }
-            }
+            item { PermissionCard { askPermission.launch(PhotoBackupWorker.mediaPermissions()) } }
             return@LazyColumn
         }
 
-        item {
-            Card {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Backup automatico", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            statusLine(settings, status, savedCount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = c.textSecondary,
-                        )
-                    }
-                    Switch(
-                        checked = settings.enabled,
-                        onCheckedChange = vm::setEnabled,
-                        enabled = settings.destination != null && settings.albums.isNotEmpty(),
-                        colors = arancioSwitchColors(),
-                    )
-                }
-                if (progress.running) {
-                    Text(
-                        if (progress.total > 0) "In corso: ${progress.done} di ${progress.total}" else "In corso…",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = c.accentText,
-                    )
-                    ArancioProgress(if (progress.total > 0) progress.done.toFloat() / progress.total else null)
-                } else if (settings.enabled) {
-                    SecondaryButton(onClick = { vm.runNow() }) { Text("Esegui ora") }
-                }
-                status.lastError?.let { Notice(NoticeKind.Error, "Ultimo backup non riuscito", it) }
-            }
-        }
-
-        item {
-            Card(onClick = { choosingFolder = true }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Cartella sul NAS", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                        Text(
-                            settings.destination?.fullPath ?: "Scegli dove salvare le foto",
-                            style = if (settings.destination == null) MaterialTheme.typography.titleSmall else ArancioType.code,
-                            color = if (settings.destination == null) c.accentText else c.text,
-                        )
-                    }
-                    Icon(AppIcons.ChevronRight, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
+        item { AutoBackupCard(settings, status, savedCount, progress, vm) }
+        item { DestinationCard(settings.destination) { choosingFolder = true } }
 
         if (settings.destination != null) {
             item { FreeSpaceCard(freeSpace, onCheck = vm::checkFreeSpace, onFree = { confirmFree = true }, onClose = vm::resetFreeSpace) }
         }
 
         item { SectionTitle("Album da salvare") }
-        item {
-            if (albums.isEmpty()) {
-                Text(
-                    "Nessun album trovato sul telefono.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = c.textSecondary,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            } else {
-                Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
-                    albums.forEachIndexed { i, album ->
-                        if (i > 0) Divider()
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { vm.toggleAlbum(album.id) }
-                                .padding(start = 4.dp, end = 16.dp, top = 2.dp, bottom = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = album.id in settings.albums,
-                                onCheckedChange = { vm.toggleAlbum(album.id) },
-                                colors = CheckboxDefaults.colors(checkedColor = c.accent, checkmarkColor = c.onAccent, uncheckedColor = c.borderStrong),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(album.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                            Text("${album.count}", style = ArancioType.data, color = c.textSecondary)
-                        }
-                    }
-                }
-            }
-        }
+        item { AlbumsCard(albums, settings.albums, vm::toggleAlbum) }
 
         item {
             Text(
@@ -243,28 +158,10 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
     }
 
     if (confirmFree) {
-        val ready = freeSpace as? FreeSpace.Ready
-        AlertDialog(
-            onDismissRequest = { confirmFree = false },
-            containerColor = c.surfaceRaised,
-            title = { Text("Eliminare dal telefono?", style = MaterialTheme.typography.titleLarge) },
-            text = {
-                Text(
-                    "${ready?.items?.size ?: 0} foto e video (${formatSize(ready?.bytes ?: 0)}) verranno eliminati dal " +
-                        "telefono. Sul NAS restano, e li vedi nella Galleria. Android ti chiederà un'ultima conferma.",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            },
-            confirmButton = {
-                DangerButton(
-                    onClick = {
-                        confirmFree = false
-                        launchDelete()
-                    },
-                ) { Text("Elimina dal telefono") }
-            },
-            dismissButton = { GhostButton(onClick = { confirmFree = false }) { Text("Annulla") } },
-        )
+        FreePhoneDialog(freeSpace as? FreeSpace.Ready, onDismiss = { confirmFree = false }) {
+            confirmFree = false
+            launchDelete()
+        }
     }
 
     if (choosingFolder) {
@@ -278,6 +175,128 @@ fun BackupScreen(onBack: () -> Unit, vm: BackupViewModel = viewModel()) {
             },
         )
     }
+}
+
+/* Without the permission to read the gallery the page only asks for it. */
+@Composable
+private fun PermissionCard(onAsk: () -> Unit) {
+    Card {
+        Text("Per salvare le foto serve il permesso di leggere la galleria.", style = MaterialTheme.typography.bodyLarge)
+        PrimaryButton(onClick = onAsk) { Text("Consenti l'accesso alle foto") }
+    }
+}
+
+/* The switch of the automatic backup, with how the last run went and the one under way. */
+@Composable
+private fun AutoBackupCard(
+    settings: BackupSettings,
+    status: BackupStatus,
+    savedCount: Int,
+    progress: BackupProgress,
+    vm: BackupViewModel,
+) {
+    val c = Arancio.colors
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Backup automatico", style = MaterialTheme.typography.titleMedium)
+                Text(statusLine(settings, status, savedCount), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+            Switch(
+                checked = settings.enabled,
+                onCheckedChange = vm::setEnabled,
+                enabled = settings.destination != null && settings.albums.isNotEmpty(),
+                colors = arancioSwitchColors(),
+            )
+        }
+        if (progress.running) {
+            Text(
+                if (progress.total > 0) "In corso: ${progress.done} di ${progress.total}" else "In corso…",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.accentText,
+            )
+            ArancioProgress(if (progress.total > 0) progress.done.toFloat() / progress.total else null)
+        } else if (settings.enabled) {
+            SecondaryButton(onClick = { vm.runNow() }) { Text("Esegui ora") }
+        }
+        status.lastError?.let { Notice(NoticeKind.Error, "Ultimo backup non riuscito", it) }
+    }
+}
+
+/* The folder of the NAS the photos go to; a tap chooses another. */
+@Composable
+private fun DestinationCard(destination: SavedFolder?, onClick: () -> Unit) {
+    val c = Arancio.colors
+    Card(onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(AppIcons.Folder, contentDescription = null, tint = c.folder, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Cartella sul NAS", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                Text(
+                    destination?.fullPath ?: "Scegli dove salvare le foto",
+                    style = if (destination == null) MaterialTheme.typography.titleSmall else ArancioType.code,
+                    color = if (destination == null) c.accentText else c.text,
+                )
+            }
+            Icon(AppIcons.ChevronRight, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/* The albums of the phone, each with a check when the backup saves it. */
+@Composable
+private fun AlbumsCard(albums: List<Album>, chosen: Set<String>, onToggle: (String) -> Unit) {
+    val c = Arancio.colors
+    if (albums.isEmpty()) {
+        Text(
+            "Nessun album trovato sul telefono.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = c.textSecondary,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        return
+    }
+    Card(padding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
+        albums.forEachIndexed { i, album ->
+            if (i > 0) Divider()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle(album.id) }
+                    .padding(start = 4.dp, end = 16.dp, top = 2.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = album.id in chosen,
+                    onCheckedChange = { onToggle(album.id) },
+                    colors = CheckboxDefaults.colors(checkedColor = c.accent, checkmarkColor = c.onAccent, uncheckedColor = c.borderStrong),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(album.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("${album.count}", style = ArancioType.data, color = c.textSecondary)
+            }
+        }
+    }
+}
+
+/* Asks before the photos already on the NAS leave the phone; Android asks once more after it. */
+@Composable
+private fun FreePhoneDialog(ready: FreeSpace.Ready?, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Arancio.colors.surfaceRaised,
+        title = { Text("Eliminare dal telefono?", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Text(
+                "${ready?.items?.size ?: 0} foto e video (${formatSize(ready?.bytes ?: 0)}) verranno eliminati dal " +
+                    "telefono. Sul NAS restano, e li vedi nella Galleria. Android ti chiederà un'ultima conferma.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        confirmButton = { DangerButton(onClick = onConfirm) { Text("Elimina dal telefono") } },
+        dismissButton = { GhostButton(onClick = onDismiss) { Text("Annulla") } },
+    )
 }
 
 /**
