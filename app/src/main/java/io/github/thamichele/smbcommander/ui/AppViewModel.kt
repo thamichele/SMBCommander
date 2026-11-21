@@ -304,6 +304,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val cache = getApplication<Application>().cacheDir
         viewModelScope.launch(Dispatchers.IO) {
             File(cache, "edit").deleteRecursively()
+            // copies written by other apps through the file picker that never reached the NAS
+            File(cache, "documents").deleteRecursively()
             app.shareCache.cleanAll()
             File(cache, "images").deleteRecursively()
             File(getApplication<Application>().filesDir, "gallery").deleteRecursively()

@@ -3,6 +3,19 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.3 — 2026-11-21
+- Sicurezza: con lo sblocco con impronta attivo, anche «Salva sul NAS» (Condividi da un'altra app) e la scelta della
+  cartella del widget chiedono lo sblocco, se l'app non è stata sbloccata da poco; e l'elenco delle app recenti non
+  mostra più l'anteprima di foto e cartelle
+- Sicurezza: «Salva sul NAS» accetta solo file che arrivano davvero da un'altra app
+- Sicurezza: la scelta della cartella del widget risponde solo per un widget di SMBCommander
+- Sicurezza: un archivio ZIP danneggiato o costruito apposta viene rifiutato subito, e un file che dentro l'archivio
+  è più grande di quanto dichiara si ferma invece di riempire il NAS
+- Sicurezza: aggiornate due librerie usate di riflesso per la condivisione delle cartelle (commons-io,
+  commons-lang3) a versioni senza difetti noti
+- Sicurezza: «Scollega NAS» cancella anche le copie lasciate dalle altre app che salvavano sul NAS
+- Sicurezza: nella compilazione su GitHub la chiave di firma arriva solo ai passaggi che la usano
+
 ## 1.28.2 — 2026-11-21
 - Modificato: l'alone del pulsante «+» non è più fisso. A riposo il pulsante è piatto; l'alone compare animato
   quando lo tocchi e poi sfuma
