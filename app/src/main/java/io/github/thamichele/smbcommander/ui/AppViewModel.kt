@@ -433,7 +433,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * loadSuggestions() - lists the shares the user can add as folders
-     * @param nasId null for the shares of the main NAS, otherwise the other NAS whose shares are listed by their own names
+     * @param nasId null for the main NAS, otherwise the other NAS whose shares are listed by their own names
      *
      * Context: launches a coroutine; the list arrives in [suggestions].
      * Return: the job of the listing.
@@ -1126,8 +1126,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * deletePhotos() - deletes photos from the NAS, from the gallery or the viewer
      * @param photos the photos and videos
      *
-     * Those in the backup folder are first written to its list of deleted photos (size and hash), so the backup does not
-     * upload them again, even after a reinstall.
+     * Those in the backup folder are first written to its list of deleted photos (size and hash), so the backup
+     * does not upload them again, even after a reinstall.
      *
      * Context: launches a coroutine; the progress shows in [deletion].
      * Return: the job of the deletion.
@@ -1849,9 +1849,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * share() - hands files of the NAS to the share sheet of Android
      * @param entries the files
      *
-     * They are downloaded into a private, temporary folder (checked against the NAS like every download). Nothing is
-     * written to the phone's public folders, so the backup never sees them; the copies are deleted once the user is back
-     * in the app, or a few minutes later anyway.
+     * They are downloaded into a private, temporary folder (checked against the NAS like every download). Nothing
+     * is written to the phone's public folders, so the backup never sees them; the copies are deleted once the user
+     * is back in the app, or a few minutes later anyway.
      *
      * Context: launches a coroutine.
      * Return: the job of the downloads.
