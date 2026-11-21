@@ -180,14 +180,17 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                     actions = actions,
                 )
             } else {
-                // the title has a line of its own, so it is never cut; while scrolling it goes and the line of
-                // the tabs with the buttons stays
-                CollapsibleBox(collapse) {
-                    PageHeader(context = state.folder?.fullPath ?: "Foto salvate sul NAS", title = state.kind?.label ?: "Galleria")
-                }
+                // three tabs leave no room for the buttons on their line: the buttons stay next to the title,
+                // and while scrolling title and tabs go and the buttons alone stay
+                PageHeader(
+                    context = state.folder?.fullPath ?: "Foto salvate sul NAS",
+                    title = state.kind?.takeIf { it != PhotoKind.Video }?.label ?: "Galleria",
+                    collapse = collapse,
+                    actions = actions,
+                )
                 if (state.folder != null) {
                     val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
-                    GalleryTabs(tab, vm, actions)
+                    CollapsibleBox(collapse) { GalleryTabs(tab, vm) }
                 }
             }
         } else {

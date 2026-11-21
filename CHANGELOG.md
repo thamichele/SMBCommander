@@ -10,6 +10,8 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
 - Modificato: il terzo pulsante della barra in basso si chiama «Impostazioni» e ha l'icona dell'ingranaggio; la
   notifica del backup e i pulsanti «Vai al backup foto» aprono direttamente la pagina «Backup foto»
 - Nuovo: nella Galleria, tra le schede Foto e Album, c'è la scheda «Video» che mostra solo i video, per data
+- Modificato: con tre schede i quattro pulsanti della Galleria stanno accanto al titolo; scorrendo in giù titolo
+  e schede spariscono e restano solo i pulsanti
 
 ## 1.24.0 — 2026-11-21
 - Modificato: mentre scorri le foto della Galleria o i file di una cartella verso il basso l'intestazione si
