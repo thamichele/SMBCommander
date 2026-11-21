@@ -30,6 +30,7 @@ import io.github.thamichele.smbcommander.core.FileTrash
 import io.github.thamichele.smbcommander.core.NasFileSystem
 import io.github.thamichele.smbcommander.core.RandomReader
 import io.github.thamichele.smbcommander.core.RemoteEntry
+import io.github.thamichele.smbcommander.core.NasShares
 import io.github.thamichele.smbcommander.core.RemotePath
 import java.io.File
 import java.io.FileNotFoundException
@@ -139,6 +140,8 @@ class NasDocumentsProvider : DocumentsProvider() {
         if (parentDocumentId == ROOT) return documentId.startsWith("n|")
         val (pShare, pPath) = runCatching { parse(parentDocumentId) }.getOrNull() ?: return false
         val (share, path) = runCatching { parse(documentId) }.getOrNull() ?: return false
+        // the folder of another NAS holds every share of that NAS
+        if (NasShares.isRoot(pShare)) return NasShares.nasOf(share) == NasShares.nasOf(pShare)
         return pShare.equals(share, ignoreCase = true) && (pPath.isEmpty() || path.startsWith("$pPath/"))
     }
 

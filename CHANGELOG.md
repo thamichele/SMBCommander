@@ -3,13 +3,47 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.5 — 2026-11-21
+- Sicurezza: con lo sblocco con impronta attivo, anche «Salva sul NAS» (Condividi da un'altra app) e la scelta della
+  cartella del widget chiedono lo sblocco, se l'app non è stata sbloccata da poco; e l'elenco delle app recenti non
+  mostra più l'anteprima di foto e cartelle
+- Sicurezza: «Salva sul NAS» accetta solo file che arrivano davvero da un'altra app
+- Sicurezza: la scelta della cartella del widget risponde solo per un widget di SMBCommander
+- Sicurezza: un archivio ZIP danneggiato o costruito apposta viene rifiutato subito, e un file che dentro l'archivio
+  è più grande di quanto dichiara si ferma invece di riempire il NAS
+- Sicurezza: aggiornate due librerie usate di riflesso per la condivisione delle cartelle (commons-io,
+  commons-lang3) a versioni senza difetti noti
+- Sicurezza: «Scollega NAS» cancella anche le copie lasciate dalle altre app che salvavano sul NAS
+- Sicurezza: nella compilazione su GitHub la chiave di firma arriva solo ai passaggi che la usano
+
+## 1.28.4 — 2026-11-21
+- Modificato: Indietro sale sempre alla cartella che contiene quella aperta, secondo il percorso completo, un livello
+  alla volta fino alla cartella condivisa (o al NAS) e poi a «Le mie cartelle», come nei gestori SMB. La 1.28.3
+  rifaceva invece le cartelle nell'ordine in cui le avevi aperte. Resta che tornando a una cartella la ritrovi
+  scorsa dove l'avevi lasciata
+- Corretto: nel selettore di file di Android, le cartelle condivise dentro la cartella di un altro NAS ora sono
+  riconosciute come sue
+- Corretto: il Cestino mostra (e svuota dopo 30 giorni) anche gli elementi eliminati nelle cartelle condivise di un
+  altro NAS aggiunto come cartella intera; prima restavano nascosti
+- Corretto: «Scollega NAS» ferma anche la musica in riproduzione, i trasferimenti in coda e gli elementi da
+  incollare, che altrimenti continuavano a cercare il NAS appena dimenticato
+- Corretto: se Android rifiuta di tenere attivi i trasferimenti in sottofondo (app aperta dallo sfondo), l'app non si
+  chiude più: i trasferimenti continuano mentre l'app è aperta
+- Corretto (batteria): con l'app in sottofondo non si preparano più le miniature della Galleria né si dividono le
+  foto in categorie, e un backup finito non fa più rileggere tutta la cartella del NAS: tutto riprende quando
+  riapri l'app
+- Corretto (batteria): durante copie e caricamenti la notifica e la scheda dell'avanzamento si aggiornano qualche
+  volta al secondo invece che a ogni pezzo di file copiato, cioè centinaia di volte al secondo
+- Corretto (batteria): il backup non parte più ogni volta che Android avvia l'app da solo (backup orario, widget,
+  musica) ma solo quando la apri tu; e con il NAS non raggiungibile (un Wi-Fi fuori casa) aspetta il controllo
+  dell'ora dopo invece di riprovare subito più volte rileggendo tutte le foto del telefono
+
 ## 1.28.3 — 2026-11-21
 - Corretto: tornando indietro verso la cartella di un altro NAS (quella che elenca le sue cartelle condivise) l'app
   si chiudeva di colpo. Ora l'elenco si apre, e lì non si possono più selezionare le cartelle condivise, che non si
   possono copiare né eliminare. Lo stesso valeva per «Salva sul NAS» scegliendo la cartella di un altro NAS
-- Modificato: Indietro rifà il percorso al contrario, una cartella alla volta, come le hai aperte; dalla prima
-  cartella aperta torna sempre a «Le mie cartelle». Prima saliva alla cartella che contiene quella aperta, anche se
-  non c'eri mai passato
+- Modificato: Indietro rifà il percorso al contrario, una cartella alla volta, come le hai aperte (cambiato di nuovo
+  nella 1.28.4)
 - Modificato: tornando a una cartella la ritrovi scorsa dove l'avevi lasciata
 
 ## 1.28.2 — 2026-11-21

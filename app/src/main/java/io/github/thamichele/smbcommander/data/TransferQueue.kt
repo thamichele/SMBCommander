@@ -199,8 +199,19 @@ class TransferQueue(
             set(id) { it.copy(state = TransferJob.State.Running, retryIn = 0) }
             val failure: Exception = try {
                 // interruptible: cancelling interrupts the thread, which the SMB copy loops check
+                var shownAt = 0L
+                var shownName: String? = null
                 val note = runInterruptible {
-                    work(repository.fs()) { name, done, total -> set(id) { it.copy(current = name, done = done, total = total) } }
+                    work(repository.fs()) { name, done, total ->
+                        // called at every block copied: the card and the notification follow a few times a second,
+                        // and at once for a new file or its end
+                        val now = System.currentTimeMillis()
+                        if (name != shownName || done == total || now - shownAt >= PROGRESS_EVERY_MS) {
+                            shownAt = now
+                            shownName = name
+                            set(id) { it.copy(current = name, done = done, total = total) }
+                        }
+                    }
                 }
                 return end(id, TransferJob.State.Done, note = note)
             } catch (e: CancellationException) {
@@ -247,5 +258,8 @@ class TransferQueue(
     private companion object {
         /** Waits before each new attempt after a dropped connection: about 4 minutes in all, then the job fails. */
         val RETRY_SECONDS = intArrayOf(5, 10, 20, 30, 60, 120)
+
+        /** The progress of a job is shown again at most this often. */
+        const val PROGRESS_EVERY_MS = 250L
     }
 }

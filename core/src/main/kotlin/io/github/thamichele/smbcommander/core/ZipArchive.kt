@@ -121,13 +121,17 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private var count = 0L
         override fun read(): Int {
             val b = super.read()
-            if (b >= 0) { crc.update(b); count++ } else check()
+            if (b >= 0) { crc.update(b); count++; checkSize() } else check()
             return b
         }
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             val n = super.read(b, off, len)
-            if (n > 0) { crc.update(b, off, n); count += n } else check()
+            if (n > 0) { crc.update(b, off, n); count += n; checkSize() } else check()
             return n
+        }
+        /* An entry that inflates past its declared size is a "ZIP bomb": stopped now, not after filling the NAS. */
+        private fun checkSize() {
+            if (count > entry.size) throw IOException("«${entry.name}» nell'archivio è danneggiato")
         }
         private fun check() {
             if (count != entry.size || crc.value != entry.crc) throw IOException("«${entry.name}» nell'archivio è danneggiato")
@@ -143,7 +147,7 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private const val ZIP64_LOCATOR_SIG = 0x07064b50L
         private const val ZIP64_END_SIG = 0x06064b50L
         private const val MAX_ENTRIES = 200_000
-
+        private const val BAD_INDEX = "Indice dell'archivio non valido"
 
         /* Fixed parts of the records, APPNOTE.TXT 4.3. */
         private const val LOCAL_HEADER_SIZE = 30
@@ -190,8 +194,10 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
          */
         fun read(reader: RandomReader): ZipArchive {
             val index = findIndex(reader)
-            if (index.count > MAX_ENTRIES || index.size > MAX_INDEX_BYTES || index.offset + index.size > reader.size) {
-                throw NasException("Indice dell'archivio non valido")
+            if (index.count > MAX_ENTRIES || index.size > MAX_INDEX_BYTES || index.offset < 0 ||
+                index.offset + index.size > reader.size
+            ) {
+                throw NasException(BAD_INDEX)
             }
             val dir = ByteArray(index.size.toInt())
             readAt(reader, index.offset, dir)
@@ -216,8 +222,10 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
             // ZIP64: the real values are in a record of their own, found through the locator just before
             val locator = end - ZIP64_LOCATOR_SIZE
             if (locator < 0 || le32(tail, locator) != ZIP64_LOCATOR_SIG) return plain
+            val zip64End = le64(tail, locator + 8)
+            if (zip64End < 0 || zip64End > size - ZIP64_END_SIZE) throw NasException(BAD_INDEX)
             val record = ByteArray(ZIP64_END_SIZE)
-            readAt(reader, le64(tail, locator + 8), record)
+            readAt(reader, zip64End, record)
             if (le32(record, 0) != ZIP64_END_SIG) return plain
             return Index(le64(record, 32), le64(record, 40), le64(record, 48))
         }
@@ -226,6 +234,9 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private fun readCentralEntry(dir: ByteArray, p: Int): Entry? {
             val flags = le16(dir, p + 8)
             val nameLength = le16(dir, p + 28)
+            // lengths that run past the index belong to a damaged (or crafted) archive: refused as a whole
+            val recordEnd = p + CENTRAL_HEADER_SIZE + nameLength + le16(dir, p + 30) + le16(dir, p + 32)
+            if (recordEnd > dir.size) throw NasException(BAD_INDEX)
             val sizes = longArrayOf(le32(dir, p + 24), le32(dir, p + 20), le32(dir, p + 42))
             val nameStart = p + CENTRAL_HEADER_SIZE
             readZip64Extra(dir, nameStart + nameLength, le16(dir, p + 30), sizes)
@@ -256,6 +267,7 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
             while (x + EXTRA_HEADER_SIZE <= extraEnd) {
                 val id = le16(dir, x)
                 val len = le16(dir, x + 2)
+                if (x + EXTRA_HEADER_SIZE + len > extraEnd) break
                 if (id == ZIP64_EXTRA_ID) readZip64Values(dir, x + EXTRA_HEADER_SIZE, x + EXTRA_HEADER_SIZE + len, sizes)
                 x += EXTRA_HEADER_SIZE + len
             }

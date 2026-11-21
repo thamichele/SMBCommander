@@ -40,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -258,6 +259,8 @@ class CleanupViewModel(application: Application) : AndroidViewModel(application)
         val found = HashMap<String, PhotoKind>()
         var shown = System.currentTimeMillis()
         for (batch in photos.chunked(SORT_BATCH)) {
+            // heavy work on the phone: it waits while the app is in the background
+            app.inFront.first { it }
             batch.map { photo ->
                 async { runCatching { photo.path to app.photoSorter.sort(photo) }.getOrNull() }
             }.awaitAll().filterNotNull().toMap(found)

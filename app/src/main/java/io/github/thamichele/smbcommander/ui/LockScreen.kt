@@ -12,6 +12,7 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -31,6 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import io.github.thamichele.smbcommander.data.Extras
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 
 /** The optional app lock: fingerprint, face or the screen lock of the phone. */
@@ -52,6 +56,56 @@ object AppLock {
      */
     fun available(context: Context): Boolean =
         BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
+
+    /**
+     * authenticate() - asks for the fingerprint, face or screen lock of the phone
+     * @param activity the screen that shows the request
+     * @param extras where the time of the last unlock is kept
+     * @param onSuccess called once the owner is confirmed, after the unlock time is saved
+     * @param onFailure called when the request is closed without unlocking (back, cancel, too many tries)
+     *
+     * Return: nothing; the answer arrives through the two callbacks, on the main thread.
+     */
+    fun authenticate(activity: FragmentActivity, extras: Extras, onSuccess: () -> Unit, onFailure: () -> Unit = {}) {
+        val callback = object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                extras.lastUnlocked = System.currentTimeMillis()
+                onSuccess()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) = onFailure()
+        }
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(PROMPT_TITLE)
+            .setSubtitle(PROMPT_SUBTITLE)
+            .setAllowedAuthenticators(AUTHENTICATORS)
+            .build()
+        val asked = runCatching { BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), callback).authenticate(info) }
+        if (asked.isFailure) onFailure()
+    }
+
+    /**
+     * guard() - lets a screen opened from outside the app (Condividi, widget set-up) show only to the owner
+     * @param activity the screen opened from outside
+     * @param extras the optional functions, with the app lock
+     * @param onOpen shows the screen: right away without the lock or shortly after an unlock, else after one
+     *
+     * Without the lock, or within the same window in which the file picker may reach the NAS, nothing is asked.
+     * Otherwise the screen closes unless the owner unlocks: a phone left unlocked on a table must not let anyone
+     * browse the folders of the NAS through another app.
+     *
+     * Return: nothing.
+     */
+    fun guard(activity: FragmentActivity, extras: Extras, onOpen: () -> Unit) {
+        if (extras.pickerOpen()) {
+            onOpen()
+            return
+        }
+        authenticate(activity, extras, onSuccess = onOpen, onFailure = activity::finish)
+    }
+
+    private const val PROMPT_TITLE = "Sblocca SMBCommander"
+    private const val PROMPT_SUBTITLE = "Impronta, volto o blocco schermo"
 }
 
 /**

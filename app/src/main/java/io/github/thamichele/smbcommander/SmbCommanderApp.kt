@@ -8,13 +8,14 @@
  */
 package io.github.thamichele.smbcommander
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import io.github.thamichele.smbcommander.backup.BackupLedger
-import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.backup.BackupSettingsStore
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.core.RemotePath
@@ -42,6 +43,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import io.github.thamichele.smbcommander.gallery.GalleryPrefs
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
@@ -82,8 +86,21 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
     /** Something was written to the NAS (a folder, or null when it could be anywhere): the gallery looks again. */
     val nasChanged = MutableSharedFlow<NasChange?>(extraBufferCapacity = 16)
 
+    private val _inFront = MutableStateFlow(false)
+
+    /**
+     * True while a screen of the app is on display. Work that only prepares what the screens show (thumbnails made
+     * ahead, photos sorted into categories, the gallery looked at again) waits while it is false: with the app in the
+     * background it would only use the battery. Transfers, backup and music do not wait.
+     */
+    val inFront: StateFlow<Boolean> = _inFront.asStateFlow()
+
+    /* Screens of the app started and not stopped yet: MainActivity, «Salva sul NAS», the widget set-up. */
+    private var startedScreens = 0
+
     override fun onCreate() {
         super.onCreate()
+        registerActivityLifecycleCallbacks(ScreenCounter())
         repository = NasRepository(CredentialStore(this))
         extras = Extras(this)
         editSessions = EditSessionStore(this)
@@ -98,8 +115,6 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
                 if (busy) TransferService.start(this@SmbCommanderApp)
             }
         }
-        // catch up on photos taken while the app was closed (still waits for Wi-Fi)
-        BackupScheduler.runNow(this, backupSettings.load(), respectCharging = true)
         thumbnails = ThumbnailCache(File(cacheDir, "images"), repository, AspectRatios(File(filesDir, "aspect-ratios.txt")))
         videoFrames = VideoFrames(File(cacheDir, "images/" + VideoFrames.FOLDER), repository) { thumbnails.key(Thumb(it)) }
         videoFramePrefs = VideoFramePrefs(this)
@@ -111,6 +126,25 @@ class SmbCommanderApp : Application(), SingletonImageLoader.Factory {
             // copies of an earlier share that nothing deleted (the phone restarted, say)
             runCatching { shareCache.clean(olderThanMs = 10 * 60_000L) }
         }.start()
+    }
+
+    /* Private: counts the screens on display, on the main thread where Android calls it. */
+    private inner class ScreenCounter : ActivityLifecycleCallbacks {
+        override fun onActivityStarted(activity: Activity) {
+            startedScreens++
+            _inFront.value = true
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            startedScreens = (startedScreens - 1).coerceAtLeast(0)
+            _inFront.value = startedScreens > 0
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
