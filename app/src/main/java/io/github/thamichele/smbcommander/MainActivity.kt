@@ -3,13 +3,12 @@ package io.github.thamichele.smbcommander
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import io.github.thamichele.smbcommander.backup.BackupScheduler
 import io.github.thamichele.smbcommander.ui.AppLock
@@ -66,18 +65,7 @@ class MainActivity : FragmentActivity() {
             locked.value = false
             return
         }
-        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                locked.value = false
-                extras.lastUnlocked = System.currentTimeMillis()
-            }
-        })
-        val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Sblocca SMBCommander")
-            .setSubtitle("Impronta, volto o blocco schermo")
-            .setAllowedAuthenticators(AppLock.AUTHENTICATORS)
-            .build()
-        runCatching { prompt.authenticate(info) }
+        AppLock.authenticate(this, extras, onSuccess = { locked.value = false })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -91,6 +79,17 @@ class MainActivity : FragmentActivity() {
         viewModel.syncEdits()
         // back from a share: the temporary copies are not needed any more
         viewModel.cleanShared()
+    }
+
+    override fun onPause() {
+        // set on the way out, when the picture is taken: the lock may have been switched in the settings just now
+        hideFromRecents()
+        super.onPause()
+    }
+
+    /** With the app lock on, the list of recent apps shows no picture of the photos and folders on screen. */
+    private fun hideFromRecents() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(!extras.lock)
     }
 
     override fun onStop() {

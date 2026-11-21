@@ -104,13 +104,17 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private var count = 0L
         override fun read(): Int {
             val b = super.read()
-            if (b >= 0) { crc.update(b); count++ } else check()
+            if (b >= 0) { crc.update(b); count++; checkSize() } else check()
             return b
         }
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             val n = super.read(b, off, len)
-            if (n > 0) { crc.update(b, off, n); count += n } else check()
+            if (n > 0) { crc.update(b, off, n); count += n; checkSize() } else check()
             return n
+        }
+        /* An entry that inflates past its declared size is a "ZIP bomb": stopped now, not after filling the NAS. */
+        private fun checkSize() {
+            if (count > entry.size) throw IOException("«${entry.name}» nell'archivio è danneggiato")
         }
         private fun check() {
             if (count != entry.size || crc.value != entry.crc) throw IOException("«${entry.name}» nell'archivio è danneggiato")
@@ -126,6 +130,9 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
         private const val ZIP64_LOCATOR_SIG = 0x07064b50L
         private const val ZIP64_END_SIG = 0x06064b50L
         private const val MAX_ENTRIES = 200_000
+        private const val MAX_INDEX_BYTES = 64L * 1024 * 1024
+        private const val ZIP64_END_SIZE = 56L
+        private const val BAD_INDEX = "Indice dell'archivio non valido"
 
         /** Archives opened as folders; documents that are ZIP inside (.docx, .epub) still open with their app. */
         fun isZip(name: String) = RemotePath.extension(name).lowercase() in setOf("zip", "cbz")
@@ -147,7 +154,8 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
             // ZIP64: the real values are in a record of their own, found through the locator just before
             if (end >= 20 && le32(tail, end - 20) == ZIP64_LOCATOR_SIG) {
                 val zip64End = le64(tail, end - 20 + 8)
-                val record = ByteArray(56)
+                if (zip64End < 0 || zip64End > size - ZIP64_END_SIZE) throw NasException(BAD_INDEX)
+                val record = ByteArray(ZIP64_END_SIZE.toInt())
                 readAt(reader, zip64End, record)
                 if (le32(record, 0) == ZIP64_END_SIG) {
                     count = le64(record, 32)
@@ -155,7 +163,9 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
                     dirOffset = le64(record, 48)
                 }
             }
-            if (count > MAX_ENTRIES || dirSize > 64L * 1024 * 1024 || dirOffset + dirSize > size) throw NasException("Indice dell'archivio non valido")
+            if (count > MAX_ENTRIES || dirSize > MAX_INDEX_BYTES || dirOffset < 0 || dirOffset + dirSize > size) {
+                throw NasException(BAD_INDEX)
+            }
             val dir = ByteArray(dirSize.toInt())
             readAt(reader, dirOffset, dir)
             val entries = ArrayList<Entry>()
@@ -172,6 +182,8 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
                 val extraLength = le16(dir, p + 30)
                 val commentLength = le16(dir, p + 32)
                 var local = le32(dir, p + 42)
+                // lengths that run past the index belong to a damaged (or crafted) archive: refused as a whole
+                if (p + 46 + nameLength + extraLength + commentLength > dir.size) throw NasException(BAD_INDEX)
                 val nameBytes = dir.copyOfRange(p + 46, p + 46 + nameLength)
                 // ZIP64 extra field: the 32-bit values set to all ones are found here, in this order
                 var x = p + 46 + nameLength
@@ -179,6 +191,7 @@ class ZipArchive private constructor(private val reader: RandomReader, val entri
                 while (x + 4 <= extraEnd) {
                     val id = le16(dir, x)
                     val len = le16(dir, x + 2)
+                    if (x + 4 + len > extraEnd) break
                     if (id == 0x0001) {
                         var q = x + 4
                         if (uncompressed == 0xFFFFFFFFL && q + 8 <= x + 4 + len) { uncompressed = le64(dir, q); q += 8 }

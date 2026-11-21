@@ -1,9 +1,9 @@
 package io.github.thamichele.smbcommander.widget
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -26,15 +26,20 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import io.github.thamichele.smbcommander.SmbCommanderApp
 import io.github.thamichele.smbcommander.data.SavedFolder
 import io.github.thamichele.smbcommander.ui.AppIcons
+import io.github.thamichele.smbcommander.ui.AppLock
 import io.github.thamichele.smbcommander.ui.PageHeader
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioTheme
 
-/** Picks the folder a widget opens, among "Le mie cartelle". */
-class WidgetConfigActivity : ComponentActivity() {
+/**
+ * Picks the folder a widget opens, among "Le mie cartelle". The launcher starts it, so it is open to other apps too:
+ * it only answers for a widget of this app, and with the app lock on only to the owner.
+ */
+class WidgetConfigActivity : FragmentActivity() {
 
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
@@ -45,10 +50,21 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
         // backing out leaves no half-made widget behind
         setResult(RESULT_CANCELED, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        if (!isOurWidget(widgetId)) {
             finish()
             return
         }
+        AppLock.guard(this, (application as SmbCommanderApp).extras, ::show)
+    }
+
+    /** True only for a widget of SMBCommander already placed on the home screen. */
+    private fun isOurWidget(id: Int): Boolean {
+        if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return false
+        val info = AppWidgetManager.getInstance(this).getAppWidgetInfo(id) ?: return false
+        return info.provider == ComponentName(this, BackupWidget::class.java)
+    }
+
+    private fun show() {
         val folders = (application as SmbCommanderApp).folders.all()
         setContent {
             ArancioTheme {
