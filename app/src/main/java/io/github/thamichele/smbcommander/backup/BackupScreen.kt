@@ -49,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -162,8 +161,6 @@ fun BackupScreen(vm: BackupViewModel = viewModel()) {
                             settings.destination?.fullPath ?: "Scegli dove salvare le foto",
                             style = if (settings.destination == null) MaterialTheme.typography.titleSmall else ArancioType.code,
                             color = if (settings.destination == null) c.accentText else c.text,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Icon(AppIcons.ChevronRight, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
@@ -435,7 +432,7 @@ private fun FolderChooser(
                                 colors = RadioButtonDefaults.colors(selectedColor = c.accent, unselectedColor = c.borderStrong),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(f.fullPath, style = ArancioType.code, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(f.fullPath, style = ArancioType.code)
                         }
                     }
                 }

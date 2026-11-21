@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.RemoteEntry
@@ -75,7 +74,7 @@ fun ArchiveScreen(vm: AppViewModel, screen: Screen.Archive) {
                         KindTile(asEntry, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(item.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.name, style = MaterialTheme.typography.titleSmall)
                             Text(
                                 when {
                                     item.isDirectory -> "Cartella"
@@ -87,7 +86,7 @@ fun ArchiveScreen(vm: AppViewModel, screen: Screen.Archive) {
                             )
                         }
                         Box {
-                            ToolButton(AppIcons.More, "Azioni per ${item.name}", { menu = true }, tint = c.textSecondary)
+                            ToolButton(AppIcons.More, "Azioni per ${item.name}", { menu = true })
                             ArancioMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 if (!item.isDirectory) {
                                     DropdownMenuItem(

@@ -41,7 +41,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -173,13 +172,11 @@ private fun CurrentFile(entry: RemoteEntry) {
         }
         Column(Modifier.weight(1f)) {
             Text("Elimino", style = MaterialTheme.typography.labelMedium, color = c.danger)
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.name, style = MaterialTheme.typography.titleSmall)
             Text(
                 RemotePath.parent(entry.path).ifEmpty { entry.share },
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -239,9 +236,9 @@ private fun StepRow(step: DeletionStep, modifier: Modifier) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Icon(icon, contentDescription = note, tint = tint, modifier = Modifier.size(18.dp))
         Column(Modifier.weight(1f)) {
-            Text(step.entry.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(step.entry.name, style = MaterialTheme.typography.bodyMedium)
             if (step.outcome != DeletionStep.Outcome.Deleted) {
-                Text(note, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(note, style = MaterialTheme.typography.bodySmall, color = tint)
             }
         }
     }

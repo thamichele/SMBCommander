@@ -42,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.data.SavedFolder
@@ -124,19 +123,17 @@ private fun FolderCard(folder: SavedFolder, onOpen: () -> Unit, onRemove: () -> 
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(folder.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(folder.name, style = MaterialTheme.typography.titleSmall)
             if (folder.fullPath != folder.name) {
                 Text(
                     folder.fullPath,
                     style = ArancioType.data,
                     color = c.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         Box {
-            ToolButton(AppIcons.More, "Azioni per ${folder.name}", { menu = true }, tint = c.textSecondary)
+            ToolButton(AppIcons.More, "Azioni per ${folder.name}", { menu = true })
             ArancioMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 ArancioMenuItem(AppIcons.Close, "Togli dall'elenco", danger = true) { menu = false; onRemove() }
             }

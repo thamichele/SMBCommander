@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -184,7 +185,7 @@ fun SetupScreen(vm: AppViewModel) {
             PrimaryButton(
                 onClick = submit,
                 enabled = ready,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) {
                 if (connecting) {
                     CircularProgressIndicator(
@@ -334,7 +335,7 @@ private fun AppearanceSection() {
                     Row(
                         Modifier
                             .weight(1f)
-                            .height(48.dp)
+                            .heightIn(min = 48.dp)
                             .clip(shape)
                             .background(if (selected) theme.main.copy(alpha = 0.12f) else Arancio.colors.surface)
                             .border(1.dp, if (selected) theme.main else Arancio.colors.border, shape)

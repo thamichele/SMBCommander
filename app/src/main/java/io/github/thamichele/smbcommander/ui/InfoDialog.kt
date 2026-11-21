@@ -178,7 +178,7 @@ private fun InfoRow(label: String, value: String, mono: Boolean = false, onCopy:
             Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
             Text(value, style = if (mono) ArancioType.code else MaterialTheme.typography.bodyMedium)
         }
-        if (onCopy != null) ToolButton(AppIcons.Copy, "Copia $label", onCopy, tint = c.accentText)
+        if (onCopy != null) ToolButton(AppIcons.Copy, "Copia $label", onCopy)
     }
 }
 

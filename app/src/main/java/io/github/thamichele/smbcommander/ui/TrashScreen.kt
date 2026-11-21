@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.FileTrash
@@ -75,13 +74,11 @@ fun TrashScreen(vm: AppViewModel) {
                         KindTile(item.entry, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(item.entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.entry.name, style = MaterialTheme.typography.titleSmall)
                             Text(
                                 "Era in " + (listOf(item.share) + item.original.split('/').dropLast(1)).joinToString(" / "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.text,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
                             )
                             Text(
                                 "Eliminato " + DateUtils.getRelativeTimeSpanString(item.deletedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),

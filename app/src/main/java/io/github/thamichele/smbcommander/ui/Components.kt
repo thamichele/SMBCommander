@@ -17,6 +17,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +72,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -78,8 +82,8 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ThumbnailCache
@@ -88,7 +92,25 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioColors
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 
-/** Page header of the kit: small grey context line over a big title in JetBrains Mono, actions on the right. */
+/** Room between the back button, the title and the actions of a [PageHeader]. */
+private val HEADER_GAP = 4.dp
+
+/**
+ * PageHeader() - the header of a page: grey context line over a big title, actions on the right
+ * @param context the small grey line over the title (a path, "Album"); empty for none
+ * @param title the big title in JetBrains Mono
+ * @param navigation the back or close button on the left, or null
+ * @param actions the buttons of the page
+ *
+ * No text is ever cut: when the title and the buttons do not fit on one line
+ * (big display size, big font, narrow phone) the title takes the whole width,
+ * wrapping if it must, and the buttons move to a line of their own under it,
+ * on the right. Buttons that do not fit even there wrap to more lines.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PageHeader(
     context: String,
@@ -96,29 +118,47 @@ fun PageHeader(
     navigation: (@Composable () -> Unit)? = null,
     actions: @Composable () -> Unit = {},
 ) {
-    Row(
+    Layout(
+        contents = listOf(
+            { navigation?.invoke() },
+            { HeaderTitle(context, title) },
+            {
+                FlowRow(horizontalArrangement = Arrangement.End, itemVerticalAlignment = Alignment.CenterVertically) {
+                    actions()
+                }
+            },
+        ),
         modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        navigation?.invoke()
-        Column(Modifier.weight(1f).padding(start = if (navigation == null) 0.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (context.isNotEmpty()) {
-                Text(
-                    context,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Arancio.colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+    ) { (navMeasurables, titleMeasurables, actionMeasurables), constraints ->
+        val width = constraints.maxWidth
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val nav = navMeasurables.firstOrNull()?.measure(loose)
+        val navWidth = nav?.let { it.width + HEADER_GAP.roundToPx() } ?: 0
+        val actions = actionMeasurables.first().measure(loose)
+        val titleMeasurable = titleMeasurables.first()
+        val titleRoom = (width - navWidth).coerceAtLeast(0)
+        val isOneLine = titleMeasurable.maxIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
+        val titleWidth = if (isOneLine) titleRoom - actions.width else titleRoom
+        val titlePlaced = titleMeasurable.measure(loose.copy(maxWidth = titleWidth))
+        val topHeight = maxOf(nav?.height ?: 0, titlePlaced.height, if (isOneLine) actions.height else 0)
+        val height = if (isOneLine) topHeight else topHeight + actions.height
+        layout(width, height) {
+            nav?.placeRelative(0, (topHeight - nav.height) / 2)
+            titlePlaced.placeRelative(navWidth, (topHeight - titlePlaced.height) / 2)
+            val actionsY = if (isOneLine) (topHeight - actions.height) / 2 else topHeight
+            actions.placeRelative(width - actions.width, actionsY)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
+    }
+}
+
+/* Private: the two texts of a PageHeader, both wrapping instead of being cut. */
+@Composable
+private fun HeaderTitle(context: String, title: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (context.isNotEmpty()) {
+            Text(context, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
+        }
+        Text(title, style = MaterialTheme.typography.headlineMedium)
     }
 }
 
@@ -134,21 +174,26 @@ val BUTTON_BAR_HEIGHT = TOOL_BUTTON_SIZE + BUTTON_BAR_PADDING * 2
 private val FIELD_BUTTON_SIZE = 48.dp
 private val FIELD_ICON_SIZE = 24.dp
 
-/** A button that does nothing right now stays visible, faded. */
-private const val TOOL_DISABLED_ALPHA = 0.4f
+/** A button that does nothing right now stays visible, faded, as the kit says. */
+private const val TOOL_DISABLED_ALPHA = 0.5f
+
+/** Pressed: a little smaller for a moment, as every button of the kit. */
+private const val TOOL_PRESSED_SCALE = 0.97f
+private const val TOOL_PRESS_MS = 80
 
 /**
  * ToolButton() - the icon button of the whole app, in the style of the video player's bar
  * @param icon what the button shows
  * @param label what the button does, read aloud by TalkBack
  * @param onClick the action
- * @param tint colour of the icon; ignored when [isPrimary]
+ * @param tint colour of the icon: the main colour chosen in the settings, red for deleting
  * @param enabled false fades the button and ignores touches
- * @param isPrimary filled with the main colour: the one action that matters most on that bar (Play)
+ * @param isPrimary dark tinted background with a border in the main colour: the one action that matters most (Play)
  * @param caption a short word under the icon ("10 s"), or null
  *
  * 56dp with a 28dp icon and corners of 4 everywhere: in the headers, in the
  * viewer of photos and videos, in the rows of the lists and in the mini player.
+ * The background stays dark; only the icon takes the main colour.
  *
  * Context: composable.
  * Return: nothing.
@@ -158,18 +203,37 @@ fun ToolButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = Arancio.colors.text,
+    tint: Color = Arancio.colors.accentText,
     enabled: Boolean = true,
     isPrimary: Boolean = false,
     caption: String? = null,
 ) {
     val colors = Arancio.colors
+    val interaction = remember { MutableInteractionSource() }
+    val isPressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) TOOL_PRESSED_SCALE else 1f, tween(TOOL_PRESS_MS), label = "press")
+    val shape = if (isPrimary) ArancioShape.fab else ArancioShape.control
+    // dark background always: the tinted one of the kit for the primary, the raised surface while pressed
+    val background = when {
+        isPrimary -> colors.accentDeep
+        isPressed -> colors.surfaceRaised
+        else -> Color.Transparent
+    }
     Column(
         Modifier
             .size(TOOL_BUTTON_SIZE)
-            .clip(if (isPrimary) ArancioShape.fab else ArancioShape.control)
-            .background(if (isPrimary) colors.accentButton else Color.Transparent)
-            .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(background)
+            .then(if (isPrimary) Modifier.border(1.dp, colors.accentBorder, shape) else Modifier)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
             .alpha(if (enabled) 1f else TOOL_DISABLED_ALPHA),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -177,7 +241,7 @@ fun ToolButton(
         Icon(
             icon,
             contentDescription = label,
-            tint = if (isPrimary) colors.onAccent else tint,
+            tint = tint,
             modifier = Modifier.size(TOOL_ICON_SIZE),
         )
         if (caption != null) {
@@ -207,7 +271,7 @@ fun FieldButton(icon: ImageVector, label: String, onClick: () -> Unit) {
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = Arancio.colors.textSecondary, modifier = Modifier.size(FIELD_ICON_SIZE))
+        Icon(icon, contentDescription = label, tint = Arancio.colors.accentText, modifier = Modifier.size(FIELD_ICON_SIZE))
     }
 }
 
@@ -239,19 +303,18 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = ArancioShape.control
     Box(
         Modifier
-            .height(36.dp)
+            .heightIn(min = 36.dp)
             .clip(shape)
             .background(if (selected) c.text else c.surface)
             .then(if (selected) Modifier else Modifier.border(1.dp, c.border, shape))
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium),
             color = if (selected) c.background else c.text,
-            maxLines = 1,
         )
     }
 }
@@ -264,7 +327,6 @@ fun Tag(text: String, tint: Color? = null, modifier: Modifier = Modifier) {
         text,
         style = MaterialTheme.typography.labelSmall,
         color = tint ?: c.accentLabel,
-        maxLines = 1,
         modifier = modifier
             .background((tint ?: c.accent).copy(alpha = 0.16f), ArancioShape.pill)
             .padding(horizontal = 10.dp, vertical = 3.dp),
@@ -435,7 +497,7 @@ fun ArancioMenuItem(icon: ImageVector?, label: String, danger: Boolean = false, 
             .padding(horizontal = 6.dp)
             .clip(ArancioShape.control)
             .background(if (active) c.accentTint else Color.Transparent)
-            .height(44.dp),
+            .heightIn(min = 44.dp),
     )
 }
 
