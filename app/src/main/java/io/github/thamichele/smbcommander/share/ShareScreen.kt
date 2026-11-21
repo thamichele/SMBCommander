@@ -84,7 +84,8 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
                     when {
                         state.loading -> SkeletonList(rows = 6)
                         else -> LazyColumn(Modifier.fillMaxSize()) {
-                            items(state.subfolders, key = { it.path }) { sub ->
+                            // the shares listed by another NAS all have an empty path: the share is part of the key
+                            items(state.subfolders, key = { it.share + "/" + it.path }) { sub ->
                                 FolderRow(sub.name, null) { vm.open(SavedFolder(sub.share, sub.path)) }
                             }
                         }

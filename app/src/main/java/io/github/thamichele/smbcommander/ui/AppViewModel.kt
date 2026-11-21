@@ -474,7 +474,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message("«${folder.name}» aggiunta alle tue cartelle")
     }
 
-    fun openSaved(folder: SavedFolder) = navigate(folder.share, folder.path)
+    fun openSaved(folder: SavedFolder) {
+        history.clear()
+        navigate(folder.share, folder.path)
+    }
 
     /**
      * A folder opened from a widget. The intent can come from any app, so only one of the user's folders (or a folder
@@ -484,12 +487,51 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (!repo.isConfigured) return
         val dir = RemotePath.normalize(path)
         val allowed = app.folders.all().any { it.contains(share, dir) }
-        if (allowed) navigate(share, dir)
+        if (!allowed) return
+        history.clear()
+        navigate(share, dir)
     }
 
     // --- navigation -------------------------------------------------------------------------------------------------
 
-    fun openFolder(entry: RemoteEntry) = navigate(entry.share, entry.path)
+    /*
+     * The folders opened one inside the other since the start screen, the newest last: back retraces them in order,
+     * whatever their place on the NAS (a result of the search in the subfolders goes back to the search).
+     */
+    private val history = ArrayDeque<Screen.Browser>()
+
+    /* Where each folder was scrolled to, so that going back finds the list as it was left. */
+    private val scrollMemory = HashMap<Screen.Browser, Pair<Int, Int>>()
+
+    fun openFolder(entry: RemoteEntry) {
+        (_screen.value as? Screen.Browser)?.let { history.addLast(it) }
+        navigate(entry.share, entry.path)
+    }
+
+    /**
+     * scrollOf() - where the list of a folder was left
+     * @param screen the folder
+     *
+     * Return: the first item shown and its offset in pixels; 0, 0 for a folder never scrolled.
+     */
+    fun scrollOf(screen: Screen.Browser): Pair<Int, Int> = scrollMemory[screen] ?: (0 to 0)
+
+    /**
+     * keepScroll() - remembers where the list of a folder is, when the user leaves it
+     * @param screen the folder
+     * @param index first item shown
+     * @param offset how far that item is scrolled, in pixels
+     *
+     * Return: nothing.
+     */
+    fun keepScroll(screen: Screen.Browser, index: Int, offset: Int) {
+        if (index == 0 && offset == 0) {
+            scrollMemory.remove(screen)
+            return
+        }
+        if (scrollMemory.size >= SCROLL_MEMORY_MAX) scrollMemory.clear()
+        scrollMemory[screen] = index to offset
+    }
 
     fun navigate(share: String, path: String) {
         _selected.value = emptySet()
@@ -524,9 +566,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else if (_browser.value.searching) {
                     setSearching(false)
                 } else {
-                    val up = SavedFolder(s.share, s.path).parent()
-                    if (up != null) {
-                        navigate(up.share, up.path)
+                    // the way the user came, one folder at a time; at the first one, back to "Le mie cartelle"
+                    val previous = history.removeLastOrNull()
+                    if (previous != null) {
+                        navigate(previous.share, previous.path)
                     } else {
                         listJob?.cancel()
                         _screen.value = Screen.Shares
@@ -690,13 +733,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- selection, copy and move -----------------------------------------------------------------------------------
 
-    fun toggleSelected(entry: RemoteEntry) = _selected.update { if (entry.path in it) it - entry.path else it + entry.path }
+    fun toggleSelected(entry: RemoteEntry) {
+        if (inNasRoot()) return
+        _selected.update { if (entry.path in it) it - entry.path else it + entry.path }
+    }
+
+    /* The folder of another NAS lists its shares, all with the same empty path: nothing there can be selected. */
+    private fun inNasRoot(): Boolean = (_screen.value as? Screen.Browser)?.let { NasShares.isRoot(it.share) } == true
 
     fun clearSelection() {
         _selected.value = emptySet()
     }
 
     fun selectAll() {
+        if (inNasRoot()) return
         _selected.value = _browser.value.visible.mapTo(HashSet()) { it.path }
     }
 
@@ -1582,5 +1632,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         /** Unchanged copies are forgotten after a week: the editor is long closed by then. */
         const val KEEP_UNCHANGED_MS = 7L * 24 * 60 * 60 * 1000
+        /** Folders whose scroll position is remembered; past this the memory starts again, it only saves a scroll. */
+        const val SCROLL_MEMORY_MAX = 200
     }
 }

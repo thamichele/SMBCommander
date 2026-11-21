@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -46,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -131,6 +134,20 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         select = vm::toggleSelected,
     )
     val single = if (selected.size == 1) state.visible.firstOrNull { it.path in selected } else null
+
+    // each folder keeps its own scroll: going back finds the list where it was left
+    val listState = remember(screen) { vm.scrollOf(screen).let { (i, o) -> LazyListState(i, o) } }
+    val gridState = remember(screen) { vm.scrollOf(screen).let { (i, o) -> LazyGridState(i, o) } }
+    val isGrid = state.grid
+    DisposableEffect(screen, isGrid) {
+        onDispose {
+            if (isGrid) {
+                vm.keepScroll(screen, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            } else {
+                vm.keepScroll(screen, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
+        }
+    }
 
     // while the files scroll down the header of the folder shrinks to its buttons, and grows back scrolling up
     val collapse = rememberCollapsingHeaderState()
@@ -275,18 +292,20 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                     )
                     state.grid && !state.showingDeep -> LazyVerticalGrid(
                         columns = GridCells.Adaptive(112.dp),
+                        state = gridState,
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(visible, key = { it.path }) { GridTile(it, actions) }
+                        items(visible, key = ::entryKey) { GridTile(it, actions) }
                     }
                     else -> LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(bottom = 96.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(visible, key = { it.path }) { entry ->
+                        items(visible, key = ::entryKey) { entry ->
                             // matches from the subfolders say where they are
                             val location = if (state.showingDeep) {
                                 val parent = RemotePath.parent(entry.path)
@@ -360,6 +379,9 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
         null -> Unit
     }
 }
+
+/* Key of a row: the shares listed in the folder of another NAS all have the same empty path, so the share is part of it. */
+private fun entryKey(entry: RemoteEntry): String = entry.share + "/" + entry.path
 
 private class EntryActions(
     val selected: Set<String>,
