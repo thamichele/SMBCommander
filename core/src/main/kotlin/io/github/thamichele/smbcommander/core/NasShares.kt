@@ -8,7 +8,7 @@
  *
  * This file only builds, splits and shows these names; MultiNasFileSystem sends each call to the right NAS.
  *
- * Version: 1.26.0
+ * Version: 1.27.2
  */
 package io.github.thamichele.smbcommander.core
 
@@ -89,11 +89,15 @@ object NasShares {
      * trail() - the names to show for [share], outermost first
      * @param share any share name used by the app
      *
+     * A share called exactly as its NAS ("STREAMING" on the NAS "STREAMING") is shown once: twice the same word
+     * in a row reads as a mistake.
+     *
      * Return: [share] on the main NAS; the NAS name and then the share name on another NAS.
      */
     fun trail(share: String): List<String> {
         val nas = label(share) ?: return listOf(share)
-        return listOfNotNull(nas, localOf(share).ifEmpty { null })
+        val local = localOf(share)
+        return if (local.isEmpty() || local.equals(nas, ignoreCase = true)) listOf(nas) else listOf(nas, local)
     }
 
     /**

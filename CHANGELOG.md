@@ -3,6 +3,12 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.27.2 — 2026-11-21
+- Corretto: il percorso grigio sopra il titolo di una cartella sta sempre su una riga sola. Se è corto resta sopra
+  il titolo; se è lungo prende tutta la larghezza della pagina, e se non basta mostra la fine (le cartelle più
+  vicine) e si scorre di lato per leggere l'inizio
+- Corretto: una cartella condivisa che si chiama come il suo NAS non viene più scritta due volte nel percorso
+
 ## 1.27.1 — 2026-11-21
 - Corretto: toccando File, Galleria o Impostazioni nella barra in basso l'animazione non scatta più mentre la
   sezione si apre. La Galleria legge dal telefono l'elenco delle foto senza bloccare lo schermo, la sezione File non
