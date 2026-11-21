@@ -52,7 +52,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -217,8 +216,6 @@ fun BrowserScreen(vm: AppViewModel, screen: Screen.Browser) {
                             " · trovati ${visible.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -376,14 +373,14 @@ private fun ListRow(entry: RemoteEntry, actions: EntryActions, location: String?
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.name, style = MaterialTheme.typography.titleSmall)
             if (location != null) {
-                Text(location, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(location, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.accentText)
             }
-            Text(entryDetails(entry), style = ArancioType.data, color = Arancio.colors.textSecondary, maxLines = 1)
+            Text(entryDetails(entry), style = ArancioType.data, color = Arancio.colors.textSecondary)
         }
         if (actions.selected.isEmpty()) Box {
-            ToolButton(AppIcons.More, "Azioni per ${entry.name}", { menu = true }, tint = Arancio.colors.textSecondary)
+            ToolButton(AppIcons.More, "Azioni per ${entry.name}", { menu = true })
             EntryMenu(entry, actions, menu) { menu = false }
         }
     }
@@ -407,8 +404,6 @@ private fun GridTile(entry: RemoteEntry, actions: EntryActions) {
         Text(
             entry.name,
             style = MaterialTheme.typography.labelMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp),
         )
     }

@@ -16,7 +16,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.core.Conflict
 import io.github.thamichele.smbcommander.data.TransferJob
@@ -52,7 +51,7 @@ fun TransferCard(
     ) {
         when {
             running?.state == TransferJob.State.Retrying -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(running.label, style = MaterialTheme.typography.titleSmall)
                 Text(
                     "Connessione al NAS persa: riprovo tra ${running.retryIn} s, da dove si era fermato",
                     style = MaterialTheme.typography.bodySmall,
@@ -61,16 +60,16 @@ fun TransferCard(
                 ArancioProgress(null, Modifier.padding(end = 8.dp), color = c.textSecondary)
             }
             running != null -> {
-                Text(running.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(running.label, style = MaterialTheme.typography.titleSmall)
                 if (running.current.isNotEmpty()) {
-                    Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(running.current, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                 }
                 ArancioProgress(running.fraction, Modifier.padding(end = 8.dp))
             }
             paused -> {
                 Text("Trasferimenti in pausa", style = MaterialTheme.typography.titleSmall)
                 pausedJob?.let {
-                    Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("${it.label}: riprende da dove si era fermato", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                 }
             }
             !active -> Text(
@@ -84,8 +83,6 @@ fun TransferCard(
                     "${job.label}: ${job.error}",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.danger,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 GhostButton(onClick = { onRetry(job.id) }) { Text("Riprova") }

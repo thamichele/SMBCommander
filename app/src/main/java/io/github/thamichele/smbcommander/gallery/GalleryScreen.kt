@@ -59,7 +59,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -568,14 +567,11 @@ private fun PhotoList(
                                 Text(
                                     photo.name,
                                     style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     entryDetails(photo),
                                     style = ArancioType.data,
                                     color = c.textSecondary,
-                                    maxLines = 1,
                                 )
                             }
                         }

@@ -53,7 +53,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -144,7 +143,7 @@ fun CleanupScreen(appVm: AppViewModel, gallery: GalleryViewModel = viewModel(), 
             navigation = { ToolButton(AppIcons.Back, "Indietro", { appVm.back() }) },
         ) {
             if (top != null) ToolButton(AppIcons.Info, "Informazioni", { info = top.entry })
-            ToolButton(AppIcons.Delete, "Cestino (${state.trashCount})", { trashDialog = true }, tint = if (state.trashCount > 0) c.danger else c.text)
+            ToolButton(AppIcons.Delete, "Cestino (${state.trashCount})", { trashDialog = true }, tint = if (state.trashCount > 0) c.danger else c.accentText)
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -370,8 +369,6 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
                     reason.text,
                     style = MaterialTheme.typography.labelMedium,
                     color = c.text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(12.dp)
@@ -381,13 +378,11 @@ private fun PhotoCard(card: CleanupCard, root: String, behind: Boolean, onOpen: 
             }
         }
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry.name, style = MaterialTheme.typography.titleSmall)
             Text(
                 entryDetails(entry) + " · " + CleanupRules.relative(entry.path, root).substringBeforeLast('/', "").ifEmpty { "cartella del backup" },
                 style = ArancioType.data,
                 color = c.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -588,13 +583,13 @@ private fun DuplicateSide(entry: RemoteEntry, root: String, verdict: Verdict, mo
             if (entry.isVideo) VideoBadge(Modifier.align(Alignment.Center), size = 40.dp)
         }
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(folder, style = ArancioType.data, color = c.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            Text(entryDetails(entry), style = ArancioType.data, color = c.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(entry.name, style = MaterialTheme.typography.titleSmall)
+            Text(folder, style = ArancioType.data, color = c.text)
+            Text(entryDetails(entry), style = ArancioType.data, color = c.textSecondary)
         }
         PrimaryButton(
             onClick = onKeep,
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp),
-        ) { Text("Tieni questo", maxLines = 1) }
+        ) { Text("Tieni questo") }
     }
 }

@@ -44,7 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -184,8 +183,6 @@ private fun AlbumCard(album: Album, title: String, onClick: () -> Unit) {
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
         )
         Text(
@@ -283,8 +280,8 @@ private fun PickerRow(title: String, detail: String, album: Album? = null, icon:
             }
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(detail, style = ArancioType.data, color = c.textSecondary, maxLines = 1)
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = ArancioType.data, color = c.textSecondary)
         }
     }
 }

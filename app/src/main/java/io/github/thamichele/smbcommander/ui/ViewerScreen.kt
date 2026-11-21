@@ -8,7 +8,7 @@
  * a video page is drawn by VideoPage.kt with the player of VideoPlayerState.kt.
  * It reads the NAS only through the image loader and the player.
  *
- * Version: 1.22.0
+ * Version: 1.23.0
  */
 package io.github.thamichele.smbcommander.ui
 
@@ -50,7 +50,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -233,7 +232,6 @@ private fun ChromeTimeout(isCounting: Boolean, interactions: Int, onTimeout: () 
 /* Private: back, name of the file and its place in the list; the actions are in ViewerActionBar(). */
 @Composable
 private fun ViewerTopBar(entry: RemoteEntry, position: String, onBack: () -> Unit) {
-    val white = Color.White
     Row(
         Modifier
             .fillMaxWidth()
@@ -241,7 +239,7 @@ private fun ViewerTopBar(entry: RemoteEntry, position: String, onBack: () -> Uni
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ToolButton(AppIcons.Back, "Indietro", onBack, tint = white)
+        ToolButton(AppIcons.Back, "Indietro", onBack)
         ViewerTitle(entry, position, Modifier.weight(1f).padding(start = 4.dp))
     }
 }
@@ -290,14 +288,11 @@ private fun ViewerTitle(entry: RemoteEntry, position: String, modifier: Modifier
             entry.name,
             style = MaterialTheme.typography.titleSmall,
             color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             "$position · ${entryDetails(entry)}",
             style = ArancioType.data,
             color = Color.White.copy(alpha = TOP_BAR_DETAIL_ALPHA),
-            maxLines = 1,
         )
     }
 }

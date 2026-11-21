@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.data.SavedFolder
@@ -94,12 +94,12 @@ fun ShareScreen(vm: ShareViewModel, onDone: (String) -> Unit, onCancel: () -> Un
                     state.error?.let { Notice(NoticeKind.Error, it) }
                     val progress = state.progress
                     if (progress != null) {
-                        Text(progress, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(progress, style = MaterialTheme.typography.titleSmall)
                         ArancioProgress(state.fraction)
                     } else {
                         PrimaryButton(
                             onClick = { vm.saveHere(onDone) },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) { Text("Salva qui $what") }
                     }
                 }
@@ -123,8 +123,8 @@ private fun FolderRow(name: String, detail: String?, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (detail != null) Text(detail, style = ArancioType.data, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(name, style = MaterialTheme.typography.titleSmall)
+            if (detail != null) Text(detail, style = ArancioType.data, color = c.textSecondary)
         }
         Icon(AppIcons.ChevronRight, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
     }

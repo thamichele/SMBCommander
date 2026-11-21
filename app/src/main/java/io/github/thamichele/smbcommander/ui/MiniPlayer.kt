@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.data.MusicState
 import io.github.thamichele.smbcommander.ui.theme.Arancio
@@ -66,13 +65,11 @@ fun MiniPlayer(
                 }
             }
             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                Text(music.title.ifEmpty { "Musica" }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(music.title.ifEmpty { "Musica" }, style = MaterialTheme.typography.titleSmall)
                 Text(
                     music.error ?: listOf(music.subtitle, "${music.index + 1} di ${music.count}").filter { it.isNotEmpty() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (music.error != null) c.danger else c.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (!open) {

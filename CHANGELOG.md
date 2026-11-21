@@ -3,6 +3,17 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.23.0 — 2026-11-21
+- Corretto: nessuna scritta viene più tagliata con i puntini, con qualsiasi dimensione dello schermo, zoom o grandezza
+  del carattere. I titoli in alto vanno a capo; se titolo e pulsanti non stanno sulla stessa riga, i pulsanti passano
+  su una riga loro sotto il titolo, a destra, e vanno a capo anche loro se serve
+- Corretto: nomi di file, percorsi, dettagli e messaggi negli elenchi, nei dialoghi e nel mini lettore vanno a capo
+  invece di essere tagliati; schede e pulsanti con del testo crescono in altezza quando serve
+- Modificato: le icone di tutti i pulsanti hanno il colore principale scelto nelle Impostazioni, sempre su fondo
+  scuro (rosso resta solo per eliminare); il pulsante principale (Riproduci) ha il fondo scuro con il bordo colorato
+- Modificato: i pulsanti con un'icona si rimpiccioliscono appena quando li premi e, se non disponibili, sono
+  sbiaditi al 50%, come gli altri pulsanti del kit Arancio UI
+
 ## 1.22.0 — 2026-11-21
 - Modificato: tutti i pulsanti con un'icona hanno lo stile e la misura di quelli del lettore video (56 dp, icona di
   28 dp): intestazioni di File, Galleria, Album, Cestino, Pulizia rapida e Archivi, righe degli elenchi e mini
