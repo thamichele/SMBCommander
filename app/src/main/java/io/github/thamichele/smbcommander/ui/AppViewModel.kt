@@ -293,6 +293,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun disconnect() {
+        // nothing keeps reading or writing the NAS just forgotten: the song playing and the transfers stop
+        app.music.stop()
+        app.transfers.cancelAll()
+        _clipboard.value = null
         repo.forget()
         app.folders.clear()
         // a different NAS starts from scratch: no backup towards a folder that may not exist there
@@ -1308,10 +1312,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val browsing = ((_screen.value as? Screen.Trash)?.returnTo as? Screen.Browser)?.share
-                val shares = (app.folders.all().map { it.share } + listOfNotNull(browsing))
-                    .filterNot { NasShares.isRoot(it) }
-                    .distinctBy { it.lowercase() }
+                val saved = app.folders.all().map { it.share } + listOfNotNull(browsing)
                 val items = repo.io { fs ->
+                    // the folder of a whole other NAS stands for all its shares: their bins are shown too
+                    val shares = saved.flatMap { share ->
+                        if (!NasShares.isRoot(share)) listOf(share)
+                        else runCatching { fs.list(share, "").map { it.share } }.getOrDefault(emptyList())
+                    }.distinctBy { it.lowercase() }
                     shares.flatMap { share ->
                         runCatching { FileTrash.purge(fs, share) }
                         runCatching { FileTrash.contents(fs, share) }.getOrDefault(emptyList())

@@ -44,8 +44,13 @@ class TransferService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // promised to Android when the service was started: foreground first, whatever comes next
-        goForeground(build(queue.jobs.value, queue.paused.value))
+        // promised to Android when the service was started: foreground first, whatever comes next. Android 12 and
+        // later refuse it to an app started in the background: the queue then goes on only while the app is open,
+        // instead of the whole app closing on the refusal
+        if (runCatching { goForeground(build(queue.jobs.value, queue.paused.value)) }.isFailure) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_PAUSE -> queue.pause()
             ACTION_RESUME -> queue.resume()

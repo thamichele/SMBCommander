@@ -10,6 +10,12 @@ Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino
   scorsa dove l'avevi lasciata
 - Corretto: nel selettore di file di Android, le cartelle condivise dentro la cartella di un altro NAS ora sono
   riconosciute come sue
+- Corretto: il Cestino mostra (e svuota dopo 30 giorni) anche gli elementi eliminati nelle cartelle condivise di un
+  altro NAS aggiunto come cartella intera; prima restavano nascosti
+- Corretto: «Scollega NAS» ferma anche la musica in riproduzione, i trasferimenti in coda e gli elementi da
+  incollare, che altrimenti continuavano a cercare il NAS appena dimenticato
+- Corretto: se Android rifiuta di tenere attivi i trasferimenti in sottofondo (app aperta dallo sfondo), l'app non si
+  chiude più: i trasferimenti continuano mentre l'app è aperta
 
 ## 1.28.3 — 2026-11-21
 - Corretto: tornando indietro verso la cartella di un altro NAS (quella che elenca le sue cartelle condivise) l'app
