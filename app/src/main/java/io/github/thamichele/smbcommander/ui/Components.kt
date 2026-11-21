@@ -17,9 +17,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -56,7 +56,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -72,8 +76,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -82,8 +88,8 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.thamichele.smbcommander.core.RemoteEntry
 import io.github.thamichele.smbcommander.data.ThumbnailCache
@@ -91,6 +97,7 @@ import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioColors
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
+import kotlin.math.roundToInt
 
 /** Room between the back button, the title and the actions of a [PageHeader]. */
 private val HEADER_GAP = 4.dp
@@ -102,10 +109,10 @@ private val HEADER_GAP = 4.dp
  * @param navigation the back or close button on the left, or null
  * @param actions the buttons of the page
  *
- * No text is ever cut: when the title and the buttons do not fit on one line
- * (big display size, big font, narrow phone) the title takes the whole width,
- * wrapping if it must, and the buttons move to a line of their own under it,
- * on the right. Buttons that do not fit even there wrap to more lines.
+ * No text is ever cut, and the header stays short: the title wraps beside the
+ * buttons. Only when even its longest word does not fit there (big display
+ * size, big font, narrow phone) the title takes the whole width and the
+ * buttons move to a line of their own under it, on the right.
  *
  * Context: composable.
  * Return: nothing.
@@ -128,7 +135,7 @@ fun PageHeader(
                 }
             },
         ),
-        modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
     ) { (navMeasurables, titleMeasurables, actionMeasurables), constraints ->
         val width = constraints.maxWidth
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
@@ -137,7 +144,8 @@ fun PageHeader(
         val actions = actionMeasurables.first().measure(loose)
         val titleMeasurable = titleMeasurables.first()
         val titleRoom = (width - navWidth).coerceAtLeast(0)
-        val isOneLine = titleMeasurable.maxIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
+        // one line while even the longest word of the title fits beside the buttons: the title wraps there
+        val isOneLine = titleMeasurable.minIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
         val titleWidth = if (isOneLine) titleRoom - actions.width else titleRoom
         val titlePlaced = titleMeasurable.measure(loose.copy(maxWidth = titleWidth))
         val topHeight = maxOf(nav?.height ?: 0, titlePlaced.height, if (isOneLine) actions.height else 0)
@@ -159,6 +167,70 @@ private fun HeaderTitle(context: String, title: String) {
             Text(context, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
         }
         Text(title, style = MaterialTheme.typography.headlineMedium)
+    }
+}
+
+/**
+ * CollapsingHeaderState - how much of a [CollapsingHeader] is hidden by the scroll
+ *
+ * Give [connection] to Modifier.nestedScroll() on a parent of both the header
+ * and the list: scrolling down hides the header a pixel at a time, scrolling
+ * up brings it back at once, wherever the list is.
+ */
+@Stable
+class CollapsingHeaderState {
+    /** 0 = whole header shown, -height = all hidden. */
+    var offset by mutableFloatStateOf(0f)
+        private set
+
+    /** Height of the header, measured at each layout. */
+    var height by mutableIntStateOf(0)
+        internal set
+
+    val connection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            val before = offset
+            offset = (offset + available.y).coerceIn(-height.toFloat(), 0f)
+            return Offset(0f, offset - before)
+        }
+    }
+
+    /**
+     * show() - brings the whole header back
+     *
+     * Return: nothing.
+     */
+    fun show() {
+        offset = 0f
+    }
+}
+
+/**
+ * rememberCollapsingHeaderState() - a [CollapsingHeaderState] kept across recompositions
+ *
+ * Return: the state.
+ */
+@Composable
+fun rememberCollapsingHeaderState(): CollapsingHeaderState = remember { CollapsingHeaderState() }
+
+/**
+ * CollapsingHeader() - a header that slides away while the list under it scrolls down
+ * @param state how much is hidden; its connection must be on a parent of the list
+ * @param content the header: PageHeader, tabs, anything
+ *
+ * The header keeps its full size and is only moved up and clipped, so no
+ * text in it is ever squeezed or cut while it is shown.
+ *
+ * Context: composable.
+ * Return: nothing.
+ */
+@Composable
+fun CollapsingHeader(state: CollapsingHeaderState, content: @Composable () -> Unit) {
+    Layout(content = { Column { content() } }, modifier = Modifier.fillMaxWidth().clipToBounds()) { measurables, constraints ->
+        val placed = measurables.first().measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+        if (state.height != placed.height) state.height = placed.height
+        val shift = state.offset.roundToInt().coerceAtLeast(-placed.height)
+        layout(placed.width, placed.height + shift) { placed.placeRelative(0, shift) }
     }
 }
 
