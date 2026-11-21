@@ -101,26 +101,14 @@ internal fun albumTitle(state: GalleryState, path: String): String {
  * GalleryTabs() - the three faces of the gallery: all the photos by date, only the videos, or the albums
  * @param tab which of the three is on screen
  * @param vm where the choice goes
- * @param actions the buttons of the page, on the right of the tabs
  *
- * Return: nothing; draws a row of three pills under the page header.
+ * Return: nothing; emits three icon buttons for the left of the header's row.
  */
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
-internal fun GalleryTabs(tab: GalleryTab, vm: GalleryViewModel, actions: @Composable () -> Unit = {}) {
-    // the buttons share the line of the tabs; on a screen too narrow for both they wrap under them, on the right
-    FlowRow(
-        Modifier.fillMaxWidth().padding(start = PAGE_MARGIN, end = 4.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Foto", selected = tab == GalleryTab.Photos, onClick = vm::openPhotos)
-            Pill("Video", selected = tab == GalleryTab.Videos, onClick = vm::openVideos)
-            Pill("Album", selected = tab == GalleryTab.Albums, onClick = vm::openAlbums)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
-    }
+internal fun GalleryTabs(tab: GalleryTab, vm: GalleryViewModel) {
+    ToolButton(AppIcons.Image, "Foto", vm::openPhotos, isPrimary = tab == GalleryTab.Photos)
+    ToolButton(AppIcons.Video, "Video", vm::openVideos, isPrimary = tab == GalleryTab.Videos)
+    ToolButton(AppIcons.Folder, "Album", vm::openAlbums, isPrimary = tab == GalleryTab.Albums)
 }
 
 /**
@@ -134,11 +122,14 @@ internal fun GalleryTabs(tab: GalleryTab, vm: GalleryViewModel, actions: @Compos
 internal fun AlbumsPage(state: GalleryState, vm: GalleryViewModel) {
     var isNaming by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        PageHeader(context = state.folder?.fullPath.orEmpty(), title = "Album") {
+        PageHeader(
+            context = state.folder?.fullPath.orEmpty(),
+            title = "Album",
+            tabs = { GalleryTabs(GalleryTab.Albums, vm) },
+        ) {
             ToolButton(AppIcons.FolderPlus, NEW_ALBUM_TITLE, { isNaming = true })
             ToolButton(AppIcons.Refresh, "Aggiorna", vm::pull)
         }
-        GalleryTabs(GalleryTab.Albums, vm)
         if (state.albums.isEmpty()) {
             EmptyState(
                 icon = AppIcons.Folder,
@@ -289,7 +280,7 @@ private fun PickerRow(title: String, detail: String, album: Album? = null, icon:
             AlbumCover(album, Modifier.size(PICKER_COVER_SIZE), iconSize = 20.dp)
         } else if (icon != null) {
             Box(Modifier.size(PICKER_COVER_SIZE), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = c.accentText, modifier = Modifier.size(22.dp))
+                Icon(icon, contentDescription = null, tint = c.accentIcon, modifier = Modifier.size(22.dp))
             }
         }
         Column(Modifier.weight(1f)) {

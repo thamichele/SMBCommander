@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.thamichele.smbcommander.core.NasServer
 import io.github.thamichele.smbcommander.ui.theme.AccentStore
+import io.github.thamichele.smbcommander.ui.theme.ThemeStore
 import io.github.thamichele.smbcommander.ui.theme.AccentTheme
 import io.github.thamichele.smbcommander.ui.theme.Arancio
 import io.github.thamichele.smbcommander.ui.theme.ArancioShape
@@ -144,7 +145,7 @@ fun SetupScreen(vm: AppViewModel, onBack: () -> Unit = { vm.back() }) {
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentText, modifier = Modifier.size(20.dp))
+                        Icon(AppIcons.Server, contentDescription = null, tint = Arancio.colors.accentIcon, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(nas.name, style = MaterialTheme.typography.titleSmall)
@@ -346,7 +347,18 @@ private val ACCENT_SWATCH = 22.dp
 internal fun AppearanceSection() {
     val context = LocalContext.current
     val current by remember(context) { AccentStore.state(context) }.collectAsStateWithLifecycle()
-    SectionLabel("Aspetto", Modifier.padding(top = 20.dp))
+    val dark by remember(context) { ThemeStore.state(context) }.collectAsStateWithLifecycle()
+    SectionLabel("Tema", Modifier.padding(top = 20.dp))
+    Text(
+        "Il tema chiaro è quello normale. Quello scuro si accende solo da qui, qualunque sia il tema del telefono.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Arancio.colors.textSecondary,
+    )
+    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP)) {
+        Pill("Chiaro", selected = !dark) { ThemeStore.set(context, false) }
+        Pill("Scuro", selected = dark) { ThemeStore.set(context, true) }
+    }
+    SectionLabel("Colore", Modifier.padding(top = 20.dp))
     Text(
         "Colore principale dell'app, del widget e dell'icona. L'icona cambia quando esci dall'app; " +
             "se l'avevi nella schermata Home, potrebbe servire rimetterla.",

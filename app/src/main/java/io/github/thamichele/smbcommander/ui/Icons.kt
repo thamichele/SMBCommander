@@ -17,7 +17,7 @@ object AppIcons {
     val Image = icon("M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8.5 10a1.5 1.5 0 1 0 0-3a1.5 1.5 0 1 0 0 3zM20 15l-5-5L5 20")
     val Video = icon("M4 6h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM16 10l5-3v10l-5-3")
     val Music = icon("M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0zM21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z")
-    val Copy = icon("M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1")
+    val Copy = icon("M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1", shiftX = 0.5f)
     val Move = icon("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 13h6M13 10.5l2.5 2.5l-2.5 2.5")
     val Play = icon("M7 4.5v15a.5.5 0 0 0 .77.42l11.5-7.5a.5.5 0 0 0 0-.84L7.77 4.08A.5.5 0 0 0 7 4.5z")
     val Archive = icon("M4 4h16v4H4zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4")
@@ -30,8 +30,8 @@ object AppIcons {
     val Upload = icon("M12 16V4M7 9l5-5l5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3")
     val Share = icon("M18 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM6 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM18 16a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1")
     val Download = icon("M12 4v12M7 11l5 5l5-5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3")
-    val Rename = icon("M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4")
-    val Delete = icon("M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3")
+    val Rename = icon("M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4", shiftX = 0.5f, shiftY = -0.5f)
+    val Delete = icon("M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3", shiftY = -0.5f)
     val Refresh = icon("M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4")
     val Server = icon("M5 3h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM5 13h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1zM8 7h.01M8 17h.01")
     val Grid = icon("M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z")
@@ -39,7 +39,7 @@ object AppIcons {
     val Mosaic = icon("M4 4h9v7H4zM15 4h5v7h-5zM4 13h5v7H4zM11 13h9v7h-9z")
     val OpenWith = icon("M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5")
     val Alert = icon("M12 3l9 16H3zM12 10v4M12 17h.01")
-    val Power = icon("M12 3v8M7.5 6.5a7 7 0 1 0 9 0")
+    val Power = icon("M12 3v8M7.5 6.5a7 7 0 1 0 9 0", shiftY = 1f)
     val Pause = icon("M8 5v14M16 5v14", stroke = 2.5f)
     val Next = icon("M6 5l9 7l-9 7zM18 5v14")
     val Previous = icon("M18 5l-9 7l9 7zM6 5v14")
@@ -49,22 +49,25 @@ object AppIcons {
     val FullscreenExit = icon("M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5")
     val Check = icon("M5 12l5 5l9-10")
     val Broom = icon("M21 3l-7.5 7.5M11.7 8.7l3.6 3.6l-1.4 1.4l-3.6-3.6zM10.3 10.1Q6 11 3.5 13.5L10.5 20.5Q13 18 13.9 13.7M3.5 13.5l7 7M10.8 11.2L6 16M12.8 13.2L8 18")
-    val Undo = icon("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3")
-    val Skip = icon("M4 12h13M13 7l5 5l-5 5M21 5v14")
+    val Undo = icon("M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3", shiftY = 0.5f)
+    val Skip = icon("M4 12h13M13 7l5 5l-5 5M21 5v14", shiftX = -0.5f)
     val Info = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8h.01")
     val UpDown = icon("M8 9l4-4l4 4M8 15l4 4l4-4")
     val ChevronRight = icon("M9 6l6 6l-6 6")
     val Eye = icon("M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6a3 3 0 1 0 0 6z")
     val Categories = icon("M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14a3 3 0 1 0 0 6a3 3 0 1 0 0-6z")
-    val People = icon("M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6zM3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 0 1 0 5.6M18 14.4c1.8 0.8 3 2.6 3 4.6")
+    val People = icon("M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6zM3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 0 1 0 5.6M18 14.4c1.8 0.8 3 2.6 3 4.6", shiftY = -0.5f)
     val Phone = icon("M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2")
     val TextLines = icon("M4 6h16M4 10h16M4 14h10M4 18h12")
     val EyeOff = icon("M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2")
 
+    val SortName = icon("M3 18l4-12l4 12M4.5 14h5M18 6v12M15 15l3 3l3-3")
+    val Calendar = icon("M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4", shiftY = 0.5f)
+    val SortSize = icon("M5 20v-4M10 20v-8M15 20v-12M20 20V4", shiftX = -0.5f)
     val Sliders = icon("M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4")
     val Palette = icon(
         "M12 3C7 3 3 7 3 12s4 9 9 9c1.1 0 2-.9 2-2c0-.5-.2-1-.5-1.3c-.3-.4-.5-.8-.5-1.3c0-1.1.9-2 2-2h2.3" +
-            "c2.6 0 4.7-2.1 4.7-4.7C22 6 17.5 3 12 3zM7.5 12h.01M9.5 8h.01M14.5 7.5h.01",
+            "c2.6 0 4.7-2.1 4.7-4.7C22 6 17.5 3 12 3zM7.5 12h.01M9.5 8h.01M14.5 7.5h.01",        shiftX = -0.5f,
     )
     val Settings = icon(
         "M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06 .06a2 2 0 1 1 -2.83 2.83l-.06 -.06" +
@@ -76,8 +79,21 @@ object AppIcons {
             "a1.65 1.65 0 0 0 -.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0 -1.51 1z",
     )
 
-    private fun icon(pathData: String, stroke: Float = 1.75f): ImageVector =
+    /**
+     * icon() - a line icon of the kit from its path
+     * @param pathData the drawing, on the grid of 24
+     * @param stroke width of the line
+     * @param shiftX how far right the drawing moves, for one that is not in the middle of its grid
+     * @param shiftY how far down the drawing moves
+     *
+     * Every drawing sits in the middle of the grid, so that it is in the middle of its button too.
+     * Play and Alert stay where they are: a triangle looks centred on its weight, not on its box.
+     *
+     * Return: the icon.
+     */
+    private fun icon(pathData: String, stroke: Float = 1.75f, shiftX: Float = 0f, shiftY: Float = 0f): ImageVector =
         ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+            .addGroup(translationX = shiftX, translationY = shiftY)
             .addPath(
                 pathData = addPathNodes(pathData),
                 fill = null,
@@ -86,5 +102,6 @@ object AppIcons {
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round,
             )
+            .clearGroup()
             .build()
 }

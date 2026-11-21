@@ -30,6 +30,8 @@ class MultiNasFileSystemTest {
         assertEquals("Musica", NasShares.localOf(music))
         assertTrue(NasShares.isRoot(NasShares.root("2")))
         assertEquals("Ufficio / Musica / Rock", NasShares.display(music, "Rock"))
+        // a share called as its NAS is not said twice
+        assertEquals("Ufficio / Rock", NasShares.display(NasShares.of("2", "UFFICIO"), "Rock"))
         assertEquals("Ufficio", NasShares.shownName(NasShares.root("2")))
         assertEquals("Musica", RemoteEntry(music, "", true, 0, 0).name)
     }

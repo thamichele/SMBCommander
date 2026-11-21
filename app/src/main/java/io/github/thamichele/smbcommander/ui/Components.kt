@@ -54,6 +54,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -104,89 +108,115 @@ import io.github.thamichele.smbcommander.ui.theme.ArancioShape
 import io.github.thamichele.smbcommander.ui.theme.ArancioType
 import kotlin.math.roundToInt
 
-/** Room between the back button, the title and the actions of a [PageHeader]. */
-private val HEADER_GAP = 4.dp
+/** Left margin of every page: the line of the title starts there. */
+private val HEADER_MARGIN = 16.dp
+
+/** The buttons reach closer to the edge than the texts: their own padding does the rest. */
+private val HEADER_ROW_MARGIN = 4.dp
 
 /**
- * PageHeader() - the header of a page: grey context line over a big title, actions on the right
- * @param context the small grey line over the title (a path, "Album"); empty for none
- * @param title the big title in JetBrains Mono
- * @param navigation the back or close button on the left, or null
- * @param collapse when not null, the title shrinks and fades with the scroll and only the buttons stay
- * @param actions the buttons of the page
+ * PageHeader() - the header of every page: one thin line of title, one row of buttons
+ * @param context the grey words before the title on its line (a path, "Album"); empty for none
+ * @param title the name of the page, at the end of the line
+ * @param navigation the back or close button, first on the left of the row of the buttons, or null
+ * @param collapse when not null, the line of the title slides away with the scroll and only the row of the buttons stays
+ * @param tabs the buttons that choose what the page shows (Foto/Video/Album, the sorting), on the left of the row
+ * @param actions the buttons of the page, on the right of the row
  *
- * No text is ever cut, and the header stays short: the title wraps beside the
- * buttons. Only when even its longest word does not fit there (big display
- * size, big font, narrow phone) the title takes the whole width and the
- * buttons move to a line of their own under it, on the right.
+ * The header is as low as it can be and the same on every page and at every
+ * screen size: context and title share one line, the buttons one row under
+ * it; see [ToolRow]. A line too long for the page (a deep path) shows its end,
+ * where the title is, and scrolls sideways to the rest: nothing is cut.
  *
  * Context: composable.
  * Return: nothing.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PageHeader(
     context: String,
     title: String,
     navigation: (@Composable () -> Unit)? = null,
     collapse: CollapsingHeaderState? = null,
+    tabs: @Composable () -> Unit = {},
     actions: @Composable () -> Unit = {},
 ) {
-    val part = rememberCollapsingPart(collapse)
-    Layout(
-        contents = listOf(
-            { navigation?.invoke() },
-            {
-                Box(Modifier.graphicsLayer { alpha = 1f - (collapse?.fraction ?: 0f) }) { HeaderTitle(context, title) }
-            },
-            {
-                FlowRow(horizontalArrangement = Arrangement.End, itemVerticalAlignment = Alignment.CenterVertically) {
-                    actions()
-                }
-            },
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clipToBounds()
-            .padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
-    ) { (navMeasurables, titleMeasurables, actionMeasurables), constraints ->
-        val width = constraints.maxWidth
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val nav = navMeasurables.firstOrNull()?.measure(loose)
-        val navWidth = nav?.let { it.width + HEADER_GAP.roundToPx() } ?: 0
-        val actions = actionMeasurables.first().measure(loose)
-        val titleMeasurable = titleMeasurables.first()
-        val titleRoom = (width - navWidth).coerceAtLeast(0)
-        // one line while even the longest word of the title fits beside the buttons: the title wraps there
-        val isOneLine = titleMeasurable.minIntrinsicWidth(Constraints.Infinity) + actions.width <= titleRoom
-        val titleWidth = if (isOneLine) titleRoom - actions.width else titleRoom
-        val titlePlaced = titleMeasurable.measure(loose.copy(maxWidth = titleWidth))
-        val navHeight = nav?.height ?: 0
-        val fullTop = maxOf(navHeight, titlePlaced.height, if (isOneLine) actions.height else 0)
-        // shrunk by the scroll, the title goes and the row of the buttons stays
-        val shrunkTop = maxOf(navHeight, if (isOneLine) actions.height else 0)
-        collapse?.report(part, fullTop - shrunkTop)
-        val fraction = collapse?.fraction ?: 0f
-        val topHeight = fullTop - ((fullTop - shrunkTop) * fraction).roundToInt()
-        val height = if (isOneLine) topHeight else topHeight + actions.height
-        layout(width, height) {
-            nav?.placeRelative(0, (topHeight - nav.height) / 2)
-            val titleY = if (isOneLine) (topHeight - titlePlaced.height) / 2 else topHeight - titlePlaced.height
-            titlePlaced.placeRelative(navWidth, titleY)
-            val actionsY = if (isOneLine) (topHeight - actions.height) / 2 else topHeight
-            actions.placeRelative(width - actions.width, actionsY)
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
+        if (collapse != null) {
+            CollapsibleBox(collapse) { HeaderLine(context, title) }
+        } else {
+            HeaderLine(context, title)
+        }
+        Box(Modifier.padding(horizontal = HEADER_ROW_MARGIN)) {
+            ToolRow(
+                tabs = {
+                    navigation?.invoke()
+                    tabs()
+                },
+                actions = actions,
+            )
         }
     }
 }
 
-/* Private: the two texts of a PageHeader, both wrapping instead of being cut. */
+/* Private: context in grey and title after it, on one line opened on its end and scrolling to the rest. */
 @Composable
-private fun HeaderTitle(context: String, title: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun HeaderLine(context: String, title: String) {
+    // a new page starts again from the end of its line; the largest value is brought back to the real end at layout
+    val scroll = key(context, title) { rememberScrollState(Int.MAX_VALUE) }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = HEADER_MARGIN, vertical = 2.dp),
+    ) {
         if (context.isNotEmpty()) {
-            Text(context, style = MaterialTheme.typography.bodySmall, color = Arancio.colors.textSecondary)
+            Text(
+                "$context / ",
+                style = MaterialTheme.typography.bodySmall,
+                color = Arancio.colors.textSecondary,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.alignByBaseline(),
+            )
         }
-        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, softWrap = false, modifier = Modifier.alignByBaseline())
+    }
+}
+
+/** Room between the choices on the left and the actions on the right of a [ToolRow], when they have to shrink. */
+private val TOOL_ROW_GAP = 8.dp
+
+/**
+ * ToolRow() - one row of icon buttons: choices on the left, actions on the right
+ * @param tabs the buttons on the left; each direct child is one button
+ * @param actions the buttons on the right; each direct child is one button
+ *
+ * The row never wraps and never cuts a button: when the buttons do not fit
+ * at their size they all get the same narrower share of the width.
+ *
+ * Context: composable.
+ * Return: nothing; a row with no button has no height.
+ */
+@Composable
+fun ToolRow(tabs: @Composable () -> Unit, actions: @Composable () -> Unit) {
+    Layout(contents = listOf(tabs, actions), modifier = Modifier.fillMaxWidth()) { (tabMeasurables, actionMeasurables), constraints ->
+        val count = tabMeasurables.size + actionMeasurables.size
+        if (count == 0) return@Layout layout(constraints.maxWidth, 0) {}
+        val gap = if (tabMeasurables.isEmpty() || actionMeasurables.isEmpty()) 0 else TOOL_ROW_GAP.roundToPx()
+        val share = ((constraints.maxWidth - gap) / count).coerceAtLeast(0)
+        val each = Constraints(maxWidth = share)
+        val left = tabMeasurables.map { it.measure(each) }
+        val right = actionMeasurables.map { it.measure(each) }
+        val height = (left + right).maxOf { it.height }
+        layout(constraints.maxWidth, height) {
+            var x = 0
+            for (button in left) {
+                button.placeRelative(x, (height - button.height) / 2)
+                x += button.width
+            }
+            x = constraints.maxWidth - right.sumOf { it.width }
+            for (button in right) {
+                button.placeRelative(x, (height - button.height) / 2)
+                x += button.width
+            }
+        }
     }
 }
 
@@ -332,6 +362,11 @@ private const val TOOL_DISABLED_ALPHA = 0.5f
 private const val TOOL_PRESSED_SCALE = 0.97f
 private const val TOOL_PRESS_MS = 80
 
+/* Halo of the main action of a page: a ring of the main colour at 10%, 8 wide, and a glow of the same colour. */
+private val FAB_HALO_WIDTH = 8.dp
+private const val FAB_HALO_ALPHA = 0.10f
+private val FAB_GLOW = 12.dp
+
 /**
  * ToolButton() - the icon button of the whole app, in the style of the video player's bar
  * @param icon what the button shows
@@ -355,7 +390,7 @@ fun ToolButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    tint: Color = Arancio.colors.accentText,
+    tint: Color = Arancio.colors.accentIcon,
     enabled: Boolean = true,
     isPrimary: Boolean = false,
     caption: String? = null,
@@ -364,7 +399,8 @@ fun ToolButton(
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) TOOL_PRESSED_SCALE else 1f, tween(TOOL_PRESS_MS), label = "press")
-    val shape = if (isPrimary) ArancioShape.fab else ArancioShape.control
+    // icon-only buttons are round in the kit
+    val shape = ArancioShape.fab
     // dark background always: the tinted one of the kit for the primary, the raised surface while pressed
     val background = when {
         isPrimary -> colors.accentDeep
@@ -422,11 +458,11 @@ fun FieldButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(FIELD_BUTTON_SIZE)
-            .clip(ArancioShape.control)
+            .clip(ArancioShape.fab)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = Arancio.colors.accentText, modifier = Modifier.size(FIELD_ICON_SIZE))
+        Icon(icon, contentDescription = label, tint = Arancio.colors.accentIcon, modifier = Modifier.size(FIELD_ICON_SIZE))
     }
 }
 
@@ -451,7 +487,7 @@ fun ButtonBar(modifier: Modifier = Modifier, content: @Composable RowScope.() ->
     )
 }
 
-/** Filter chip of the kit: filled light when selected, outlined panel otherwise, corners of 4. */
+/** Filter chip of the kit: filled with the text colour when selected, outlined panel otherwise, corners of 14. */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val c = Arancio.colors
@@ -602,13 +638,17 @@ fun DangerButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bo
 @Composable
 fun AccentFab(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Arancio.colors
+    val halo = c.accent.copy(alpha = FAB_HALO_ALPHA)
     FloatingActionButton(
         onClick = onClick,
         containerColor = c.accentButton,
         contentColor = c.onAccent,
         shape = ArancioShape.fab,
-        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp, pressedElevation = 8.dp),
-        modifier = modifier,
+        // the depth comes from the tinted glow of the kit, not from the grey shadow of Material
+        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+        modifier = modifier
+            .drawBehind { drawCircle(halo, radius = size.minDimension / 2 + FAB_HALO_WIDTH.toPx()) }
+            .shadow(FAB_GLOW, ArancioShape.fab, ambientColor = c.accent, spotColor = c.accent),
     ) {
         Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
     }

@@ -3,6 +3,25 @@
 Storia delle versioni di SMBCommander, la più recente in alto. Le versioni fino alla 1.19.0 sono descritte nelle
 [release su GitHub](https://github.com/thamichele/SMBCommander/releases).
 
+## 1.28.0 — 2026-11-21
+- Modificato: aspetto secondo la nuova Specifica «Arancio Mix». Il tema chiaro è quello normale e quello scuro si
+  accende da Impostazioni › Aspetto › Tema, senza più seguire il telefono. Angoli più morbidi (pulsanti e campi 14,
+  riquadri 20), pulsanti a icona tondi, il «+» tondo con l'alone del colore principale. Nel tema chiaro il colore
+  principale è quello puro per pulsanti e icone, con la variante scura solo per le scritte. Colori di stato della
+  specifica. Foto e video restano sempre su fondo scuro
+- Corretto: le icone di Copia, Rinomina, Elimina, Annulla, Salta, Persone, Data, Dimensione, Colori e Accendi non
+  erano al centro del proprio pulsante (spostate di mezzo punto o uno): ora ogni disegno è centrato
+- Modificato: intestazione molto più bassa e uguale in tutte le schermate, con qualsiasi zoom. Una riga sottile con
+  il percorso in grigio e il nome della pagina, e sotto una riga sola di pulsanti: a sinistra Indietro e quelli che
+  scelgono cosa vedere, a destra le azioni. Se non ci stanno si stringono tutti allo stesso modo, senza andare a
+  capo. Scorrendo resta solo la riga dei pulsanti, con Indietro sempre a portata
+- Modificato: le schede Foto / Video / Album della Galleria e l'ordinamento per nome, data e dimensione delle
+  cartelle sono pulsanti con un'icona sulla stessa riga delle azioni, non più scritte su una riga a parte; quello
+  attivo ha il fondo colorato scuro
+- Corretto: percorso e nome della cartella stanno sempre su una riga sola; se sono più lunghi dello schermo si vede
+  la fine (le cartelle più vicine) e si scorre di lato per leggere l'inizio
+- Corretto: una cartella condivisa che si chiama come il suo NAS non viene più scritta due volte nel percorso
+
 ## 1.27.1 — 2026-11-21
 - Corretto: toccando File, Galleria o Impostazioni nella barra in basso l'animazione non scatta più mentre la
   sezione si apre. La Galleria legge dal telefono l'elenco delle foto senza bloccare lo schermo, la sezione File non

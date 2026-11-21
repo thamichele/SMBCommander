@@ -163,9 +163,11 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
     LaunchedEffect(selected.isEmpty(), albumTitle, state.kind) { collapse.show() }
     Column(Modifier.fillMaxSize().nestedScroll(collapse.connection)) {
         if (selected.isEmpty()) {
+            // the videos have a tab of their own: for the button of the categories they are "all the photos"
+            val category = state.kind?.takeIf { it != PhotoKind.Video }
             val actions: @Composable () -> Unit = {
                 if (state.folder != null) {
-                    KindMenu(state.kind, state.kindCounts, vm::setKind)
+                    KindMenu(category, state.kindCounts, vm::setKind)
                     ViewMenu(state.view, vm::setView)
                     // the quick cleanup goes through the whole gallery, not one album
                     if (albumTitle == null) ToolButton(AppIcons.Broom, "Pulizia rapida", appVm::openCleanup)
@@ -181,18 +183,15 @@ fun GalleryScreen(appVm: AppViewModel, vm: GalleryViewModel = viewModel()) {
                     actions = actions,
                 )
             } else {
-                // three tabs leave no room for the buttons on their line: the buttons stay next to the title,
-                // and while scrolling title and tabs go and the buttons alone stay
+                // the tabs and the buttons share the row under the title, which alone stays while scrolling
+                val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
                 PageHeader(
                     context = state.folder?.fullPath ?: "Foto salvate sul NAS",
-                    title = state.kind?.takeIf { it != PhotoKind.Video }?.label ?: "Galleria",
+                    title = category?.label ?: "Galleria",
                     collapse = collapse,
+                    tabs = { if (state.folder != null) GalleryTabs(tab, vm) },
                     actions = actions,
                 )
-                if (state.folder != null) {
-                    val tab = if (state.kind == PhotoKind.Video) GalleryTab.Videos else GalleryTab.Photos
-                    CollapsibleBox(collapse) { GalleryTabs(tab, vm) }
-                }
             }
         } else {
             // only the number as title: four big buttons leave little room next to it
